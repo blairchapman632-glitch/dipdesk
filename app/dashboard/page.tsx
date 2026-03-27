@@ -1602,408 +1602,408 @@ className="cursor-pointer rounded-xl border px-3 py-1.5 text-xs font-semibold te
               </div>
 
               <div className="grid gap-5 md:grid-cols-2">
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-gray-700">
-                    Name of Wrap
-                  </label>
-                  <input
-                    value={wrapForm.name}
-                    onChange={(event) => updateWrapForm('name', event.target.value)}
-                    className="w-full rounded-xl border px-3 py-2 outline-none focus:border-pink-500"
-                  />
-                </div>
+  <div>
+    <label className="mb-1 block text-sm font-medium text-gray-700">
+      Name of Wrap
+    </label>
+    <input
+      value={wrapForm.name}
+      onChange={(event) => updateWrapForm('name', event.target.value)}
+      className="w-full rounded-xl border px-3 py-2 text-base text-gray-900 placeholder:text-gray-400 outline-none focus:border-pink-500 xl:text-sm"
+    />
+  </div>
 
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-gray-700">
-                    Brand
-                  </label>
-                  <input
-                    value={wrapForm.brand}
-                    onChange={(event) => updateWrapForm('brand', event.target.value)}
-                    className="w-full rounded-xl border px-3 py-2 outline-none focus:border-pink-500"
-                  />
-                </div>
+  <div>
+    <label className="mb-1 block text-sm font-medium text-gray-700">
+      Brand
+    </label>
+    <input
+      value={wrapForm.brand}
+      onChange={(event) => updateWrapForm('brand', event.target.value)}
+      className="w-full rounded-xl border px-3 py-2 text-base text-gray-900 placeholder:text-gray-400 outline-none focus:border-pink-500 xl:text-sm"
+    />
+  </div>
 
-                <div className="md:col-span-2">
-                  <label className="mb-1 block text-sm font-medium text-gray-700">
-                    Description
-                  </label>
-                  <textarea
-                    rows={4}
-                    value={wrapForm.description}
-                    onChange={(event) =>
-                      updateWrapForm('description', event.target.value)
-                    }
-                    className="w-full rounded-xl border px-3 py-2 outline-none focus:border-pink-500"
-                  />
-                </div>
+  <div className="md:col-span-2">
+    <label className="mb-1 block text-sm font-medium text-gray-700">
+      Description
+    </label>
+    <textarea
+      rows={4}
+      value={wrapForm.description}
+      onChange={(event) =>
+        updateWrapForm('description', event.target.value)
+      }
+      className="w-full rounded-xl border px-3 py-2 text-base text-gray-900 placeholder:text-gray-400 outline-none focus:border-pink-500 xl:text-sm"
+    />
+  </div>
 
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-gray-700">
-                    Date Purchased
-                  </label>
-                  <input
-                    type="date"
-                    value={wrapForm.purchase_date}
-                    onChange={(event) =>
-                      updateWrapForm('purchase_date', event.target.value)
-                    }
-                    className="w-full rounded-xl border px-3 py-2 outline-none focus:border-pink-500"
-                  />
-                </div>
+  <div>
+    <label className="mb-1 block text-sm font-medium text-gray-700">
+      Date Purchased
+    </label>
+    <input
+      type="date"
+      value={wrapForm.purchase_date}
+      onChange={(event) =>
+        updateWrapForm('purchase_date', event.target.value)
+      }
+      className="w-full rounded-xl border px-3 py-2 text-base text-gray-900 outline-none focus:border-pink-500 xl:text-sm"
+    />
+  </div>
 
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-gray-700">
-                    Purchased From
-                  </label>
-                  <input
-                    value={wrapForm.purchased_from}
-                    onChange={(event) =>
-                      updateWrapForm('purchased_from', event.target.value)
-                    }
-                    className="w-full rounded-xl border px-3 py-2 outline-none focus:border-pink-500"
-                  />
-                </div>
+  <div>
+    <label className="mb-1 block text-sm font-medium text-gray-700">
+      Purchased From
+    </label>
+    <input
+      value={wrapForm.purchased_from}
+      onChange={(event) =>
+        updateWrapForm('purchased_from', event.target.value)
+      }
+      className="w-full rounded-xl border px-3 py-2 text-base text-gray-900 placeholder:text-gray-400 outline-none focus:border-pink-500 xl:text-sm"
+    />
+  </div>
 
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-gray-700">
-                    Purchase Price
-                  </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={wrapForm.purchase_price}
-                    onChange={(event) =>
-                      updateWrapForm('purchase_price', event.target.value)
-                    }
-                    className="w-full rounded-xl border px-3 py-2 outline-none focus:border-pink-500"
-                  />
-                </div>
+  <div>
+    <label className="mb-1 block text-sm font-medium text-gray-700">
+      Purchase Price
+    </label>
+    <input
+      type="number"
+      step="0.01"
+      value={wrapForm.purchase_price}
+      onChange={(event) =>
+        updateWrapForm('purchase_price', event.target.value)
+      }
+      className="w-full rounded-xl border px-3 py-2 text-base text-gray-900 outline-none focus:border-pink-500 xl:text-sm"
+    />
+  </div>
 
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-gray-700">
-                    Currency
-                  </label>
-                  <select
-                    value={wrapForm.purchase_currency}
-                    onChange={(event) =>
-                      updateWrapForm(
-                        'purchase_currency',
-                        event.target.value as CurrencyCode
-                      )
-                    }
-                    className="w-full rounded-xl border px-3 py-2 outline-none focus:border-pink-500"
-                  >
-                    <option value="AUD">AUD</option>
-                    <option value="USD">USD</option>
-                    <option value="EUR">EUR</option>
-                  </select>
-                  <p className="mt-1 text-xs text-gray-500">
-  Record own currency for accurate reporting
+  <div>
+    <label className="mb-1 block text-sm font-medium text-gray-700">
+      Currency
+    </label>
+    <select
+      value={wrapForm.purchase_currency}
+      onChange={(event) =>
+        updateWrapForm(
+          'purchase_currency',
+          event.target.value as CurrencyCode
+        )
+      }
+      className="w-full rounded-xl border px-3 py-2 text-base text-gray-900 outline-none focus:border-pink-500 xl:text-sm"
+    >
+      <option value="AUD">AUD</option>
+      <option value="USD">USD</option>
+      <option value="EUR">EUR</option>
+    </select>
+    <p className="mt-1 text-xs text-gray-500">
+Record own currency for accurate reporting
 </p>
-                </div>
+  </div>
 
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-gray-700">
-                    Country Purchased From
-                  </label>
-                  <input
-                    value={wrapForm.purchase_country}
-                    onChange={(event) =>
-                      updateWrapForm('purchase_country', event.target.value)
-                    }
-                    className="w-full rounded-xl border px-3 py-2 outline-none focus:border-pink-500"
-                  />
-                </div>
+  <div>
+    <label className="mb-1 block text-sm font-medium text-gray-700">
+      Country Purchased From
+    </label>
+    <input
+      value={wrapForm.purchase_country}
+      onChange={(event) =>
+        updateWrapForm('purchase_country', event.target.value)
+      }
+      className="w-full rounded-xl border px-3 py-2 text-base text-gray-900 placeholder:text-gray-400 outline-none focus:border-pink-500 xl:text-sm"
+    />
+  </div>
 
-                <div className="md:col-span-2">
-  <label className="mb-2 block text-sm font-medium text-gray-700">
-    Wrap Images (Max {MAX_WRAP_IMAGES})
+  <div className="md:col-span-2">
+<label className="mb-2 block text-sm font-medium text-gray-700">
+  Wrap Images (Max {MAX_WRAP_IMAGES})
+</label>
+
+{/* Upload Button */}
+<div className="flex items-center gap-3 mb-3">
+  <label className="cursor-pointer rounded-xl bg-gradient-to-r from-pink-500 to-rose-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:opacity-90">
+    {isUploadingImages ? 'Uploading...' : 'Upload Images'}
+    <input
+      type="file"
+      accept="image/*"
+      multiple
+      onChange={(event) => {
+        if (event.target.files) {
+          uploadWrapImages(event.target.files)
+        }
+      }}
+      className="hidden"
+    />
   </label>
 
-  {/* Upload Button */}
-  <div className="flex items-center gap-3 mb-3">
-    <label className="cursor-pointer rounded-xl bg-gradient-to-r from-pink-500 to-rose-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:opacity-90">
-      {isUploadingImages ? 'Uploading...' : 'Upload Images'}
-      <input
-        type="file"
-        accept="image/*"
-        multiple
-        onChange={(event) => {
-          if (event.target.files) {
-            uploadWrapImages(event.target.files)
-          }
-        }}
-        className="hidden"
-      />
-    </label>
-
-    <span className="text-xs text-gray-500">
-      {wrapForm.images.length}/{MAX_WRAP_IMAGES} images
-    </span>
-  </div>
-
-  {/* Upload warning */}
-  {isUploadingImages && (
-    <p className="mb-3 text-xs text-amber-600">
-      Uploading images... please wait before closing
-    </p>
-  )}
-
-  {/* Image Grid */}
-  {wrapForm.images.length > 0 && (
-    <div className="grid grid-cols-3 gap-3">
-      {wrapForm.images.map((image) => (
-        <div
-          key={image.id}
-          className={`relative rounded-xl overflow-hidden border ${
-            image.is_primary ? 'border-pink-500' : 'border-gray-200'
-          }`}
-        >
-          <img
-            src={image.image_url}
-            className="h-24 w-full object-cover cursor-pointer"
-            onClick={() => setCoverPhoto(image.id)}
-          />
-
-          {/* Cover badge */}
-          {image.is_primary && (
-            <div className="absolute top-1 left-1 rounded bg-white/90 px-2 py-0.5 text-xs font-semibold text-pink-600">
-              Cover
-            </div>
-          )}
-
-          {/* Uploading overlay */}
-          {image.status === 'uploading' && (
-            <div className="absolute inset-0 bg-black/40 flex items-center justify-center text-white text-xs">
-              Uploading...
-            </div>
-          )}
-
-          {/* Error overlay */}
-          {image.status === 'error' && (
-            <div className="absolute inset-0 bg-red-500/70 flex items-center justify-center text-white text-xs">
-              Error
-            </div>
-          )}
-
-          {/* Actions */}
-          <div className="absolute bottom-1 left-1 right-1 flex justify-between gap-1">
-            <button
-              type="button"
-              onClick={() => removeWrapImage(image.id)}
-              className="flex-1 rounded bg-white/90 text-xs py-1"
-            >
-              Remove
-            </button>
-
-            <label className="flex-1 cursor-pointer rounded bg-white/90 text-xs py-1 text-center">
-              Replace
-              <input
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={(event) => {
-                  const file = event.target.files?.[0]
-                  if (file) replaceWrapImage(image.id, file)
-                }}
-              />
-            </label>
-          </div>
-        </div>
-      ))}
-    </div>
-  )}
+  <span className="text-xs text-gray-500">
+    {wrapForm.images.length}/{MAX_WRAP_IMAGES} images
+  </span>
 </div>
 
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-gray-700">
-                    Status
-                  </label>
-                  <select
-                    value={wrapForm.status}
-                    onChange={(event) =>
-                      updateWrapForm(
-                        'status',
-                        event.target.value as 'active' | 'holiday' | 'departed'
-                      )
-                    }
-                    className="w-full rounded-xl border px-3 py-2 outline-none focus:border-pink-500"
-                  >
-                    <option value="active">Active</option>
-                    <option value="holiday">On Holiday</option>
-                    <option value="departed">Departed</option>
-                  </select>
-                </div>
+{/* Upload warning */}
+{isUploadingImages && (
+  <p className="mb-3 text-xs text-amber-600">
+    Uploading images... please wait before closing
+  </p>
+)}
 
-                {wrapForm.status === 'holiday' && (
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-700">
-                      On Holiday With
-                    </label>
-                    <input
-                      value={wrapForm.on_loan_to}
-                      onChange={(event) =>
-                        updateWrapForm('on_loan_to', event.target.value)
-                      }
-                      placeholder="Borrower name"
-                      className="w-full rounded-xl border px-3 py-2 outline-none focus:border-pink-500"
-                    />
-                  </div>
-                )}
-
-                {wrapForm.status === 'departed' && (
-                  <>
-                    <div>
-                      <label className="mb-1 block text-sm font-medium text-gray-700">
-                        Sold To
-                      </label>
-                      <input
-                        value={wrapForm.sold_to}
-                        onChange={(event) =>
-                          updateWrapForm('sold_to', event.target.value)
-                        }
-                        className="w-full rounded-xl border px-3 py-2 outline-none focus:border-pink-500"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="mb-1 block text-sm font-medium text-gray-700">
-                        Date Sold
-                      </label>
-                      <input
-                        type="date"
-                        value={wrapForm.sold_date}
-                        onChange={(event) =>
-                          updateWrapForm('sold_date', event.target.value)
-                        }
-                        className="w-full rounded-xl border px-3 py-2 outline-none focus:border-pink-500"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="mb-1 block text-sm font-medium text-gray-700">
-                        Sold Price
-                      </label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        value={wrapForm.sold_price}
-                        onChange={(event) =>
-                          updateWrapForm('sold_price', event.target.value)
-                        }
-                        className="w-full rounded-xl border px-3 py-2 outline-none focus:border-pink-500"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="mb-1 block text-sm font-medium text-gray-700">
-                        Sold Currency
-                      </label>
-                      <select
-                        value={wrapForm.sold_currency}
-                        onChange={(event) =>
-                          updateWrapForm(
-                            'sold_currency',
-                            event.target.value as CurrencyCode
-                          )
-                        }
-                        className="w-full rounded-xl border px-3 py-2 outline-none focus:border-pink-500"
-                      >
-                        <option value="AUD">AUD</option>
-                        <option value="USD">USD</option>
-                        <option value="EUR">EUR</option>
-                      </select>
-                      <p className="mt-1 text-xs text-gray-500">
-  Record own currency for accurate reporting
-</p>
-                    </div>
-                  </>
-                )}
-
-                <div className="md:col-span-2 flex flex-col gap-4">
-  <div className="flex items-center gap-4">
-    <div className="flex items-center gap-2">
-      <input
-        id="wrap-favourite"
-        type="checkbox"
-        checked={wrapForm.is_favourite}
-        onChange={(event) =>
-          updateWrapForm('is_favourite', event.target.checked)
-        }
-      />
-      <label
-        htmlFor="wrap-favourite"
-        className="text-sm font-medium text-gray-700"
+{/* Image Grid */}
+{wrapForm.images.length > 0 && (
+  <div className="grid grid-cols-3 gap-3">
+    {wrapForm.images.map((image) => (
+      <div
+        key={image.id}
+        className={`relative rounded-xl overflow-hidden border ${
+          image.is_primary ? 'border-pink-500' : 'border-gray-200'
+        }`}
       >
-        Perma
-      </label>
-    </div>
+        <img
+          src={image.image_url}
+          className="h-24 w-full object-cover cursor-pointer"
+          onClick={() => setCoverPhoto(image.id)}
+        />
 
-    <div className="flex items-center gap-2">
-      <input
-        id="wrap-for-sale"
-        type="checkbox"
-        checked={wrapForm.for_sale}
-        onChange={(event) => {
-          const checked = event.target.checked
+        {/* Cover badge */}
+        {image.is_primary && (
+          <div className="absolute top-1 left-1 rounded bg-white/90 px-2 py-0.5 text-xs font-semibold text-pink-600">
+            Cover
+          </div>
+        )}
 
-          updateWrapForm('for_sale', checked)
+        {/* Uploading overlay */}
+        {image.status === 'uploading' && (
+          <div className="absolute inset-0 bg-black/40 flex items-center justify-center text-white text-xs">
+            Uploading...
+          </div>
+        )}
 
-          // auto-fill price if empty
-          if (checked && !wrapForm.for_sale_price && wrapForm.purchase_price) {
-            updateWrapForm('for_sale_price', wrapForm.purchase_price)
-            updateWrapForm('for_sale_currency', wrapForm.purchase_currency)
-          }
-        }}
-      />
-      <label
-        htmlFor="wrap-for-sale"
-        className="text-sm font-medium text-gray-700"
-      >
-        For Sale
-      </label>
-    </div>
+        {/* Error overlay */}
+        {image.status === 'error' && (
+          <div className="absolute inset-0 bg-red-500/70 flex items-center justify-center text-white text-xs">
+            Error
+          </div>
+        )}
+
+        {/* Actions */}
+        <div className="absolute bottom-1 left-1 right-1 flex justify-between gap-1 rounded-lg bg-black/10 p-1 xl:bg-transparent xl:p-0">
+<button
+  type="button"
+  onClick={() => removeWrapImage(image.id)}
+  className="flex-1 rounded bg-white/95 py-1 text-[13px] font-semibold text-gray-900 shadow-sm xl:text-xs xl:font-normal"
+>
+  Remove
+</button>
+
+<label className="flex-1 cursor-pointer rounded bg-white/95 py-1 text-center text-[13px] font-semibold text-gray-900 shadow-sm xl:text-xs xl:font-normal">
+  Replace
+  <input
+    type="file"
+    accept="image/*"
+    className="hidden"
+    onChange={(event) => {
+      const file = event.target.files?.[0]
+      if (file) replaceWrapImage(image.id, file)
+    }}
+  />
+</label>
+</div>
+      </div>
+    ))}
+  </div>
+)}
+</div>
+
+  <div>
+    <label className="mb-1 block text-sm font-medium text-gray-700">
+      Status
+    </label>
+    <select
+      value={wrapForm.status}
+      onChange={(event) =>
+        updateWrapForm(
+          'status',
+          event.target.value as 'active' | 'holiday' | 'departed'
+        )
+      }
+      className="w-full rounded-xl border px-3 py-2 text-base text-gray-900 outline-none focus:border-pink-500 xl:text-sm"
+    >
+      <option value="active">Active</option>
+      <option value="holiday">On Holiday</option>
+      <option value="departed">Departed</option>
+    </select>
   </div>
 
-  {wrapForm.for_sale && (
-    <div className="grid grid-cols-2 gap-3">
+  {wrapForm.status === 'holiday' && (
+    <div>
+      <label className="mb-1 block text-sm font-medium text-gray-700">
+        On Holiday With
+      </label>
+      <input
+        value={wrapForm.on_loan_to}
+        onChange={(event) =>
+          updateWrapForm('on_loan_to', event.target.value)
+        }
+        placeholder="Borrower name"
+        className="w-full rounded-xl border px-3 py-2 text-base text-gray-900 placeholder:text-gray-400 outline-none focus:border-pink-500 xl:text-sm"
+      />
+    </div>
+  )}
+
+  {wrapForm.status === 'departed' && (
+    <>
       <div>
         <label className="mb-1 block text-sm font-medium text-gray-700">
-          Sale Price
+          Sold To
         </label>
         <input
-          type="number"
-          step="0.01"
-          value={wrapForm.for_sale_price}
+          value={wrapForm.sold_to}
           onChange={(event) =>
-            updateWrapForm('for_sale_price', event.target.value)
+            updateWrapForm('sold_to', event.target.value)
           }
-          className="w-full rounded-xl border px-3 py-2 outline-none focus:border-pink-500"
+          className="w-full rounded-xl border px-3 py-2 text-base text-gray-900 placeholder:text-gray-400 outline-none focus:border-pink-500 xl:text-sm"
         />
       </div>
 
       <div>
         <label className="mb-1 block text-sm font-medium text-gray-700">
-          Currency
+          Date Sold
+        </label>
+        <input
+          type="date"
+          value={wrapForm.sold_date}
+          onChange={(event) =>
+            updateWrapForm('sold_date', event.target.value)
+          }
+          className="w-full rounded-xl border px-3 py-2 text-base text-gray-900 outline-none focus:border-pink-500 xl:text-sm"
+        />
+      </div>
+
+      <div>
+        <label className="mb-1 block text-sm font-medium text-gray-700">
+          Sold Price
+        </label>
+        <input
+          type="number"
+          step="0.01"
+          value={wrapForm.sold_price}
+          onChange={(event) =>
+            updateWrapForm('sold_price', event.target.value)
+          }
+          className="w-full rounded-xl border px-3 py-2 text-base text-gray-900 outline-none focus:border-pink-500 xl:text-sm"
+        />
+      </div>
+
+      <div>
+        <label className="mb-1 block text-sm font-medium text-gray-700">
+          Sold Currency
         </label>
         <select
-          value={wrapForm.for_sale_currency}
+          value={wrapForm.sold_currency}
           onChange={(event) =>
             updateWrapForm(
-              'for_sale_currency',
+              'sold_currency',
               event.target.value as CurrencyCode
             )
           }
-          className="w-full rounded-xl border px-3 py-2 outline-none focus:border-pink-500"
+          className="w-full rounded-xl border px-3 py-2 text-base text-gray-900 outline-none focus:border-pink-500 xl:text-sm"
         >
           <option value="AUD">AUD</option>
           <option value="USD">USD</option>
           <option value="EUR">EUR</option>
         </select>
+        <p className="mt-1 text-xs text-gray-500">
+Record own currency for accurate reporting
+</p>
       </div>
-    </div>
+    </>
   )}
+
+  <div className="md:col-span-2 flex flex-col gap-4">
+<div className="flex items-center gap-4">
+  <div className="flex items-center gap-2">
+    <input
+      id="wrap-favourite"
+      type="checkbox"
+      checked={wrapForm.is_favourite}
+      onChange={(event) =>
+        updateWrapForm('is_favourite', event.target.checked)
+      }
+    />
+    <label
+      htmlFor="wrap-favourite"
+      className="text-sm font-medium text-gray-700"
+    >
+      Perma
+    </label>
+  </div>
+
+  <div className="flex items-center gap-2">
+    <input
+      id="wrap-for-sale"
+      type="checkbox"
+      checked={wrapForm.for_sale}
+      onChange={(event) => {
+        const checked = event.target.checked
+
+        updateWrapForm('for_sale', checked)
+
+        // auto-fill price if empty
+        if (checked && !wrapForm.for_sale_price && wrapForm.purchase_price) {
+          updateWrapForm('for_sale_price', wrapForm.purchase_price)
+          updateWrapForm('for_sale_currency', wrapForm.purchase_currency)
+        }
+      }}
+    />
+    <label
+      htmlFor="wrap-for-sale"
+      className="text-sm font-medium text-gray-700"
+    >
+      For Sale
+    </label>
+  </div>
+</div>
+
+{wrapForm.for_sale && (
+  <div className="grid grid-cols-2 gap-3">
+    <div>
+      <label className="mb-1 block text-sm font-medium text-gray-700">
+        Sale Price
+      </label>
+      <input
+        type="number"
+        step="0.01"
+        value={wrapForm.for_sale_price}
+        onChange={(event) =>
+          updateWrapForm('for_sale_price', event.target.value)
+        }
+        className="w-full rounded-xl border px-3 py-2 text-base text-gray-900 outline-none focus:border-pink-500 xl:text-sm"
+      />
+    </div>
+
+    <div>
+      <label className="mb-1 block text-sm font-medium text-gray-700">
+        Currency
+      </label>
+      <select
+        value={wrapForm.for_sale_currency}
+        onChange={(event) =>
+          updateWrapForm(
+            'for_sale_currency',
+            event.target.value as CurrencyCode
+          )
+        }
+        className="w-full rounded-xl border px-3 py-2 text-base text-gray-900 outline-none focus:border-pink-500 xl:text-sm"
+      >
+        <option value="AUD">AUD</option>
+        <option value="USD">USD</option>
+        <option value="EUR">EUR</option>
+      </select>
+    </div>
+  </div>
+)}
 </div>
               </div>
 
