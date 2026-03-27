@@ -952,56 +952,44 @@ function exportReportCsv() {
   return (
     <AppLayout hideHeader>
             <div className="space-y-6">
-                        <div className="grid gap-6 xl:grid-cols-[3fr_1fr]">
-          <section className="rounded-3xl border bg-white p-5 shadow-sm">
-            <div className="mb-5 flex items-center justify-between gap-3">
-              <div>
-                <h2 className="text-2xl font-bold text-gray-900">
-                  Your Collection
-                </h2>
-                
-              </div>
-
-              
-    <div className="flex items-center gap-2">
-  <button
-    type="button"
-    onClick={openReportModal}
-    className="cursor-pointer rounded-xl border px-4 py-2 text-sm font-semibold text-gray-700 shadow-sm hover:bg-gray-50"
-  >
-    Report
-  </button>
-
-  {isAdmin && (
-    <button
-      type="button"
-      onClick={() => router.push('/admin')}
-      className="cursor-pointer rounded-xl border px-4 py-2 text-sm font-semibold text-gray-700 shadow-sm hover:bg-gray-50"
-    >
-      Admin
-    </button>
-  )}
-
-  <button
-    type="button"
-    onClick={handleLogout}
-    className="cursor-pointer rounded-xl border px-4 py-2 text-sm font-semibold text-gray-700 shadow-sm hover:bg-gray-50"
-  >
-    Logout
-  </button>
+                        <div className="grid gap-4 xl:grid-cols-[3fr_1fr]">
+          <section className="order-2 rounded-3xl border bg-white p-2 shadow-sm xl:order-1 xl:p-5">
+<div className="mb-5 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between xl:gap-4">  <h2 className="text-2xl font-bold text-gray-900">
+    Your Collection
+  </h2>
 
   <button
     type="button"
     onClick={openNewWrapModal}
-    className="cursor-pointer rounded-xl bg-gradient-to-r from-pink-500 to-rose-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:opacity-90"
-    >
+className="w-full cursor-pointer rounded-xl bg-gradient-to-r from-pink-500 to-rose-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:opacity-90 xl:order-3 xl:w-auto xl:px-4 xl:py-2 xl:text-sm xl:ml-1" >
     Add Wrap
   </button>
+
+<div className="flex flex-wrap gap-2 xl:order-2 xl:ml-auto xl:items-center">    <button
+      type="button"
+      onClick={openReportModal}
+      className="cursor-pointer rounded-xl border px-3 py-1.5 text-xs font-semibold text-gray-700 shadow-sm hover:bg-gray-50 xl:px-4 xl:py-2 xl:text-sm"
+    >
+      Report
+    </button>
+
+    {isAdmin && (
+      <button
+        type="button"
+        onClick={() => router.push('/admin')}
+className="cursor-pointer rounded-xl border px-3 py-1.5 text-xs font-semibold text-gray-700 shadow-sm hover:bg-gray-50 xl:px-4 xl:py-2 xl:text-sm"      >
+        Admin
+      </button>
+    )}
+
+    <button
+      type="button"
+      onClick={handleLogout}
+className="cursor-pointer rounded-xl border px-3 py-1.5 text-xs font-semibold text-gray-700 shadow-sm hover:bg-gray-50 xl:px-4 xl:py-2 xl:text-sm"    >
+      Logout
+    </button>
+  </div>
 </div>
-
-  
-
-            </div>
 
             {loading && wraps.length === 0 ? (
               <p className="text-sm text-gray-500">Loading wraps...</p>
@@ -1016,8 +1004,8 @@ function exportReportCsv() {
                   Add your first wrap
                 </button>
               </div>
-            ) : (
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            ) : (<div className="grid grid-cols-2 gap-1.5 sm:grid-cols-2 xl:grid-cols-3 xl:gap-4">
+              
                 {collectionWraps.map((wrap) => {
                   const imageUrl = getPrimaryImage(wrap)
 
@@ -1026,13 +1014,13 @@ function exportReportCsv() {
                       key={wrap.id}
                       type="button"
                       onClick={() => openViewWrapModal(wrap)}
-                      className="group cursor-pointer overflow-hidden rounded-2xl border bg-white text-left shadow-sm transition duration-200 hover:-translate-y-1 hover:shadow-md"
+                      className="group flex h-auto cursor-pointer flex-col overflow-hidden rounded-xl border bg-white p-0 text-left shadow-none transition duration-200 hover:-translate-y-1 hover:shadow-md xl:rounded-2xl xl:shadow-sm"
                     >
-                      <div className="relative aspect-square w-full bg-gray-100 pointer-events-none">
+                      <div className="relative aspect-[3/4] w-full bg-gray-100 pointer-events-none">
                         <img
                           src={imageUrl}
                           alt={wrap.name}
-                          className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]"
+                          className="h-full w-full object-cover object-[center_20%] transition duration-300 group-hover:scale-[1.03]"
                         />
 
                         {wrap.for_sale && (
@@ -1055,14 +1043,14 @@ function exportReportCsv() {
                         
                       </div>
 
-                      <div className="space-y-1 p-4 pointer-events-none">
-                        <h3 className="font-bold text-gray-900">{wrap.name}</h3>
-                        <p className="text-sm text-gray-600">
-                          {wrap.brand || 'No brand added'}
-                        </p>
+                      <div className="space-y-0.5 p-2 pointer-events-none xl:space-y-1 xl:p-5">
+  <h3 className="text-sm font-bold leading-tight text-gray-900 xl:text-base xl:leading-normal">{wrap.name}</h3>
+  <p className="text-xs leading-tight text-gray-600 xl:text-sm xl:leading-normal">
+    {wrap.brand || 'No brand added'}
+  </p>
 
                         {wrap.status === 'holiday' && wrap.on_loan_to && (
-                          <div className="inline-flex rounded-full bg-amber-100 px-2 py-1 text-xs font-medium text-amber-800">
+                          <div className="inline-flex rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 xl:px-2 xl:py-1 xl:text-xs">
                             On loan to {wrap.on_loan_to}
                           </div>
                         )}
@@ -1087,13 +1075,13 @@ function exportReportCsv() {
                       key={wrap.id}
                       type="button"
                       onClick={() => openViewWrapModal(wrap)}
-                      className="group cursor-pointer overflow-hidden rounded-2xl border bg-gray-50 text-left shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-md"
+                      className="group flex cursor-pointer flex-col overflow-hidden rounded-2xl border bg-gray-50 p-0 text-left shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-md"
                     >
-                      <div className="relative aspect-square w-full bg-gray-100 pointer-events-none">
+                      <div className="relative aspect-[4/5] w-full bg-gray-100 pointer-events-none">
                         <img
                           src={getPrimaryImage(wrap)}
                           alt={wrap.name}
-                          className="h-full w-full object-cover opacity-90 transition duration-300 group-hover:scale-[1.03]"
+                          className="h-full w-full object-cover object-[center_20%] opacity-90 transition duration-300 group-hover:scale-[1.03]"
                         />
                         {wrap.for_sale && (
   <div className="absolute left-3 top-3 rounded-xl bg-white/90 px-2 py-1 text-xs font-semibold text-amber-700 shadow">
@@ -1128,10 +1116,10 @@ function exportReportCsv() {
             </div>
           </section>
 
-                   <section className="rounded-3xl border bg-white p-5 shadow-sm">
-            <div className="mb-4 flex items-center justify-between gap-3">
+                   <section className="order-1 bg-white p-3 xl:order-2 xl:rounded-3xl xl:border xl:p-5 xl:shadow-sm">
+            <div className="mb-2 flex items-center justify-between gap-3 xl:mb-4">
               <div>
-                <h2 className="text-2xl font-bold text-gray-900">Activity</h2>
+                <h2 className="text-xl font-bold text-gray-900 xl:text-2xl">Activity</h2>
                 <p className="text-sm text-gray-500">
                   Updates and quick links.
                 </p>
@@ -1140,7 +1128,7 @@ function exportReportCsv() {
               
             </div>
 
-            <div className="space-y-3">
+            <div className="space-y-2 xl:space-y-3">
               {dips.map((dip) => {
                 const linkedWrap = dip.wrap_id ? wrapsById[dip.wrap_id] : undefined
                 const imageUrl = getPrimaryImage(linkedWrap)
@@ -1157,7 +1145,7 @@ function exportReportCsv() {
                       <img
                         src={imageUrl}
                         alt={dip.title}
-                        className="h-12 w-12 shrink-0 rounded-xl object-cover"
+                        className="h-12 w-12 shrink-0 rounded-xl object-cover object-[center_30%]"
                       />
 
                                             <div className="min-w-0 flex-1">
@@ -1215,8 +1203,7 @@ function exportReportCsv() {
     >
       <div className="mb-6 flex items-start justify-between gap-4">
   <div>
-    <h2 className="text-2xl font-bold text-gray-900">
-      {selectedWrap.name}
+<h2 className="text-2xl font-bold text-gray-900 xl:text-2xl">    {selectedWrap.name}
     </h2>
 
     <div className="flex items-center gap-2 mt-1 flex-wrap">
