@@ -106,7 +106,7 @@ export default function Home() {
                 <input
                   type="text"
                   placeholder="Full name"
-                  className="w-full p-3 border border-gray-200 rounded-xl mb-3 focus:outline-none focus:ring-2 focus:ring-pink-500"
+                  className="w-full p-3 border border-gray-200 rounded-xl mb-3 text-base text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-pink-500 xl:text-sm"
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
                 />
@@ -115,7 +115,7 @@ export default function Home() {
               <input
                 type="email"
                 placeholder="Email"
-                className="w-full p-3 border border-gray-200 rounded-xl mb-3 focus:outline-none focus:ring-2 focus:ring-pink-500"
+                className="w-full p-3 border border-gray-200 rounded-xl mb-3 text-base text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-pink-500 xl:text-sm"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
               />
@@ -123,7 +123,7 @@ export default function Home() {
               <input
                 type="password"
                 placeholder="Password"
-                className="w-full p-3 border border-gray-200 rounded-xl mb-4 focus:outline-none focus:ring-2 focus:ring-pink-500"
+                className="w-full p-3 border border-gray-200 rounded-xl mb-4 text-base text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-pink-500 xl:text-sm"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
               />
