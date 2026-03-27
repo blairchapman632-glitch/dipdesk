@@ -1788,27 +1788,27 @@ Record own currency for accurate reporting
         )}
 
         {/* Actions */}
-        <div className="absolute bottom-1 left-1 right-1 flex justify-between gap-1 rounded-lg bg-black/10 p-1 xl:bg-transparent xl:p-0">
-<button
-  type="button"
-  onClick={() => removeWrapImage(image.id)}
-  className="flex-1 rounded bg-white/95 py-1 text-[13px] font-semibold text-gray-900 shadow-sm xl:text-xs xl:font-normal"
->
-  Remove
-</button>
+<div className="absolute inset-x-1 bottom-1 flex gap-1 xl:bottom-1 xl:left-1 xl:right-1 xl:flex xl:justify-between xl:gap-1 xl:rounded-lg xl:bg-transparent xl:p-0">
+  <button
+    type="button"
+    onClick={() => removeWrapImage(image.id)}
+    className="min-w-0 flex-1 rounded bg-white/95 px-1 py-0.5 text-[10px] leading-tight text-gray-900 shadow-sm xl:px-0 xl:py-1 xl:text-xs xl:font-normal"
+  >
+    Remove
+  </button>
 
-<label className="flex-1 cursor-pointer rounded bg-white/95 py-1 text-center text-[13px] font-semibold text-gray-900 shadow-sm xl:text-xs xl:font-normal">
-  Replace
-  <input
-    type="file"
-    accept="image/*"
-    className="hidden"
-    onChange={(event) => {
-      const file = event.target.files?.[0]
-      if (file) replaceWrapImage(image.id, file)
-    }}
-  />
-</label>
+  <label className="min-w-0 flex-1 cursor-pointer rounded bg-white/95 px-1 py-0.5 text-center text-[10px] leading-tight text-gray-900 shadow-sm xl:px-0 xl:py-1 xl:text-xs xl:font-normal">
+    Replace
+    <input
+      type="file"
+      accept="image/*"
+      className="hidden"
+      onChange={(event) => {
+        const file = event.target.files?.[0]
+        if (file) replaceWrapImage(image.id, file)
+      }}
+    />
+  </label>
 </div>
       </div>
     ))}
