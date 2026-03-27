@@ -1,65 +1,164 @@
-import Image from "next/image";
+'use client'
+
+import { useEffect, useState } from 'react'
+import { supabase } from '@/lib/supabase'
+import { useRouter } from 'next/navigation'
 
 export default function Home() {
+  const router = useRouter()
+  const [fullName, setFullName] = useState('')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [message, setMessage] = useState('')
+  const [isSignUp, setIsSignUp] = useState(false)
+
+  useEffect(() => {
+    const checkSession = async () => {
+      const { data } = await supabase.auth.getSession()
+
+      if (data.session) {
+        router.replace('/dashboard')
+      }
+    }
+
+    checkSession()
+  }, [router])
+
+  const handleSignUp = async () => {
+    setLoading(true)
+    setMessage('')
+
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          full_name: fullName,
+        },
+      },
+    })
+
+    if (error) {
+      setMessage(error.message)
+      setLoading(false)
+      return
+    }
+
+    const user = data?.user
+
+    if (user) {
+      await supabase.from('profiles').insert({
+        id: user.id,
+        email,
+        full_name: fullName,
+      })
+    }
+
+    setMessage('Account created. You can now log in.')
+    setLoading(false)
+  }
+
+  const handleLogin = async () => {
+    setLoading(true)
+    setMessage('')
+
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    })
+
+    if (error) {
+      setMessage(error.message)
+      setLoading(false)
+      return
+    }
+
+    router.replace('/dashboard')
+  }
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
+    <div className="min-h-screen bg-gray-200 p-3 flex items-center justify-center">
+      <div className="relative w-full min-h-screen overflow-hidden md:h-[95vh] md:rounded-[28px] shadow-2xl">
+        <div
+          className="absolute inset-0 pointer-events-none"
+          style={{
+            backgroundImage: "url('/login-bg.jpg')",
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+          }}
         />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+
+        <div className="absolute inset-0 pointer-events-none bg-gradient-to-r from-white/60 via-white/20 to-transparent" />
+
+        <div className="relative z-10 flex min-h-screen items-center">
+          <div className="w-full max-w-md ml-6 md:ml-20">
+            <div className="relative z-20 bg-white/70 p-8 rounded-3xl shadow-2xl border border-white/50 backdrop-blur-xl">
+              <h1 className="text-4xl font-extrabold mb-2 tracking-tight text-gray-900">
+                WrapApp
+              </h1>
+
+              <p className="text-sm text-gray-700 mb-6">
+                Every wrap deserves to be shown off
+              </p>
+
+              {isSignUp && (
+                <input
+                  type="text"
+                  placeholder="Full name"
+                  className="w-full p-3 border border-gray-200 rounded-xl mb-3 focus:outline-none focus:ring-2 focus:ring-pink-500"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                />
+              )}
+
+              <input
+                type="email"
+                placeholder="Email"
+                className="w-full p-3 border border-gray-200 rounded-xl mb-3 focus:outline-none focus:ring-2 focus:ring-pink-500"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+
+              <input
+                type="password"
+                placeholder="Password"
+                className="w-full p-3 border border-gray-200 rounded-xl mb-4 focus:outline-none focus:ring-2 focus:ring-pink-500"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+
+              <button
+                type="button"
+                onClick={() => {
+                  if (isSignUp) {
+                    handleSignUp()
+                  } else {
+                    handleLogin()
+                  }
+                }}
+                className="w-full bg-gradient-to-r from-pink-500 to-rose-500 text-white p-3 rounded-xl mb-2 hover:opacity-90 transition shadow-md"
+                disabled={loading}
+              >
+                {loading ? 'Please wait...' : isSignUp ? 'Create Account' : 'Login'}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setIsSignUp(!isSignUp)}
+                className="w-full border border-gray-300 p-3 rounded-xl hover:bg-white/60 transition"
+                disabled={loading}
+              >
+                {isSignUp ? 'Back to Login' : 'Create Account'}
+              </button>
+
+              {message && (
+                <p className="mt-4 text-sm text-center">{message}</p>
+              )}
+            </div>
+          </div>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
+      </div>
     </div>
-  );
+  )
 }
