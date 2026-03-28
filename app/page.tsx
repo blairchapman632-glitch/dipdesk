@@ -55,7 +55,11 @@ export default function Home() {
       })
     }
 
-    setMessage('Account created. You can now log in.')
+        setMessage('Account created. Please verify your email, then log in.')
+    setIsSignUp(false)
+    setFullName('')
+    setEmail('')
+    setPassword('')
     setLoading(false)
   }
 
@@ -90,15 +94,17 @@ export default function Home() {
         />
 
         <div className="absolute inset-0 pointer-events-none bg-gradient-to-r from-white/60 via-white/20 to-transparent" />
+                <div className="relative z-10 flex min-h-screen items-center justify-center px-4 md:justify-start md:px-0">
 
-        <div className="relative z-10 flex min-h-screen items-center">
-          <div className="w-full max-w-md ml-6 md:ml-20">
-            <div className="relative z-20 bg-white/70 p-8 rounded-3xl shadow-2xl border border-white/50 backdrop-blur-xl">
-              <h1 className="text-4xl font-extrabold mb-2 tracking-tight text-gray-900">
+                              <div className="w-full max-w-[310px] mx-auto md:max-w-md md:mx-0 md:ml-20">
+                                    <div className="relative z-20 bg-white/60 p-5 md:p-8 rounded-3xl shadow-lg md:shadow-2xl border border-white/40 backdrop-blur-md md:backdrop-blur-xl overflow-hidden">
+                                          <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-white/30 via-white/10 to-transparent" />
+              <div className="relative z-10">
+              <h1 className="text-3xl md:text-4xl font-extrabold mb-2 tracking-tight text-gray-900">
                 WrapApp
               </h1>
 
-              <p className="text-sm text-gray-700 mb-6">
+                            <p className="text-sm text-gray-700 mb-5 md:mb-6">
                 Every wrap deserves to be shown off
               </p>
 
@@ -106,7 +112,7 @@ export default function Home() {
                 <input
                   type="text"
                   placeholder="Full name"
-                  className="w-full p-3 border border-gray-200 rounded-xl mb-3 text-base text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-pink-500 xl:text-sm"
+                                    className="w-full p-2.5 md:p-3 border border-gray-200 rounded-xl mb-3 text-base text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-pink-500 xl:text-sm"
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
                 />
@@ -115,7 +121,7 @@ export default function Home() {
               <input
                 type="email"
                 placeholder="Email"
-                className="w-full p-3 border border-gray-200 rounded-xl mb-3 text-base text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-pink-500 xl:text-sm"
+                className="w-full p-2.5 md:p-3 border border-gray-200 rounded-xl mb-3 text-base text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-pink-500 xl:text-sm"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
               />
@@ -123,7 +129,7 @@ export default function Home() {
               <input
                 type="password"
                 placeholder="Password"
-                className="w-full p-3 border border-gray-200 rounded-xl mb-4 text-base text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-pink-500 xl:text-sm"
+                className="w-full p-2.5 md:p-3 border border-gray-200 rounded-xl mb-4 text-base text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-pink-500 xl:text-sm"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
               />
@@ -137,7 +143,7 @@ export default function Home() {
                     handleLogin()
                   }
                 }}
-                className="w-full bg-gradient-to-r from-pink-500 to-rose-500 text-white p-3 rounded-xl mb-2 hover:opacity-90 transition shadow-md"
+                                className="w-full bg-gradient-to-r from-pink-500 to-rose-500 text-white p-2.5 md:p-3 rounded-xl mb-2 hover:opacity-90 transition shadow-md"
                 disabled={loading}
               >
                 {loading ? 'Please wait...' : isSignUp ? 'Create Account' : 'Login'}
@@ -146,15 +152,29 @@ export default function Home() {
               <button
                 type="button"
                 onClick={() => setIsSignUp(!isSignUp)}
-                className="w-full border border-gray-300 p-3 rounded-xl hover:bg-white/60 transition"
+                                className="w-full border border-gray-300 p-2.5 md:p-3 rounded-xl hover:bg-white/60 transition"
                 disabled={loading}
               >
                 {isSignUp ? 'Back to Login' : 'Create Account'}
               </button>
 
-              {message && (
-                <p className="mt-4 text-sm text-center">{message}</p>
+                                          {message && (
+                <p
+                  className={`mt-4 text-sm text-center ${
+                    message.toLowerCase().includes('error')
+                      ? 'text-red-600'
+                      : 'text-green-600'
+                  }`}
+                >
+                  {message}
+                </p>
               )}
+
+                            <div className="mt-6 pt-4 border-t border-gray-200 text-center text-[11px] leading-5 text-gray-600">
+                <p>© 2026 Paige Chapman. All rights reserved.</p>
+                <p>Internal use only. Unauthorised access prohibited.</p>
+              </div>
+              </div>
             </div>
           </div>
         </div>

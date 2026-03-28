@@ -17,6 +17,7 @@ type WrapImage = {
 
 type Wrap = {
   id: string
+  user_id: string
   name: string
   brand: string | null
   description: string | null
@@ -35,7 +36,9 @@ type Wrap = {
   for_sale: boolean
   for_sale_price: number | null
   for_sale_currency: CurrencyCode | null
+  for_sale_price_is_pm: boolean
   created_at: string
+  
   wrap_images?: WrapImage[]
 }
 
@@ -88,8 +91,9 @@ type WrapFormState = {
   sold_date: string
   is_favourite: boolean
   for_sale: boolean
-  for_sale_price: string
+    for_sale_price: string
   for_sale_currency: CurrencyCode
+  for_sale_price_is_pm: boolean
   status: 'active' | 'holiday' | 'departed'
 }
 
@@ -114,9 +118,10 @@ const EMPTY_WRAP_FORM: WrapFormState = {
   sold_currency: 'AUD',
   sold_date: new Date().toISOString().slice(0, 10),
   is_favourite: false,
-  for_sale: false,
+   for_sale: false,
   for_sale_price: '',
   for_sale_currency: 'AUD',
+  for_sale_price_is_pm: false,
   status: 'active',
 }
 
@@ -184,8 +189,10 @@ export default function Dashboard() {
   const [email, setEmail] = useState('')
   const [dips, setDips] = useState<Dip[]>([])
   const [wraps, setWraps] = useState<Wrap[]>([])
+  const [communityWraps, setCommunityWraps] = useState<Wrap[]>([])
+  const [profilesMap, setProfilesMap] = useState<Record<string, { full_name: string | null; username: string | null }>>({})
   const [loading, setLoading] = useState(true)
-  
+    const [mobileTab, setMobileTab] = useState<'collection' | 'activity'>('collection')
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [isAdmin, setIsAdmin] = useState(false)
 
@@ -200,6 +207,7 @@ const [reportStatusFilter, setReportStatusFilter] = useState<
 const [selectedWrap, setSelectedWrap] = useState<Wrap | null>(null)
 const [selectedViewImage, setSelectedViewImage] = useState<string | null>(null)
 const [isImagePreviewOpen, setIsImagePreviewOpen] = useState(false)
+const [isReadOnlyWrapView, setIsReadOnlyWrapView] = useState(false)
 const [isSavingWrap, setIsSavingWrap] = useState(false)
 const [isUploadingImages, setIsUploadingImages] = useState(false)
 const [wrapForm, setWrapForm] = useState<WrapFormState>(EMPTY_WRAP_FORM)
@@ -320,24 +328,36 @@ localStorage.setItem(DASHBOARD_EMAIL_KEY, userEmail)
 
 
 
-    const [{ data: dipData, error: dipError }, { data: wrapData, error: wrapError }] =
-      await Promise.all([
-        supabase
-          .from('dips')
-          .select(
-            'id, title, brand, wrap_name, total_spots, price_per_spot, current_likes, likes_required, stage, status, wrap_id'
-          )
-          .eq('user_id', user.id)
-          .order('created_at', { ascending: false }),
-        supabase
-          .from('wraps')
-          .select(
-  'id, name, brand, description, purchase_date, purchase_price, purchase_currency, purchased_from, purchase_country, status, on_loan_to, sold_to, sold_price, sold_currency, sold_date, is_favourite, for_sale, for_sale_price, for_sale_currency, created_at, wrap_images(id, image_url, is_primary, sort_order)'
+    const [
+  { data: dipData, error: dipError },
+  { data: wrapData, error: wrapError },
+  { data: communityWrapData }
+] = await Promise.all([
+  supabase
+    .from('dips')
+    .select(
+      'id, title, brand, wrap_name, total_spots, price_per_spot, current_likes, likes_required, stage, status, wrap_id'
+    )
+    .eq('user_id', user.id)
+    .order('created_at', { ascending: false }),
+
+  supabase
+    .from('wraps')
+    .select(
+'id, name, brand, description, purchase_date, purchase_price, purchase_currency, purchased_from, purchase_country, status, on_loan_to, sold_to, sold_price, sold_currency, sold_date, is_favourite, for_sale, for_sale_price, for_sale_currency, for_sale_price_is_pm, created_at, wrap_images(id, image_url, is_primary, sort_order)'
 )
-          .eq('user_id', user.id)
-          .order('is_favourite', { ascending: false })
-          .order('purchase_price', { ascending: false }),
-      ])
+    .eq('user_id', user.id)
+    .order('is_favourite', { ascending: false })
+    .order('purchase_price', { ascending: false }),
+
+  supabase
+  .from('wraps')
+  .select(
+'id, name, brand, description, purchase_date, purchased_from, purchase_country, status, on_loan_to, sold_to, sold_price, sold_currency, sold_date, is_favourite, for_sale, for_sale_price, for_sale_currency, for_sale_price_is_pm, created_at, user_id, wrap_images(id, image_url, is_primary, sort_order)'
+)
+  .order('created_at', { ascending: false })
+  .limit(20)
+])
 
     if (!dipError && dipData) {
       setDips(dipData)
@@ -350,7 +370,30 @@ localStorage.setItem(DASHBOARD_EMAIL_KEY, userEmail)
   setWraps(safeWraps)
   localStorage.setItem(DASHBOARD_WRAPS_KEY, JSON.stringify(safeWraps))
 }
+if (communityWrapData) {
+  const wraps = communityWrapData as Wrap[]
+  setCommunityWraps(wraps)
 
+  const userIds = [...new Set(wraps.map(w => w.user_id))]
+
+  const { data: profileData } = await supabase
+    .from('profiles')
+    .select('id, full_name, username')
+    .in('id', userIds)
+
+  if (profileData) {
+    const map: Record<string, { full_name: string | null; username: string | null }> = {}
+
+    profileData.forEach((p) => {
+      map[p.id] = {
+        full_name: p.full_name,
+        username: p.username,
+      }
+    })
+
+    setProfilesMap(map)
+  }
+}
     setLoading(false)
   }, [])
 
@@ -380,7 +423,7 @@ localStorage.setItem(DASHBOARD_EMAIL_KEY, userEmail)
     setLoading(false)
     loadData()
   }, [loadData])
-function openViewWrapModal(wrap: Wrap) {
+function openViewWrapModal(wrap: Wrap, readOnly = false) {
   const sortedImages = [...(wrap.wrap_images || [])].sort(
     (a, b) => a.sort_order - b.sort_order
   )
@@ -392,6 +435,7 @@ function openViewWrapModal(wrap: Wrap) {
 
   setSelectedWrap(wrap)
   setSelectedViewImage(primaryImage)
+  setIsReadOnlyWrapView(readOnly)
   setIsViewWrapModalOpen(true)
 }
 function closeViewWrapModal() {
@@ -399,6 +443,7 @@ function closeViewWrapModal() {
   setSelectedWrap(null)
   setSelectedViewImage(null)
   setIsImagePreviewOpen(false)
+  setIsReadOnlyWrapView(false)
 }
 function openReportModal() {
   setIsReportModalOpen(true)
@@ -458,7 +503,8 @@ function closeReportModal() {
       ? String(wrap.for_sale_price)
       : '',
 
-  for_sale_currency: wrap.for_sale_currency || 'AUD',
+    for_sale_currency: wrap.for_sale_currency || 'AUD',
+  for_sale_price_is_pm: wrap.for_sale_price_is_pm || false,
 
   status: wrap.status,
 })
@@ -760,13 +806,16 @@ const wrapPayload = {
     wrapForm.status === 'departed' ? wrapForm.sold_date || null : null,
 
   // ✅ NEW
-  for_sale: wrapForm.for_sale,
-  for_sale_price: wrapForm.for_sale && wrapForm.for_sale_price
-    ? Number(wrapForm.for_sale_price)
-    : null,
-  for_sale_currency: wrapForm.for_sale
-    ? wrapForm.for_sale_currency || 'AUD'
-    : null,
+    for_sale: wrapForm.for_sale,
+  for_sale_price_is_pm: wrapForm.for_sale ? wrapForm.for_sale_price_is_pm : false,
+  for_sale_price:
+    wrapForm.for_sale && !wrapForm.for_sale_price_is_pm && wrapForm.for_sale_price
+      ? Number(wrapForm.for_sale_price)
+      : null,
+  for_sale_currency:
+    wrapForm.for_sale && !wrapForm.for_sale_price_is_pm
+      ? wrapForm.for_sale_currency || 'AUD'
+      : null,
 
   is_favourite: wrapForm.is_favourite,
 }
@@ -950,10 +999,42 @@ function exportReportCsv() {
   }
 
   return (
-    <AppLayout hideHeader>
-            <div className="space-y-6">
-                        <div className="grid gap-4 xl:grid-cols-[3fr_1fr]">
-          <section className="order-2 rounded-3xl border bg-white p-2 shadow-sm xl:order-1 xl:p-5">
+        <AppLayout hideHeader>
+      <div className="space-y-6">
+        <div className="xl:hidden">
+          <div className="grid grid-cols-2 rounded-2xl border bg-white p-1 shadow-sm">
+            <button
+              type="button"
+              onClick={() => setMobileTab('collection')}
+              className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${
+                mobileTab === 'collection'
+                  ? 'bg-gradient-to-r from-pink-500 to-rose-500 text-white shadow-sm'
+                  : 'text-gray-600'
+              }`}
+            >
+              Collection
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setMobileTab('activity')}
+              className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${
+                mobileTab === 'activity'
+                  ? 'bg-gradient-to-r from-pink-500 to-rose-500 text-white shadow-sm'
+                  : 'text-gray-600'
+              }`}
+            >
+              Activity
+            </button>
+          </div>
+        </div>
+
+        <div className="grid gap-4 xl:grid-cols-[3fr_1fr]">
+                    <section
+            className={`order-2 rounded-3xl border bg-white p-2 shadow-sm xl:order-1 xl:p-5 ${
+              mobileTab === 'activity' ? 'hidden xl:block' : 'block'
+            }`}
+          >
 <div className="mb-5 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between xl:gap-4">  <h2 className="text-2xl font-bold text-gray-900">
     Your Collection
   </h2>
@@ -1025,12 +1106,14 @@ className="cursor-pointer rounded-xl border px-3 py-1.5 text-xs font-semibold te
 
                         {wrap.for_sale && (
   <div className="absolute left-3 top-3 rounded-xl bg-white/90 px-2 py-1 text-xs font-semibold text-amber-700 shadow">
-    🪓 For Sale
-    {wrap.for_sale_price !== null && (
-  <div className="text-[10px] font-medium text-gray-700">
-    {formatCurrency(wrap.for_sale_price, wrap.for_sale_currency || 'AUD')}
-  </div>
-)}
+    <div>🪓 For Sale</div>
+    <div className="text-[10px] font-medium text-gray-700">
+      {wrap.for_sale_price_is_pm
+        ? 'PM'
+        : wrap.for_sale_price !== null
+        ? formatCurrency(wrap.for_sale_price, wrap.for_sale_currency || 'AUD')
+        : ''}
+    </div>
   </div>
 )}
 
@@ -1116,9 +1199,14 @@ className="cursor-pointer rounded-xl border px-3 py-1.5 text-xs font-semibold te
             </div>
           </section>
 
-                   <section className="order-1 bg-white p-3 xl:order-2 xl:rounded-3xl xl:border xl:p-5 xl:shadow-sm">
+                             <section
+            className={`order-1 bg-white p-3 xl:order-2 xl:rounded-3xl xl:border xl:p-5 xl:shadow-sm ${
+              mobileTab === 'collection' ? 'hidden xl:block' : 'block'
+            }`}
+          >
             <div className="mb-2 flex items-center justify-between gap-3 xl:mb-4">
               <div>
+                
                 <h2 className="text-xl font-bold text-gray-900 xl:text-2xl">Activity</h2>
                 <p className="text-sm text-gray-500">
                   Updates and quick links.
@@ -1129,57 +1217,112 @@ className="cursor-pointer rounded-xl border px-3 py-1.5 text-xs font-semibold te
             </div>
 
             <div className="space-y-2 xl:space-y-3">
-              {dips.map((dip) => {
-                const linkedWrap = dip.wrap_id ? wrapsById[dip.wrap_id] : undefined
-                const imageUrl = getPrimaryImage(linkedWrap)
-                const progress = getDipProgress(dip)
+              <>
+  {/* DIPS FIRST */}
+  {dips.map((dip) => {
+    const linkedWrap = dip.wrap_id ? wrapsById[dip.wrap_id] : undefined
+    const imageUrl = getPrimaryImage(linkedWrap)
+    const progress = getDipProgress(dip)
 
-                return (
-                  <button
-                    key={dip.id}
-                    type="button"
-                    onClick={() => router.push(`/dips/${dip.id}`)}
-                    className="w-full cursor-pointer rounded-2xl border bg-white p-3 text-left shadow-sm transition hover:shadow-md"
-                  >
-                                        <div className="flex items-center gap-3 pointer-events-none">
-                      <img
-                        src={imageUrl}
-                        alt={dip.title}
-                        className="h-12 w-12 shrink-0 rounded-xl object-cover object-[center_30%]"
-                      />
+    return (
+      <button
+        key={dip.id}
+        type="button"
+        onClick={() => router.push(`/dips/${dip.id}`)}
+        className="w-full cursor-pointer rounded-2xl border bg-white p-3 text-left shadow-sm transition hover:shadow-md"
+      >
+        <div className="flex items-center gap-3 pointer-events-none">
+          <img
+            src={imageUrl}
+            alt={dip.title}
+            className="h-12 w-12 shrink-0 rounded-xl object-cover object-[center_30%]"
+          />
 
-                                            <div className="min-w-0 flex-1">
-                        <p className="text-[10px] font-semibold text-gray-400 mb-0.5">
-                          MY DIP
-                        </p>
+          <div className="min-w-0 flex-1">
+            <p className="text-[10px] font-semibold text-gray-400 mb-0.5">
+              MY DIP
+            </p>
 
-                        <div className="flex items-start justify-between gap-2">
-                          <h3 className="truncate text-sm font-bold text-gray-900">
-                            {dip.title}
-                          </h3>
+            <div className="flex items-start justify-between gap-2">
+              <h3 className="truncate text-sm font-bold text-gray-900">
+                {dip.title}
+              </h3>
 
-                          <span className="rounded-full bg-pink-50 px-2 py-0.5 text-[10px] font-semibold text-pink-600">
-                            {getStageLabel(dip.stage, dip.status)}
-                          </span>
-                        </div>
+              <span className="rounded-full bg-pink-50 px-2 py-0.5 text-[10px] font-semibold text-pink-600">
+                {getStageLabel(dip.stage, dip.status)}
+              </span>
+            </div>
 
-                                               <p className="mt-0.5 truncate text-[11px] text-gray-500">
-                          {dip.total_spots} spots • {formatCurrency(dip.price_per_spot, 'AUD')} per spot
-                        </p>
+            <p className="mt-0.5 truncate text-[11px] text-gray-500">
+              {dip.total_spots} spots • {formatCurrency(dip.price_per_spot, 'AUD')} per spot
+            </p>
 
-                        <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-gray-200">
-                          <div
-                            className="h-full bg-gradient-to-r from-pink-500 to-rose-500"
-                            style={{ width: `${progress}%` }}
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  </button>
-                )
-              })}
+            <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-gray-200">
+              <div
+                className="h-full bg-gradient-to-r from-pink-500 to-rose-500"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+          </div>
+        </div>
+      </button>
+    )
+  })}
 
-              {dips.length === 0 && (
+  {/* COMMUNITY WRAPS */}
+  {communityWraps.slice(0, 10).map((wrap) => {
+    const imageUrl = getPrimaryImage(wrap)
+
+    return (
+            <div
+        key={wrap.id}
+        className="w-full rounded-2xl border bg-white p-3 text-left shadow-sm transition hover:shadow-md"
+      >
+        <div className="flex items-center gap-3 pointer-events-auto">
+                    <button
+  type="button"
+  onClick={() => openViewWrapModal(wrap, true)}
+  className="shrink-0 rounded-xl cursor-pointer"
+>
+  <img
+  src={imageUrl}
+  alt={wrap.name}
+  className="h-12 w-12 rounded-xl object-cover cursor-pointer"
+ />
+</button>
+
+          <div className="flex-1">
+            {wrap.for_sale && (
+  <p className="text-xs text-gray-400 mb-0.5">
+    🪓 FOR SALE
+  </p>
+)}
+
+            <p className="text-sm font-bold text-gray-900">
+              {wrap.name}
+            </p>
+
+            <p className="text-xs text-gray-400">
+  {wrap.brand || 'No brand'}
+</p>
+
+<button
+  type="button"
+  onClick={() => router.push(`/user/${wrap.user_id}`)}
+  className="text-xs text-pink-600 font-medium text-left hover:underline"
+>
+  {profilesMap[wrap.user_id]?.full_name
+    ? profilesMap[wrap.user_id].full_name.split(' ')[0]
+    : profilesMap[wrap.user_id]?.username || 'User'}
+</button>
+          </div>
+        </div>
+      </div>
+    )
+  })}
+</>
+
+              {dips.length === 0 && communityWraps.length === 0 && (
                 <div className="rounded-2xl border border-dashed p-6 text-sm text-gray-500">
                   Coming soon
                 </div>
@@ -1223,17 +1366,19 @@ className="cursor-pointer rounded-xl border px-3 py-1.5 text-xs font-semibold te
     </div>
   </div>
 
-  <div className="flex items-center gap-2">
-    <button
-      type="button"
-      onClick={() => {
+    <div className="flex items-center gap-2">
+    {!isReadOnlyWrapView && (
+      <button
+        type="button"
+        onClick={() => {
   closeViewWrapModal()
   openEditWrapModal(selectedWrap)
 }}
-      className="cursor-pointer rounded-xl border px-3 py-1 text-sm font-semibold text-gray-700"
-    >
-      Edit
-    </button>
+        className="cursor-pointer rounded-xl border px-3 py-1 text-sm font-semibold text-gray-700"
+      >
+        Edit
+      </button>
+    )}
 
     <button
       type="button"
@@ -1298,15 +1443,7 @@ className="cursor-pointer rounded-xl border px-3 py-1.5 text-xs font-semibold te
               <span className="font-semibold text-gray-900">Purchase Date:</span>{' '}
               {selectedWrap.purchase_date || '—'}
             </p>
-            <p>
-              <span className="font-semibold text-gray-900">Purchase Price:</span>{' '}
-              {selectedWrap.purchase_price !== null
-                ? formatCurrency(
-                    selectedWrap.purchase_price,
-                    selectedWrap.purchase_currency || 'AUD'
-                  )
-                : '—'}
-            </p>
+            
             <p>
               <span className="font-semibold text-gray-900">Purchased From:</span>{' '}
               {selectedWrap.purchased_from || '—'}
@@ -1665,7 +1802,7 @@ className="cursor-pointer rounded-xl border px-3 py-1.5 text-xs font-semibold te
     />
   </div>
 
-  <div>
+    <div>
     <label className="mb-1 block text-sm font-medium text-gray-700">
       Purchase Price
     </label>
@@ -1678,6 +1815,9 @@ className="cursor-pointer rounded-xl border px-3 py-1.5 text-xs font-semibold te
       }
       className="w-full rounded-xl border px-3 py-2 text-base text-gray-900 outline-none focus:border-pink-500 xl:text-sm"
     />
+    <p className="mt-1 text-xs text-gray-500">
+      Only you can see this. Other users cannot view your purchase price.
+    </p>
   </div>
 
   <div>
@@ -1967,41 +2107,66 @@ Record own currency for accurate reporting
 </div>
 
 {wrapForm.for_sale && (
-  <div className="grid grid-cols-2 gap-3">
-    <div>
-      <label className="mb-1 block text-sm font-medium text-gray-700">
-        Sale Price
-      </label>
+  <div className="space-y-3">
+    <div className="flex items-center gap-2">
       <input
-        type="number"
-        step="0.01"
-        value={wrapForm.for_sale_price}
-        onChange={(event) =>
-          updateWrapForm('for_sale_price', event.target.value)
-        }
-        className="w-full rounded-xl border px-3 py-2 text-base text-gray-900 outline-none focus:border-pink-500 xl:text-sm"
+        id="wrap-for-sale-pm"
+        type="checkbox"
+        checked={wrapForm.for_sale_price_is_pm}
+        onChange={(event) => {
+          const checked = event.target.checked
+          updateWrapForm('for_sale_price_is_pm', checked)
+          if (checked) {
+            updateWrapForm('for_sale_price', '')
+          }
+        }}
       />
+      <label
+        htmlFor="wrap-for-sale-pm"
+        className="text-sm font-medium text-gray-700"
+      >
+        List price as PM
+      </label>
     </div>
 
-    <div>
-      <label className="mb-1 block text-sm font-medium text-gray-700">
-        Currency
-      </label>
-      <select
-        value={wrapForm.for_sale_currency}
-        onChange={(event) =>
-          updateWrapForm(
-            'for_sale_currency',
-            event.target.value as CurrencyCode
-          )
-        }
-        className="w-full rounded-xl border px-3 py-2 text-base text-gray-900 outline-none focus:border-pink-500 xl:text-sm"
-      >
-        <option value="AUD">AUD</option>
-        <option value="USD">USD</option>
-        <option value="EUR">EUR</option>
-      </select>
-    </div>
+    {!wrapForm.for_sale_price_is_pm && (
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="mb-1 block text-sm font-medium text-gray-700">
+            Sale Price
+          </label>
+          <input
+            type="number"
+            step="0.01"
+            value={wrapForm.for_sale_price}
+            onChange={(event) =>
+              updateWrapForm('for_sale_price', event.target.value)
+            }
+            className="w-full rounded-xl border px-3 py-2 text-base text-gray-900 outline-none focus:border-pink-500 xl:text-sm"
+          />
+        </div>
+
+        <div>
+          <label className="mb-1 block text-sm font-medium text-gray-700">
+            Currency
+          </label>
+          <select
+            value={wrapForm.for_sale_currency}
+            onChange={(event) =>
+              updateWrapForm(
+                'for_sale_currency',
+                event.target.value as CurrencyCode
+              )
+            }
+            className="w-full rounded-xl border px-3 py-2 text-base text-gray-900 outline-none focus:border-pink-500 xl:text-sm"
+          >
+            <option value="AUD">AUD</option>
+            <option value="USD">USD</option>
+            <option value="EUR">EUR</option>
+          </select>
+        </div>
+      </div>
+    )}
   </div>
 )}
 </div>
