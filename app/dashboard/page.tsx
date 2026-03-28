@@ -1311,9 +1311,9 @@ className="cursor-pointer rounded-xl border px-3 py-1.5 text-xs font-semibold te
   onClick={() => router.push(`/user/${wrap.user_id}`)}
   className="text-xs text-pink-600 font-medium text-left hover:underline"
 >
-  {profilesMap[wrap.user_id]?.full_name
-    ? profilesMap[wrap.user_id].full_name.split(' ')[0]
-    : profilesMap[wrap.user_id]?.username || 'User'}
+  {profilesMap[wrap.user_id]?.full_name?.split(' ')[0] ||
+  profilesMap[wrap.user_id]?.username ||
+  'User'}
 </button>
           </div>
         </div>
