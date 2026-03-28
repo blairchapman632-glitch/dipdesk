@@ -1231,7 +1231,7 @@ className="cursor-pointer rounded-xl border px-3 py-1.5 text-xs font-semibold te
         onClick={() => router.push(`/dips/${dip.id}`)}
         className="w-full cursor-pointer rounded-2xl border bg-white p-3 text-left shadow-sm transition hover:shadow-md"
       >
-        <div className="flex items-center gap-3 pointer-events-none">
+        <div className="flex items-center justify-between gap-3 pointer-events-none">
           <img
             src={imageUrl}
             alt={dip.title}
@@ -1270,56 +1270,69 @@ className="cursor-pointer rounded-xl border px-3 py-1.5 text-xs font-semibold te
   })}
 
   {/* COMMUNITY WRAPS */}
-  {communityWraps.slice(0, 10).map((wrap) => {
-    const imageUrl = getPrimaryImage(wrap)
+    {communityWraps.slice(0, 10).map((wrap) => {
+  const imageUrl = getPrimaryImage(wrap)
 
-    return (
-            <div
-        key={wrap.id}
-        className="w-full rounded-2xl border bg-white p-3 text-left shadow-sm transition hover:shadow-md"
-      >
-        <div className="flex items-center gap-3 pointer-events-auto">
-                    <button
-  type="button"
-  onClick={() => openViewWrapModal(wrap, true)}
-  className="shrink-0 rounded-xl cursor-pointer"
->
-  <img
-  src={imageUrl}
-  alt={wrap.name}
-  className="h-12 w-12 rounded-xl object-cover cursor-pointer"
- />
-</button>
+  return (
+    <div
+      key={wrap.id}
+      role="button"
+      tabIndex={0}
+      onClick={() => openViewWrapModal(wrap, true)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          openViewWrapModal(wrap, true)
+        }
+      }}
+      className="w-full cursor-pointer rounded-2xl border bg-white px-3 py-2.5 text-left shadow-sm transition hover:shadow-md active:scale-95"
+    >
+      <div className="flex items-center justify-between gap-3 pointer-events-none">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="shrink-0 rounded-xl">
+            <img
+              src={imageUrl}
+              alt={wrap.name}
+              className="h-12 w-12 rounded-xl object-cover"
+            />
+          </div>
 
-          <div className="flex-1">
+          <div className="min-w-0">
             {wrap.for_sale && (
-  <p className="text-xs text-gray-400 mb-0.5">
-    🪓 FOR SALE
-  </p>
-)}
+              <p className="mb-0.5 text-xs text-gray-400">
+                🪓 FOR SALE
+              </p>
+            )}
 
-            <p className="text-sm font-bold text-gray-900">
+            <p className="text-sm font-bold text-gray-900 truncate">
               {wrap.name}
             </p>
 
-            <p className="text-xs text-gray-400">
-  {wrap.brand || 'No brand'}
-</p>
-
-<button
-  type="button"
-  onClick={() => router.push(`/user/${wrap.user_id}`)}
-  className="text-xs text-pink-600 font-medium text-left hover:underline"
->
-  {profilesMap[wrap.user_id]?.full_name?.split(' ')[0] ||
-  profilesMap[wrap.user_id]?.username ||
-  'User'}
-</button>
+            <p className="text-xs text-gray-400 truncate">
+              {wrap.brand || 'No brand'}
+            </p>
           </div>
         </div>
+
+        <div
+          onClick={(e) => e.stopPropagation()}
+          onKeyDown={(e) => e.stopPropagation()}
+          className="pointer-events-auto shrink-0 self-center"
+        >
+          <button
+            type="button"
+            onClick={() => router.push(`/user/${wrap.user_id}`)}
+            className="inline-flex cursor-pointer items-center gap-1 rounded-full bg-pink-600 px-2.5 py-1 text-xs font-semibold text-white shadow-md transition transform hover:scale-105 hover:bg-pink-700 active:scale-95 xl:bg-pink-50 xl:text-pink-600 xl:hover:bg-pink-100 xl:px-2 xl:py-1 xl:shadow-sm"
+          >
+            {profilesMap[wrap.user_id]?.full_name?.split(' ')[0] ||
+              profilesMap[wrap.user_id]?.username ||
+              'User'}
+          </button>
+        </div>
       </div>
-    )
-  })}
+    </div>
+  )
+})}
 </>
 
               {dips.length === 0 && communityWraps.length === 0 && (

@@ -105,7 +105,7 @@ export default function Home() {
               </h1>
 
                             <p className="text-sm text-gray-700 mb-5 md:mb-6">
-                Every wrap deserves to be shown off
+                For the Love of Wraps
               </p>
 
               {isSignUp && (
