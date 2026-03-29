@@ -2,7 +2,7 @@
 
 import { supabase } from '@/lib/supabase'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import imageCompression from 'browser-image-compression'
 import AppLayout from '@/app/components/AppLayout'
 
@@ -213,7 +213,7 @@ const [isUploadingImages, setIsUploadingImages] = useState(false)
 const [wrapForm, setWrapForm] = useState<WrapFormState>(EMPTY_WRAP_FORM)
 
     const router = useRouter()
-const searchParams = useSearchParams()
+
   const handleLogout = async () => {
     await supabase.auth.signOut()
     router.replace('/')
@@ -424,11 +424,13 @@ if (communityWrapData) {
     loadData()
   }, [loadData])
   useEffect(() => {
-  if (searchParams.get('report') === 'true') {
+  const params = new URLSearchParams(window.location.search)
+
+  if (params.get('report') === 'true') {
     setIsReportModalOpen(true)
     router.replace('/dashboard')
   }
-}, [searchParams, router])
+}, [router])
 function openViewWrapModal(wrap: Wrap, readOnly = false) {
   const sortedImages = [...(wrap.wrap_images || [])].sort(
     (a, b) => a.sort_order - b.sort_order
