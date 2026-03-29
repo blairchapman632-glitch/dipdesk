@@ -2,7 +2,7 @@
 
 import { supabase } from '@/lib/supabase'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import imageCompression from 'browser-image-compression'
 import AppLayout from '@/app/components/AppLayout'
 
@@ -213,7 +213,7 @@ const [isUploadingImages, setIsUploadingImages] = useState(false)
 const [wrapForm, setWrapForm] = useState<WrapFormState>(EMPTY_WRAP_FORM)
 
     const router = useRouter()
-
+const searchParams = useSearchParams()
   const handleLogout = async () => {
     await supabase.auth.signOut()
     router.replace('/')
@@ -423,6 +423,12 @@ if (communityWrapData) {
     setLoading(false)
     loadData()
   }, [loadData])
+  useEffect(() => {
+  if (searchParams.get('report') === 'true') {
+    setIsReportModalOpen(true)
+    router.replace('/dashboard')
+  }
+}, [searchParams, router])
 function openViewWrapModal(wrap: Wrap, readOnly = false) {
   const sortedImages = [...(wrap.wrap_images || [])].sort(
     (a, b) => a.sort_order - b.sort_order
@@ -999,7 +1005,7 @@ function exportReportCsv() {
   }
 
   return (
-        <AppLayout hideHeader>
+        <AppLayout>
       <div className="space-y-6">
         <div className="xl:hidden">
           <div className="grid grid-cols-2 rounded-2xl border bg-white p-1 shadow-sm">
@@ -1046,30 +1052,7 @@ className="w-full cursor-pointer rounded-xl bg-gradient-to-r from-pink-500 to-ro
     Add Wrap
   </button>
 
-<div className="flex flex-wrap gap-2 xl:order-2 xl:ml-auto xl:items-center">    <button
-      type="button"
-      onClick={openReportModal}
-      className="cursor-pointer rounded-xl border px-3 py-1.5 text-xs font-semibold text-gray-700 shadow-sm hover:bg-gray-50 xl:px-4 xl:py-2 xl:text-sm"
-    >
-      Report
-    </button>
 
-    {isAdmin && (
-      <button
-        type="button"
-        onClick={() => router.push('/admin')}
-className="cursor-pointer rounded-xl border px-3 py-1.5 text-xs font-semibold text-gray-700 shadow-sm hover:bg-gray-50 xl:px-4 xl:py-2 xl:text-sm"      >
-        Admin
-      </button>
-    )}
-
-    <button
-      type="button"
-      onClick={handleLogout}
-className="cursor-pointer rounded-xl border px-3 py-1.5 text-xs font-semibold text-gray-700 shadow-sm hover:bg-gray-50 xl:px-4 xl:py-2 xl:text-sm"    >
-      Logout
-    </button>
-  </div>
 </div>
 
             {loading && wraps.length === 0 ? (
@@ -1379,7 +1362,7 @@ className="cursor-pointer rounded-xl border px-3 py-1.5 text-xs font-semibold te
     </div>
   </div>
 
-    <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2">
     {!isReadOnlyWrapView && (
       <button
         type="button"
@@ -1390,6 +1373,15 @@ className="cursor-pointer rounded-xl border px-3 py-1.5 text-xs font-semibold te
         className="cursor-pointer rounded-xl border px-3 py-1 text-sm font-semibold text-gray-700"
       >
         Edit
+      </button>
+    )}
+
+        {selectedWrap.user_id !== currentUserId && (
+      <button
+        type="button"
+        className="cursor-pointer rounded-xl bg-pink-600 px-3 py-1 text-sm font-semibold text-white"
+      >
+        Follow
       </button>
     )}
 

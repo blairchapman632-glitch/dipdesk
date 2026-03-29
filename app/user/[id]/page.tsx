@@ -70,41 +70,65 @@ export default function UserCollectionPage() {
   const userId = params.id as string
 
   const [profile, setProfile] = useState<Profile | null>(null)
-  const [wraps, setWraps] = useState<Wrap[]>([])
-  const [loading, setLoading] = useState(true)
+const [wraps, setWraps] = useState<Wrap[]>([])
+const [loading, setLoading] = useState(true)
+const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+const [isFollowing, setIsFollowing] = useState(false)
+const [toastMessage, setToastMessage] = useState('')
 
-  const [selectedWrap, setSelectedWrap] = useState<Wrap | null>(null)
+const [selectedWrap, setSelectedWrap] = useState<Wrap | null>(null)
   const [selectedViewImage, setSelectedViewImage] = useState<string | null>(null)
   const [isViewWrapModalOpen, setIsViewWrapModalOpen] = useState(false)
   const [isImagePreviewOpen, setIsImagePreviewOpen] = useState(false)
 
   useEffect(() => {
-    async function load() {
-      setLoading(true)
+  async function load() {
+    setLoading(true)
 
-      const [{ data: profileData }, { data: wrapData }] = await Promise.all([
-        supabase
-          .from('profiles')
-          .select('id, full_name, username')
-          .eq('id', userId)
-          .single(),
-        supabase
-          .from('wraps')
-          .select(
-            'id, name, brand, description, purchase_date, purchased_from, purchase_country, status, on_loan_to, sold_to, sold_price, sold_currency, sold_date, is_favourite, for_sale, for_sale_price, for_sale_currency, for_sale_price_is_pm, wrap_images(id, image_url, is_primary, sort_order)'
-          )
-          .eq('user_id', userId)
-          .order('is_favourite', { ascending: false })
-          .order('purchase_date', { ascending: false }),
-      ])
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
 
-      setProfile(profileData || null)
-      setWraps((wrapData as Wrap[]) || [])
-      setLoading(false)
+    const loggedInUserId = user?.id || null
+    setCurrentUserId(loggedInUserId)
+
+    const [{ data: profileData }, { data: wrapData }] = await Promise.all([
+      supabase
+        .from('profiles')
+        .select('id, full_name, username')
+        .eq('id', userId)
+        .single(),
+      supabase
+        .from('wraps')
+        .select(
+          'id, name, brand, description, purchase_date, purchased_from, purchase_country, status, on_loan_to, sold_to, sold_price, sold_currency, sold_date, is_favourite, for_sale, for_sale_price, for_sale_currency, for_sale_price_is_pm, wrap_images(id, image_url, is_primary, sort_order)'
+        )
+        .eq('user_id', userId)
+        .order('is_favourite', { ascending: false })
+        .order('purchase_date', { ascending: false }),
+    ])
+
+    if (loggedInUserId && loggedInUserId !== userId) {
+      const { data: followData } = await supabase
+        .from('follows')
+        .select('id')
+        .eq('follower_id', loggedInUserId)
+        .eq('following_id', userId)
+        .eq('status', 'accepted')
+        .maybeSingle()
+
+      setIsFollowing(!!followData)
+    } else {
+      setIsFollowing(false)
     }
 
-    if (userId) load()
-  }, [userId])
+    setProfile(profileData || null)
+    setWraps((wrapData as Wrap[]) || [])
+    setLoading(false)
+  }
+
+  if (userId) load()
+}, [userId])
 
   const collectionTitle = useMemo(() => {
   if (profile?.full_name?.trim()) {
@@ -161,7 +185,7 @@ export default function UserCollectionPage() {
 
   if (loading) {
     return (
-      <AppLayout hideHeader>
+      <AppLayout>
         <div className="space-y-6">
           <section className="rounded-3xl border bg-white p-5 shadow-sm">
             <p className="text-sm text-gray-500">Loading collection...</p>
@@ -172,7 +196,7 @@ export default function UserCollectionPage() {
   }
 
   return (
-    <AppLayout hideHeader>
+    <AppLayout>
       <div className="space-y-6">
         <section className="rounded-3xl border bg-white p-2 shadow-sm xl:p-5">
           <div className="mb-5 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
@@ -185,13 +209,51 @@ export default function UserCollectionPage() {
     </p>
   </div>
 
+    <div className="flex w-full flex-col gap-2 xl:w-auto xl:flex-row">
+    {currentUserId !== userId && (
   <button
     type="button"
-    onClick={() => window.location.href = '/dashboard'}
-    className="w-full cursor-pointer rounded-xl border px-4 py-2 text-sm font-semibold text-gray-700 shadow-sm hover:bg-gray-50 xl:w-auto"
+    onClick={async () => {
+      if (!currentUserId) return
+
+      if (isFollowing) {
+        const { error } = await supabase
+          .from('follows')
+          .delete()
+          .eq('follower_id', currentUserId)
+          .eq('following_id', userId)
+
+        if (error) return
+
+        setIsFollowing(false)
+        setToastMessage(`Unfollowed ${profile?.full_name?.split(' ')[0] || 'user'}`)
+        setTimeout(() => setToastMessage(''), 2000)
+      } else {
+        const { error } = await supabase.from('follows').insert({
+          follower_id: currentUserId,
+          following_id: userId,
+          status: 'accepted',
+        })
+
+        if (error) return
+
+        setIsFollowing(true)
+        setToastMessage(`Following ${profile?.full_name?.split(' ')[0] || 'user'}`)
+        setTimeout(() => setToastMessage(''), 2000)
+      }
+    }}
+    className={`w-full cursor-pointer rounded-xl px-4 py-2 text-sm font-semibold text-white shadow-sm xl:w-auto ${
+      isFollowing
+        ? 'bg-gray-600'
+        : 'bg-pink-600 hover:bg-pink-700'
+    }`}
   >
-    Back to Dashboard
+    {isFollowing ? 'Following ✓' : 'Follow'}
   </button>
+)}
+
+    
+  </div>
 </div>
 
           {collectionWraps.length === 0 ? (
