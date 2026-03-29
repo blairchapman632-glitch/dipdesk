@@ -59,8 +59,8 @@ export default function AppLayout({
           </header>
 
           {/* Phone bottom nav */}
-          <nav className="fixed inset-x-0 bottom-0 z-40 border-t bg-white md:hidden">
-            <div className="grid grid-cols-5">
+          <nav className="fixed inset-x-0 bottom-0 z-40 h-20 border-t bg-white md:hidden">
+  <div className="grid grid-cols-5 pb-3 pt-2">
               {navItems.map((item) => {
                 const isActive = pathname === item.href
 
@@ -69,7 +69,7 @@ export default function AppLayout({
                     key={item.href}
                     type="button"
                     onClick={() => router.push(item.href)}
-                    className={`flex cursor-pointer flex-col items-center justify-center px-2 py-3 text-[11px] font-semibold transition ${
+                    className={`flex cursor-pointer flex-col items-center justify-center px-2 py-4 text-sm font-semibold transition ${
                       isActive ? 'text-pink-600' : 'text-gray-500'
                     }`}
                   >
