@@ -66,7 +66,9 @@ function getPrimaryImage(wrap?: Wrap) {
     wrap.wrap_images.find((image) => image.is_primary) ||
     [...wrap.wrap_images].sort((a, b) => a.sort_order - b.sort_order)[0]
 
-  return primary?.image_url || WRAP_PLACEHOLDER
+  return primary?.image_url
+  ? `${primary.image_url}?width=400&quality=60`
+  : WRAP_PLACEHOLDER
 }
 
 function getDisplayName(profile?: Profile) {
