@@ -225,6 +225,7 @@ localStorage.setItem(EXPLORE_WRAPS_KEY, JSON.stringify(wraps))
       )
 
       setProfilesMap(profileMap)
+      localStorage.setItem(EXPLORE_PROFILES_KEY, JSON.stringify(profileMap))
 localStorage.setItem(EXPLORE_PROFILES_KEY, JSON.stringify(profileMap))
       const usersFromWraps: ExploreUser[] = uniqueUserIds.map((userId) => {
         const userWraps = wraps.filter((wrap) => wrap.user_id === userId)
@@ -239,7 +240,7 @@ localStorage.setItem(EXPLORE_PROFILES_KEY, JSON.stringify(profileMap))
       })
 
       setUsers(usersFromWraps)
-
+localStorage.setItem(EXPLORE_USERS_KEY, JSON.stringify(usersFromWraps))
 // 🔽 LOAD FOLLOWING USERS
 if (currentUserId) {
   const { data: followsData } = await supabase
@@ -267,6 +268,7 @@ if (currentUserId) {
   .filter(Boolean) as FollowingUser[]
 
   setFollowingUsers(followingUsersData)
+  localStorage.setItem(EXPLORE_FOLLOWING_KEY, JSON.stringify(followingUsersData))
 } else {
   setFollowingUsers([])
 }
