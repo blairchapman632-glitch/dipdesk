@@ -13,7 +13,7 @@ export default function AppLayout({
   const pathname = usePathname()
 
   const navItems = [
-    { label: 'Dashboard', href: '/dashboard' },
+    { label: 'Home', href: '/dashboard' },
     { label: 'Explore', href: '/explore' },
     { label: 'Wishlist', href: '/wishlist' },
     { label: 'Messages', href: '/messages' },
@@ -59,13 +59,13 @@ export default function AppLayout({
           </header>
 
           {/* Phone bottom nav */}
-<nav className="fixed inset-x-0 bottom-0 z-40 border-t bg-white/95 backdrop-blur supports-[padding:max(0px)]:pb-[max(0.5rem,env(safe-area-inset-bottom))] md:hidden">
-  <div className="grid grid-cols-5 gap-1 px-2 pt-2 pb-2">
+<nav className="fixed inset-x-0 bottom-0 z-40 border-t bg-white md:hidden">
+  <div className="grid grid-cols-5 gap-1 px-2 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
     {navItems.map((item) => {
       const isActive = pathname === item.href
 
       const icon =
-        item.label === 'Dashboard'
+        item.label === 'Home'
           ? '⌂'
           : item.label === 'Explore'
           ? '⌕'
@@ -80,17 +80,17 @@ export default function AppLayout({
           key={item.href}
           type="button"
           onClick={() => router.push(item.href)}
-          className={`min-h-[68px] rounded-2xl px-1 py-2 flex flex-col items-center justify-center gap-1 text-xs font-semibold select-none transition-transform duration-75 ${
+          className={`flex min-h-[64px] flex-col items-center justify-center gap-1 rounded-xl px-1 py-2 text-xs font-semibold ${
             isActive
-              ? 'bg-pink-600 text-white shadow-md'
-              : 'bg-gray-50 text-gray-600 border border-gray-200 active:scale-95 active:bg-gray-100'
+              ? 'bg-pink-600 text-white'
+              : 'bg-white text-gray-600 border border-gray-200 active:bg-gray-100'
           }`}
         >
-          <span className="text-base leading-none pointer-events-none">
+          <span className="pointer-events-none text-base leading-none">
             {icon}
           </span>
 
-          <span className="leading-none pointer-events-none">
+          <span className="pointer-events-none leading-none">
             {item.label}
           </span>
         </button>
