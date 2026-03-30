@@ -147,6 +147,7 @@ if (cachedWraps) {
   try {
     setLatestWraps(JSON.parse(cachedWraps))
     setCachedLoaded(true)
+setLoading(false)
     setLoading(false)
   } catch {}
 }
@@ -169,7 +170,7 @@ if (cachedFollowing) {
   } catch {}
 }
     async function loadExploreData() {
-  setLoading(true)
+  if (!cachedLoaded) setLoading(true)
 
   const {
     data: { user },
