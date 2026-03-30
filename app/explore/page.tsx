@@ -126,7 +126,7 @@ export default function Page() {
   const [searchTerm, setSearchTerm] = useState('')
   const [loading, setLoading] = useState(false)
   const [latestWraps, setLatestWraps] = useState<Wrap[]>([])
-  const [cachedLoaded, setCachedLoaded] = useState(false)
+  
 const [users, setUsers] = useState<ExploreUser[]>([])
 const [followingUsers, setFollowingUsers] = useState<FollowingUser[]>([])
 const [profilesMap, setProfilesMap] = useState<Record<string, Profile>>({})
@@ -137,41 +137,37 @@ const [profilesMap, setProfilesMap] = useState<Record<string, Profile>>({})
 const [toastMessage, setToastMessage] = useState('')
 
   useEffect(() => {
-    const cachedWraps = localStorage.getItem(EXPLORE_WRAPS_KEY)
-const cachedProfiles = localStorage.getItem(EXPLORE_PROFILES_KEY)
+  const cachedWraps = localStorage.getItem(EXPLORE_WRAPS_KEY)
+  const cachedProfiles = localStorage.getItem(EXPLORE_PROFILES_KEY)
+  const cachedUsers = localStorage.getItem(EXPLORE_USERS_KEY)
+  const cachedFollowing = localStorage.getItem(EXPLORE_FOLLOWING_KEY)
 
-const cachedUsers = localStorage.getItem(EXPLORE_USERS_KEY)
-const cachedFollowing = localStorage.getItem(EXPLORE_FOLLOWING_KEY)
+  if (cachedWraps) {
+    try {
+      setLatestWraps(JSON.parse(cachedWraps))
+      setLoading(false)
+    } catch {}
+  }
 
-if (cachedWraps) {
-  try {
-    setLatestWraps(JSON.parse(cachedWraps))
-    setCachedLoaded(true)
-setLoading(false)
-    setLoading(false)
-  } catch {}
-}
+  if (cachedProfiles) {
+    try {
+      setProfilesMap(JSON.parse(cachedProfiles))
+    } catch {}
+  }
 
-if (cachedProfiles) {
-  try {
-    setProfilesMap(JSON.parse(cachedProfiles))
-  } catch {}
-}
+  if (cachedUsers) {
+    try {
+      setUsers(JSON.parse(cachedUsers))
+    } catch {}
+  }
 
-if (cachedUsers) {
-  try {
-    setUsers(JSON.parse(cachedUsers))
-  } catch {}
-}
+  if (cachedFollowing) {
+    try {
+      setFollowingUsers(JSON.parse(cachedFollowing))
+    } catch {}
+  }
 
-if (cachedFollowing) {
-  try {
-    setFollowingUsers(JSON.parse(cachedFollowing))
-  } catch {}
-}
     async function loadExploreData() {
-  if (!cachedLoaded) setLoading(true)
-
   const {
     data: { user },
   } = await supabase.auth.getUser()
@@ -352,7 +348,7 @@ return () => {
     <h2 className="text-sm font-bold text-gray-900">Following</h2>
   </div>
 
-  {loading ? (
+  {loading && latestWraps.length === 0 ? (
     <p className="text-sm text-gray-500">Loading following...</p>
   ) : followingUsers.length === 0 ? (
     <div className="rounded-lg border border-dashed px-3 py-4 text-center">
@@ -394,7 +390,7 @@ return () => {
             <h2 className="text-sm font-bold text-gray-900">Collections</h2>
           </div>
 
-          {loading ? (
+          {loading && latestWraps.length === 0 ? (
             <p className="text-sm text-gray-500">Loading collections...</p>
                     ) : filteredUsers.length === 0 ? (
             !hasSearch && (
@@ -512,7 +508,7 @@ setTimeout(() => setToastMessage(''), 2000)
             <h2 className="text-sm font-bold text-gray-900">Latest Wraps</h2>
           </div>
 
-          {loading ? (
+          {loading && latestWraps.length === 0 ? (
             <p className="text-sm text-gray-500">Loading wraps...</p>
                     ) : filteredWraps.length === 0 ? (
             !hasSearch && (
