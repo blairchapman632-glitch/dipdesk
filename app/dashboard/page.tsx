@@ -182,7 +182,7 @@ function getPrimaryImage(wrap?: Wrap) {
 
   if (!pathAfterBucket.includes('/')) return WRAP_PLACEHOLDER
 
-  return url
+  return `${url}?width=400&quality=60`
 }
 
 export default function Dashboard() {
@@ -1254,77 +1254,10 @@ className="w-full cursor-pointer rounded-xl bg-gradient-to-r from-pink-500 to-ro
     )
   })}
 
-  {/* COMMUNITY WRAPS */}
-    {communityWraps.slice(0, 10).map((wrap) => {
-  const imageUrl = getPrimaryImage(wrap)
-
-  return (
-    <div
-      key={wrap.id}
-      role="button"
-      tabIndex={0}
-      onClick={() => openViewWrapModal(wrap, true)}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault()
-          openViewWrapModal(wrap, true)
-        }
-      }}
-      className="w-full cursor-pointer rounded-2xl border bg-white px-3 py-2.5 text-left shadow-sm transition hover:shadow-md active:scale-95"
-    >
-      <div className="flex items-center justify-between gap-3 pointer-events-none">
-        <div className="flex min-w-0 items-center gap-3">
-          <div className="shrink-0 rounded-xl">
-            <img
-              src={imageUrl}
-              alt={wrap.name}
-              className="h-12 w-12 rounded-xl object-cover"
-            />
-          </div>
-
-          <div className="min-w-0">
-            {wrap.for_sale && (
-              <p className="mb-0.5 text-xs text-gray-400">
-                🪓 FOR SALE
-              </p>
-            )}
-
-            <p className="text-sm font-bold text-gray-900 truncate">
-              {wrap.name}
-            </p>
-
-            <p className="text-xs text-gray-400 truncate">
-              {wrap.brand || 'No brand'}
-            </p>
-          </div>
-        </div>
-
-        <div
-          onClick={(e) => e.stopPropagation()}
-          onKeyDown={(e) => e.stopPropagation()}
-          className="pointer-events-auto shrink-0 self-center"
-        >
-          <button
-            type="button"
-            onClick={() => router.push(`/user/${wrap.user_id}`)}
-            className="inline-flex cursor-pointer items-center gap-1 rounded-full bg-pink-600 px-2.5 py-1 text-xs font-semibold text-white shadow-md transition transform hover:scale-105 hover:bg-pink-700 active:scale-95 xl:bg-pink-50 xl:text-pink-600 xl:hover:bg-pink-100 xl:px-2 xl:py-1 xl:shadow-sm"
-          >
-            {profilesMap[wrap.user_id]?.full_name?.split(' ')[0] ||
-              profilesMap[wrap.user_id]?.username ||
-              'User'}
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-})}
+  
 </>
 
-              {dips.length === 0 && communityWraps.length === 0 && (
-                <div className="rounded-2xl border border-dashed p-6 text-sm text-gray-500">
-                  Coming soon
-                </div>
-              )}
+              
             </div>
           </section>
         </div>
