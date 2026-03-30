@@ -180,7 +180,7 @@ const [toastMessage, setToastMessage] = useState('')
           'id, user_id, name, brand, description, purchase_date, purchased_from, purchase_country, status, on_loan_to, sold_to, sold_price, sold_currency, sold_date, is_favourite, for_sale, for_sale_price, for_sale_currency, for_sale_price_is_pm, created_at, wrap_images(id, image_url, is_primary, sort_order)'
         )
         .order('created_at', { ascending: false })
-        .limit(24)
+        .limit(16)
 
       if (wrapError) {
         console.error(wrapError)
@@ -227,7 +227,7 @@ localStorage.setItem(EXPLORE_WRAPS_KEY, JSON.stringify(wraps))
       setProfilesMap(profileMap)
       localStorage.setItem(EXPLORE_PROFILES_KEY, JSON.stringify(profileMap))
 localStorage.setItem(EXPLORE_PROFILES_KEY, JSON.stringify(profileMap))
-      const usersFromWraps: ExploreUser[] = uniqueUserIds.map((userId) => {
+      const usersFromWraps: ExploreUser[] = uniqueUserIds.slice(0, 12).map((userId) => {
         const userWraps = wraps.filter((wrap) => wrap.user_id === userId)
         const latestUserWrap = userWraps[0]
 
@@ -252,6 +252,7 @@ if (currentUserId) {
   const followingIds = (followsData || []).map((f) => f.following_id)
 
   const followingUsersData = followingIds
+  .slice(0, 10)
   .map((userId) => {
     const userWraps = wraps.filter((wrap) => wrap.user_id === userId)
     const latestUserWrap = userWraps[0]

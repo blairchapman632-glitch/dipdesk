@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 
 export default function AppLayout({
@@ -76,10 +77,10 @@ export default function AppLayout({
           : '🛠'
 
       return (
-        <button
+        <Link
           key={item.href}
-          type="button"
-          onClick={() => router.push(item.href)}
+          href={item.href}
+          prefetch={true}
           className={`flex min-h-[64px] flex-col items-center justify-center gap-1 rounded-xl px-1 py-2 text-xs font-semibold ${
             isActive
               ? 'bg-pink-600 text-white'
@@ -93,7 +94,7 @@ export default function AppLayout({
           <span className="pointer-events-none leading-none">
             {item.label}
           </span>
-        </button>
+        </Link>
       )
     })}
   </div>
