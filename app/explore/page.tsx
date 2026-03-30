@@ -124,7 +124,7 @@ export default function Page() {
     }).format(value)
   }
   const [searchTerm, setSearchTerm] = useState('')
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(false)
   const [latestWraps, setLatestWraps] = useState<Wrap[]>([])
   const [cachedLoaded, setCachedLoaded] = useState(false)
 const [users, setUsers] = useState<ExploreUser[]>([])
@@ -140,16 +140,32 @@ const [toastMessage, setToastMessage] = useState('')
     const cachedWraps = localStorage.getItem(EXPLORE_WRAPS_KEY)
 const cachedProfiles = localStorage.getItem(EXPLORE_PROFILES_KEY)
 
+const cachedUsers = localStorage.getItem(EXPLORE_USERS_KEY)
+const cachedFollowing = localStorage.getItem(EXPLORE_FOLLOWING_KEY)
+
 if (cachedWraps) {
   try {
     setLatestWraps(JSON.parse(cachedWraps))
     setCachedLoaded(true)
+    setLoading(false)
   } catch {}
 }
 
 if (cachedProfiles) {
   try {
     setProfilesMap(JSON.parse(cachedProfiles))
+  } catch {}
+}
+
+if (cachedUsers) {
+  try {
+    setUsers(JSON.parse(cachedUsers))
+  } catch {}
+}
+
+if (cachedFollowing) {
+  try {
+    setFollowingUsers(JSON.parse(cachedFollowing))
   } catch {}
 }
     async function loadExploreData() {
