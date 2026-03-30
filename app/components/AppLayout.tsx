@@ -59,28 +59,45 @@ export default function AppLayout({
           </header>
 
           {/* Phone bottom nav */}
-          <nav className="fixed inset-x-0 bottom-0 z-40 h-20 border-t bg-white md:hidden">
-  <div className="grid grid-cols-5 pb-3 pt-2 px-2">
-              {navItems.map((item) => {
-                const isActive = pathname === item.href
+<nav className="fixed inset-x-0 bottom-0 z-40 border-t bg-white/95 backdrop-blur supports-[padding:max(0px)]:pb-[max(0.5rem,env(safe-area-inset-bottom))] md:hidden">
+  <div className="grid grid-cols-5 gap-1 px-2 pt-2 pb-2">
+    {navItems.map((item) => {
+      const isActive = pathname === item.href
 
-                return (
-                  <button
-                    key={item.href}
-                    type="button"
-                    onClick={() => router.push(item.href)}
-                    className={`flex cursor-pointer flex-col items-center justify-center px-2 py-4 text-sm font-semibold rounded-xl transition active:scale-95 ${
-                      isActive 
-  ? 'bg-pink-600 text-white shadow-sm active:scale-95' 
-  : 'text-gray-500 hover:bg-gray-100 active:bg-gray-200' 
-                    }`}
-                  >
-                    {item.label}
-                  </button>
-                )
-              })}
-            </div>
-          </nav>
+      const icon =
+        item.label === 'Dashboard'
+          ? '⌂'
+          : item.label === 'Explore'
+          ? '⌕'
+          : item.label === 'Wishlist'
+          ? '★'
+          : item.label === 'Messages'
+          ? '✉'
+          : '🛠'
+
+      return (
+        <button
+          key={item.href}
+          type="button"
+          onClick={() => router.push(item.href)}
+          className={`min-h-[68px] rounded-2xl px-1 py-2 flex flex-col items-center justify-center gap-1 text-xs font-semibold select-none transition-transform duration-75 ${
+            isActive
+              ? 'bg-pink-600 text-white shadow-md'
+              : 'bg-gray-50 text-gray-600 border border-gray-200 active:scale-95 active:bg-gray-100'
+          }`}
+        >
+          <span className="text-base leading-none pointer-events-none">
+            {icon}
+          </span>
+
+          <span className="leading-none pointer-events-none">
+            {item.label}
+          </span>
+        </button>
+      )
+    })}
+  </div>
+</nav>
         </>
       )}
 

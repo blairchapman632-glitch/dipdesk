@@ -1084,10 +1084,11 @@ className="w-full cursor-pointer rounded-xl bg-gradient-to-r from-pink-500 to-ro
                     >
                       <div className="relative aspect-[3/4] w-full bg-gray-100 pointer-events-none">
                         <img
-                          src={imageUrl}
-                          alt={wrap.name}
-                          className="h-full w-full object-cover object-[center_20%] transition duration-300 group-hover:scale-[1.03]"
-                        />
+  src={imageUrl}
+  loading="lazy"
+  alt={wrap.name}
+  className="h-full w-full object-cover object-[center_20%] transition duration-300 group-hover:scale-[1.03]"
+/>
 
                         {wrap.for_sale && (
   <div className="absolute left-3 top-3 rounded-xl bg-white/90 px-2 py-1 text-xs font-semibold text-amber-700 shadow">
@@ -1147,10 +1148,11 @@ className="w-full cursor-pointer rounded-xl bg-gradient-to-r from-pink-500 to-ro
                     >
                       <div className="relative aspect-[4/5] w-full bg-gray-100 pointer-events-none">
                         <img
-                          src={getPrimaryImage(wrap)}
-                          alt={wrap.name}
-                          className="h-full w-full object-cover object-[center_20%] opacity-90 transition duration-300 group-hover:scale-[1.03]"
-                        />
+  src={getPrimaryImage(wrap)}
+  loading="lazy"
+  alt={wrap.name}
+  className="h-full w-full object-cover object-[center_20%] opacity-90 transition duration-300 group-hover:scale-[1.03]"
+/>
                         {wrap.for_sale && (
   <div className="absolute left-3 top-3 rounded-xl bg-white/90 px-2 py-1 text-xs font-semibold text-amber-700 shadow">
     🪓 For Sale
