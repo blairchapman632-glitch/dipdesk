@@ -69,8 +69,10 @@ export default function AppLayout({
                     key={item.href}
                     type="button"
                     onClick={() => router.push(item.href)}
-                    className={`flex cursor-pointer flex-col items-center justify-center px-2 py-4 text-sm font-semibold transition ${
-                      isActive ? 'text-pink-600' : 'text-gray-500'
+                    className={`flex cursor-pointer flex-col items-center justify-center px-2 py-4 text-sm font-semibold rounded-xl transition ${
+                      isActive 
+  ? 'bg-pink-600 text-white shadow-sm' 
+  : 'text-gray-500 hover:bg-gray-100' 
                     }`}
                   >
                     {item.label}
