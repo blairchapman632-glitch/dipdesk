@@ -329,7 +329,8 @@ return () => {
             className="flex w-[160px] shrink-0 cursor-pointer flex-col items-center rounded-lg border bg-white px-2 py-2 text-center shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-md sm:w-[170px]"
           >
             <img
-              src={user.image_url}
+  src={user.image_url}
+  loading="lazy"
               alt={user.name}
               className="mb-1.5 h-16 w-16 rounded-full object-cover pointer-events-none"
             />
@@ -372,7 +373,8 @@ return () => {
                     className="flex w-[160px] shrink-0 cursor-pointer flex-col items-center rounded-lg border bg-white px-2 py-2 text-center shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-md sm:w-[170px]"
                   >
                     <img
-                      src={user.image_url}
+  src={user.image_url}
+  loading="lazy"
                       alt={user.name}
                       className="mb-1.5 h-16 w-16 rounded-full object-cover pointer-events-none"
                     />
@@ -491,7 +493,8 @@ setTimeout(() => setToastMessage(''), 2000)
                 >
                   <div className="relative aspect-[3/4] w-full bg-gray-100" style={{ cursor: 'pointer' }}>
                     <img style={{ cursor: 'pointer' }}
-                      src={getPrimaryImage(wrap)}
+  src={getPrimaryImage(wrap)}
+  loading="lazy"
                       alt={wrap.name}
                       className="h-full w-full object-cover object-[center_20%] transition duration-300 group-hover:scale-[1.03] pointer-events-none"
                     />
@@ -584,7 +587,8 @@ setTimeout(() => setToastMessage(''), 2000)
                     className="block w-full cursor-zoom-in bg-black"
                   >
                     <img
-                      src={selectedViewImage || getPrimaryImage(selectedWrap)}
+  src={selectedViewImage || getPrimaryImage(selectedWrap)}
+  loading="lazy"
                       alt={selectedWrap.name}
                       className="h-[440px] w-full object-cover transition duration-300 hover:scale-[1.01]"
                     />
@@ -728,7 +732,8 @@ setTimeout(() => setToastMessage(''), 2000)
               </button>
 
               <img
-                src={selectedViewImage || getPrimaryImage(selectedWrap)}
+  src={selectedViewImage || getPrimaryImage(selectedWrap)}
+  loading="lazy"
                 alt={selectedWrap.name}
                 className="max-h-[90vh] w-full rounded-2xl bg-black object-contain"
               />
