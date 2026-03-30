@@ -331,7 +331,7 @@ return () => {
             className="flex w-[160px] shrink-0 cursor-pointer flex-col items-center rounded-lg border bg-white px-2 py-2 text-center shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-md sm:w-[170px]"
           >
             <img
-  src={user.image_url}
+  src={`${user.image_url}?width=200&quality=60`}
   loading="lazy"
               alt={user.name}
               className="mb-1.5 h-16 w-16 rounded-full object-cover pointer-events-none"
@@ -375,7 +375,7 @@ return () => {
                     className="flex w-[160px] shrink-0 cursor-pointer flex-col items-center rounded-lg border bg-white px-2 py-2 text-center shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-md sm:w-[170px]"
                   >
                     <img
-  src={user.image_url}
+  src={`${user.image_url}?width=200&quality=60`}
   loading="lazy"
                       alt={user.name}
                       className="mb-1.5 h-16 w-16 rounded-full object-cover pointer-events-none"
