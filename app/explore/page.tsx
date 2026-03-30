@@ -59,6 +59,11 @@ type ExploreUser = {
 const WRAP_PLACEHOLDER =
   'https://placehold.co/800x800/fdf2f8/be185d?text=Wrap'
 
+const EXPLORE_WRAPS_KEY = 'dipdesk_explore_wraps'
+const EXPLORE_USERS_KEY = 'dipdesk_explore_users'
+const EXPLORE_FOLLOWING_KEY = 'dipdesk_explore_following'
+const EXPLORE_PROFILES_KEY = 'dipdesk_explore_profiles'
+
 function getPrimaryImage(wrap?: Wrap) {
   if (!wrap?.wrap_images?.length) return WRAP_PLACEHOLDER
 
@@ -121,6 +126,7 @@ export default function Page() {
   const [searchTerm, setSearchTerm] = useState('')
   const [loading, setLoading] = useState(true)
   const [latestWraps, setLatestWraps] = useState<Wrap[]>([])
+  const [cachedLoaded, setCachedLoaded] = useState(false)
 const [users, setUsers] = useState<ExploreUser[]>([])
 const [followingUsers, setFollowingUsers] = useState<FollowingUser[]>([])
 const [profilesMap, setProfilesMap] = useState<Record<string, Profile>>({})
@@ -131,6 +137,21 @@ const [profilesMap, setProfilesMap] = useState<Record<string, Profile>>({})
 const [toastMessage, setToastMessage] = useState('')
 
   useEffect(() => {
+    const cachedWraps = localStorage.getItem(EXPLORE_WRAPS_KEY)
+const cachedProfiles = localStorage.getItem(EXPLORE_PROFILES_KEY)
+
+if (cachedWraps) {
+  try {
+    setLatestWraps(JSON.parse(cachedWraps))
+    setCachedLoaded(true)
+  } catch {}
+}
+
+if (cachedProfiles) {
+  try {
+    setProfilesMap(JSON.parse(cachedProfiles))
+  } catch {}
+}
     async function loadExploreData() {
   setLoading(true)
 
@@ -156,7 +177,7 @@ const [toastMessage, setToastMessage] = useState('')
 
       const wraps = (wrapData as Wrap[]) || []
       setLatestWraps(wraps)
-
+localStorage.setItem(EXPLORE_WRAPS_KEY, JSON.stringify(wraps))
       const uniqueUserIds = [...new Set(wraps.map((wrap) => wrap.user_id))]
 
       if (uniqueUserIds.length === 0) {
@@ -191,7 +212,7 @@ const [toastMessage, setToastMessage] = useState('')
       )
 
       setProfilesMap(profileMap)
-
+localStorage.setItem(EXPLORE_PROFILES_KEY, JSON.stringify(profileMap))
       const usersFromWraps: ExploreUser[] = uniqueUserIds.map((userId) => {
         const userWraps = wraps.filter((wrap) => wrap.user_id === userId)
         const latestUserWrap = userWraps[0]
