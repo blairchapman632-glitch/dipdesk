@@ -60,7 +60,7 @@ export default function AppLayout({
 
           {/* Phone bottom nav */}
           <nav className="fixed inset-x-0 bottom-0 z-40 h-20 border-t bg-white md:hidden">
-  <div className="grid grid-cols-5 pb-3 pt-2">
+  <div className="grid grid-cols-5 pb-3 pt-2 px-2">
               {navItems.map((item) => {
                 const isActive = pathname === item.href
 
@@ -69,10 +69,10 @@ export default function AppLayout({
                     key={item.href}
                     type="button"
                     onClick={() => router.push(item.href)}
-                    className={`flex cursor-pointer flex-col items-center justify-center px-2 py-4 text-sm font-semibold rounded-xl transition ${
+                    className={`flex cursor-pointer flex-col items-center justify-center px-2 py-4 text-sm font-semibold rounded-xl transition active:scale-95 ${
                       isActive 
-  ? 'bg-pink-600 text-white shadow-sm' 
-  : 'text-gray-500 hover:bg-gray-100' 
+  ? 'bg-pink-600 text-white shadow-sm active:scale-95' 
+  : 'text-gray-500 hover:bg-gray-100 active:bg-gray-200' 
                     }`}
                   >
                     {item.label}
