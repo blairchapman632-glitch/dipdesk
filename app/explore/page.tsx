@@ -127,7 +127,9 @@ const [profilesMap, setProfilesMap] = useState<Record<string, Profile>>({})
   const [isViewWrapModalOpen, setIsViewWrapModalOpen] = useState(false)
   const [isImagePreviewOpen, setIsImagePreviewOpen] = useState(false)
 const [toastMessage, setToastMessage] = useState('')
-
+const refreshData = () => {
+  loadExploreData()
+}
   useEffect(() => {
     async function loadExploreData() {
   setLoading(true)
@@ -239,6 +241,16 @@ setLoading(false)
     }
 
     loadExploreData()
+
+const handleFocus = () => {
+  loadExploreData()
+}
+
+window.addEventListener('focus', handleFocus)
+
+return () => {
+  window.removeEventListener('focus', handleFocus)
+}
   }, [])
 
   const filteredUsers = useMemo(() => {
