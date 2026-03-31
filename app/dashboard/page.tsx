@@ -96,10 +96,27 @@ type WrapFormState = {
   for_sale_price_is_pm: boolean
   status: 'active' | 'holiday' | 'departed'
 }
+type NotificationRow = {
+  id: string
+  recipient_user_id: string
+  actor_user_id: string | null
+  wrap_id: string | null
+  type: 'like' | 'wishlist' | 'for_sale'
+  created_at: string
+}
 
+type NotificationItem = {
+  id: string
+  actor_user_id: string | null
+  created_at: string
+  type: 'like' | 'wishlist' | 'for_sale'
+  actor_name: string
+  wrap: Wrap | null
+}
 const DASHBOARD_EMAIL_KEY = 'dipdesk_dashboard_email'
 const DASHBOARD_DIPS_KEY = 'dipdesk_dashboard_dips'
 const DASHBOARD_WRAPS_KEY = 'dipdesk_dashboard_wraps'
+const DASHBOARD_NOTIFICATIONS_KEY = 'dipdesk_dashboard_notifications'
 
 const EMPTY_WRAP_FORM: WrapFormState = {
   id: null,
@@ -184,7 +201,27 @@ function getPrimaryImage(wrap?: Wrap) {
 
   return `${url}?width=400&quality=60`
 }
+function formatTimeAgo(dateString: string) {
+  const now = new Date().getTime()
+  const then = new Date(dateString).getTime()
+  const diffSeconds = Math.max(1, Math.floor((now - then) / 1000))
 
+  if (diffSeconds < 60) return 'Just now'
+
+  const diffMinutes = Math.floor(diffSeconds / 60)
+  if (diffMinutes < 60) return `${diffMinutes}m ago`
+
+  const diffHours = Math.floor(diffMinutes / 60)
+  if (diffHours < 24) return `${diffHours}h ago`
+
+  const diffDays = Math.floor(diffHours / 24)
+  if (diffDays < 7) return `${diffDays}d ago`
+
+  return new Intl.DateTimeFormat('en-AU', {
+    day: 'numeric',
+    month: 'short',
+  }).format(new Date(dateString))
+}
 export default function Dashboard() {
   const [email, setEmail] = useState('')
   const [dips, setDips] = useState<Dip[]>([])
@@ -211,7 +248,7 @@ const [isReadOnlyWrapView, setIsReadOnlyWrapView] = useState(false)
 const [isSavingWrap, setIsSavingWrap] = useState(false)
 const [isUploadingImages, setIsUploadingImages] = useState(false)
 const [wrapForm, setWrapForm] = useState<WrapFormState>(EMPTY_WRAP_FORM)
-
+const [notifications, setNotifications] = useState<NotificationItem[]>([])
     const router = useRouter()
 
   const handleLogout = async () => {
@@ -331,7 +368,8 @@ localStorage.setItem(DASHBOARD_EMAIL_KEY, userEmail)
     const [
   { data: dipData, error: dipError },
   { data: wrapData, error: wrapError },
-  { data: communityWrapData }
+  { data: communityWrapData },
+  { data: notificationData, error: notificationError }
 ] = await Promise.all([
   supabase
     .from('dips')
@@ -357,6 +395,13 @@ localStorage.setItem(DASHBOARD_EMAIL_KEY, userEmail)
 )
   .order('created_at', { ascending: false })
   .limit(20)
+  ,
+  supabase
+    .from('notifications')
+    .select('id, recipient_user_id, actor_user_id, wrap_id, type, created_at')
+    .eq('recipient_user_id', user.id)
+    .order('created_at', { ascending: false })
+    .limit(20)
 ])
 
     if (!dipError && dipData) {
@@ -394,13 +439,72 @@ if (communityWrapData) {
     setProfilesMap(map)
   }
 }
+
+if (!notificationError && notificationData) {
+  const rows = (notificationData as NotificationRow[]) || []
+  const actorIds = [...new Set(rows.map((row) => row.actor_user_id).filter(Boolean) as string[])]
+  const wrapIds = [...new Set(rows.map((row) => row.wrap_id).filter(Boolean) as string[])]
+
+  let actorMap: Record<string, Profile> = {}
+  let wrapMap: Record<string, Wrap> = {}
+
+  if (actorIds.length > 0) {
+    const { data: actorProfileData } = await supabase
+      .from('profiles')
+      .select('id, full_name, username')
+      .in('id', actorIds)
+
+    actorMap = ((actorProfileData as Profile[]) || []).reduce<Record<string, Profile>>(
+      (accumulator, profile) => {
+        accumulator[profile.id] = profile
+        return accumulator
+      },
+      {}
+    )
+  }
+
+  if (wrapIds.length > 0) {
+    const { data: notificationWrapData } = await supabase
+      .from('wraps')
+      .select(
+        'id, user_id, name, brand, description, purchase_date, purchase_price, purchase_currency, purchased_from, purchase_country, status, on_loan_to, sold_to, sold_price, sold_currency, sold_date, is_favourite, for_sale, for_sale_price, for_sale_currency, for_sale_price_is_pm, created_at, wrap_images(id, image_url, is_primary, sort_order)'
+      )
+      .in('id', wrapIds)
+
+    wrapMap = ((notificationWrapData as Wrap[]) || []).reduce<Record<string, Wrap>>(
+      (accumulator, wrap) => {
+        accumulator[wrap.id] = wrap
+        return accumulator
+      },
+      {}
+    )
+  }
+
+  const nextNotifications: NotificationItem[] = rows.map((row) => ({
+    id: row.id,
+    actor_user_id: row.actor_user_id,
+    created_at: row.created_at,
+    type: row.type,
+    actor_name: row.actor_user_id
+      ? ((actorMap[row.actor_user_id]?.full_name?.split(' ')[0]) ||
+          actorMap[row.actor_user_id]?.username ||
+          'Someone')
+      : 'Someone',
+    wrap: row.wrap_id ? wrapMap[row.wrap_id] || null : null,
+  }))
+
+  setNotifications(nextNotifications)
+  localStorage.setItem(DASHBOARD_NOTIFICATIONS_KEY, JSON.stringify(nextNotifications))
+}
+
     setLoading(false)
   }, [])
 
   useEffect(() => {
-    const cachedEmail = localStorage.getItem(DASHBOARD_EMAIL_KEY)
+        const cachedEmail = localStorage.getItem(DASHBOARD_EMAIL_KEY)
     const cachedDips = localStorage.getItem(DASHBOARD_DIPS_KEY)
     const cachedWraps = localStorage.getItem(DASHBOARD_WRAPS_KEY)
+    const cachedNotifications = localStorage.getItem(DASHBOARD_NOTIFICATIONS_KEY)
 
     if (cachedEmail) setEmail(cachedEmail)
 
@@ -412,11 +516,19 @@ if (communityWrapData) {
       }
     }
 
-    if (cachedWraps) {
+        if (cachedWraps) {
       try {
         setWraps(JSON.parse(cachedWraps))
       } catch {
         localStorage.removeItem(DASHBOARD_WRAPS_KEY)
+      }
+    }
+
+    if (cachedNotifications) {
+      try {
+        setNotifications(JSON.parse(cachedNotifications))
+      } catch {
+        localStorage.removeItem(DASHBOARD_NOTIFICATIONS_KEY)
       }
     }
 
@@ -452,6 +564,21 @@ function closeViewWrapModal() {
   setSelectedViewImage(null)
   setIsImagePreviewOpen(false)
   setIsReadOnlyWrapView(false)
+}
+function handleNotificationClick(notification: NotificationItem) {
+  if (notification.type === 'for_sale' && notification.wrap) {
+    openViewWrapModal(notification.wrap, true)
+    return
+  }
+
+  if (notification.actor_user_id) {
+    router.push(`/user/${notification.actor_user_id}`)
+    return
+  }
+
+  if (notification.wrap) {
+    openViewWrapModal(notification.wrap, true)
+  }
 }
 function openReportModal() {
   setIsReportModalOpen(true)
@@ -778,14 +905,15 @@ async function replaceWrapImage(imageId: string, incomingFile: File) {
   setIsUploadingImages(false)
 }
 
-  async function saveWrap() {
+    async function saveWrap() {
     if (!currentUserId) return
     if (!wrapForm.name.trim()) return
 if (isUploadingImages) return
 
     setIsSavingWrap(true)
 
-    
+    const existingWrap = wrapForm.id ? wrapsById[wrapForm.id] : null
+    const wasForSale = existingWrap?.for_sale || false
 
 const wrapPayload = {
   user_id: currentUserId,
@@ -892,6 +1020,27 @@ const uploadedImages = savedImages.map((image, index) => ({
           setIsSavingWrap(false)
           return
         }
+      }
+    }
+
+        if (wrapId && wrapForm.for_sale && !wasForSale) {
+      const { data: wishlistUsers } = await supabase
+        .from('wishlists')
+        .select('user_id')
+        .eq('wrap_id', wrapId)
+        .neq('user_id', currentUserId)
+
+      const recipientIds = [...new Set((wishlistUsers || []).map((row) => row.user_id))]
+
+      if (recipientIds.length > 0) {
+        await supabase.from('notifications').insert(
+          recipientIds.map((recipientId) => ({
+            recipient_user_id: recipientId,
+            actor_user_id: currentUserId,
+            wrap_id: wrapId,
+            type: 'for_sale' as const,
+          }))
+        )
       }
     }
 
@@ -1203,63 +1352,117 @@ className="w-full cursor-pointer rounded-xl bg-gradient-to-r from-pink-500 to-ro
               
             </div>
 
-            <div className="space-y-2 xl:space-y-3">
-              <>
-  {/* DIPS FIRST */}
-  {dips.map((dip) => {
-    const linkedWrap = dip.wrap_id ? wrapsById[dip.wrap_id] : undefined
-    const imageUrl = getPrimaryImage(linkedWrap)
-    const progress = getDipProgress(dip)
+                       <div className="space-y-2 xl:space-y-3">
+              {notifications.map((notification) => {
+                const wrap = notification.wrap
+                const wrapName = wrap?.name || 'Wrap'
+                const imageUrl = getPrimaryImage(wrap || undefined)
 
-    return (
-      <button
-        key={dip.id}
-        type="button"
-        onClick={() => router.push(`/dips/${dip.id}`)}
-        className="w-full cursor-pointer rounded-2xl border bg-white p-3 text-left shadow-sm transition hover:shadow-md"
-      >
-        <div className="flex items-center justify-between gap-3 pointer-events-none">
-          <img
-            src={imageUrl}
-            alt={dip.title}
-            className="h-12 w-12 shrink-0 rounded-xl object-cover object-[center_30%]"
-          />
+                const title =
+                  notification.type === 'like'
+                    ? `${notification.actor_name} liked your wrap`
+                    : notification.type === 'wishlist'
+                    ? `${notification.actor_name} added your wrap to their wishlist`
+                    : `${wrapName} from your wishlist is now for sale`
 
-          <div className="min-w-0 flex-1">
-            <p className="text-[10px] font-semibold text-gray-400 mb-0.5">
-              MY DIP
-            </p>
+                const meta =
+                  notification.type === 'for_sale'
+                    ? wrap?.for_sale_price_is_pm
+                      ? 'PM'
+                      : wrap?.for_sale_price !== null && wrap?.for_sale_price !== undefined
+                      ? formatCurrency(wrap.for_sale_price, wrap.for_sale_currency || 'AUD')
+                      : 'For Sale'
+                    : wrapName
 
-            <div className="flex items-start justify-between gap-2">
-              <h3 className="truncate text-sm font-bold text-gray-900">
-                {dip.title}
-              </h3>
+                return (
+                  <button
+                    key={notification.id}
+                    type="button"
+                    onClick={() => handleNotificationClick(notification)}
+                    className="w-full cursor-pointer rounded-2xl border bg-white p-3 text-left shadow-sm transition hover:shadow-md"
+                  >
+                    <div className="flex items-center gap-3">
+                      <img
+                        src={imageUrl}
+                        alt={wrapName}
+                        className="h-12 w-12 shrink-0 rounded-xl object-cover object-[center_30%]"
+                      />
 
-              <span className="rounded-full bg-pink-50 px-2 py-0.5 text-[10px] font-semibold text-pink-600">
-                {getStageLabel(dip.stage, dip.status)}
-              </span>
-            </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">
+                          {notification.type === 'for_sale' ? 'FOR SALE' : 'ACTIVITY'}
+                        </p>
 
-            <p className="mt-0.5 truncate text-[11px] text-gray-500">
-              {dip.total_spots} spots • {formatCurrency(dip.price_per_spot, 'AUD')} per spot
-            </p>
+                        <p className="line-clamp-2 text-sm font-semibold text-gray-900">
+                          {title}
+                        </p>
 
-            <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-gray-200">
-              <div
-                className="h-full bg-gradient-to-r from-pink-500 to-rose-500"
-                style={{ width: `${progress}%` }}
-              />
-            </div>
-          </div>
-        </div>
-      </button>
-    )
-  })}
+                        <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-gray-500">
+                          <span className="truncate">{meta}</span>
+                          <span>•</span>
+                          <span>{formatTimeAgo(notification.created_at)}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </button>
+                )
+              })}
 
-  
-</>
+              {dips.map((dip) => {
+                const linkedWrap = dip.wrap_id ? wrapsById[dip.wrap_id] : undefined
+                const imageUrl = getPrimaryImage(linkedWrap)
+                const progress = getDipProgress(dip)
 
-              
+                return (
+                  <button
+                    key={dip.id}
+                    type="button"
+                    onClick={() => router.push(`/dips/${dip.id}`)}
+                    className="w-full cursor-pointer rounded-2xl border bg-white p-3 text-left shadow-sm transition hover:shadow-md"
+                  >
+                    <div className="flex items-center justify-between gap-3 pointer-events-none">
+                      <img
+                        src={imageUrl}
+                        alt={dip.title}
+                        className="h-12 w-12 shrink-0 rounded-xl object-cover object-[center_30%]"
+                      />
+
+                      <div className="min-w-0 flex-1">
+                        <p className="mb-0.5 text-[10px] font-semibold text-gray-400">
+                          MY DIP
+                        </p>
+
+                        <div className="flex items-start justify-between gap-2">
+                          <h3 className="truncate text-sm font-bold text-gray-900">
+                            {dip.title}
+                          </h3>
+
+                          <span className="rounded-full bg-pink-50 px-2 py-0.5 text-[10px] font-semibold text-pink-600">
+                            {getStageLabel(dip.stage, dip.status)}
+                          </span>
+                        </div>
+
+                        <p className="mt-0.5 truncate text-[11px] text-gray-500">
+                          {dip.total_spots} spots • {formatCurrency(dip.price_per_spot, 'AUD')} per spot
+                        </p>
+
+                        <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-gray-200">
+                          <div
+                            className="h-full bg-gradient-to-r from-pink-500 to-rose-500"
+                            style={{ width: `${progress}%` }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </button>
+                )
+              })}
+
+              {notifications.length === 0 && dips.length === 0 && (
+                <div className="rounded-2xl border border-dashed p-6 text-center text-sm text-gray-500">
+                  No activity yet
+                </div>
+              )}
             </div>
           </section>
         </div>
