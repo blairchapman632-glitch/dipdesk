@@ -1484,60 +1484,76 @@ className="w-full cursor-pointer rounded-xl bg-gradient-to-r from-pink-500 to-ro
       className="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl"
       onClick={(e) => e.stopPropagation()}
     >
-      <div className="mb-6 flex items-start justify-between gap-4">
-  <div>
-<h2 className="text-2xl font-bold text-gray-900 xl:text-2xl">    {selectedWrap.name}
-    </h2>
+            <div className="mb-6 flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="text-2xl font-bold text-gray-900 xl:text-2xl">
+              {selectedWrap.name}
+            </h2>
 
-    <div className="flex items-center gap-2 mt-1 flex-wrap">
-      <p className="text-sm text-gray-500">
-        {selectedWrap.brand || 'No brand added'}
-      </p>
+            {selectedWrap.user_id !== currentUserId && (
+              <>
+                <button
+                  type="button"
+                  className={`rounded-full border px-3 py-1 text-sm font-semibold transition ${
+                    'border-pink-200 bg-pink-50 text-pink-600'
+                  }`}
+                >
+                  ❤️ {selectedWrapCounts.likes}
+                </button>
 
-      {selectedWrap.is_favourite && (
-        <span className="rounded-full bg-pink-100 px-2 py-0.5 text-xs font-semibold text-pink-600">
-          ★ Perma
-        </span>
-      )}
+                <button
+                  type="button"
+                  className={`rounded-full border px-3 py-1 text-sm font-semibold transition ${
+                    'border-amber-200 bg-amber-50 text-amber-700'
+                  }`}
+                >
+                  ⭐ {selectedWrapCounts.wishlists}
+                </button>
+              </>
+            )}
+          </div>
 
-      <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-700">
-        {selectedWrap.status}
-      </span>
-    </div>
-  </div>
+          <div className="mt-1 flex flex-wrap items-center gap-2">
+            <p className="text-sm text-gray-500">
+              {selectedWrap.brand || 'No brand added'}
+            </p>
+
+            {selectedWrap.is_favourite && (
+              <span className="rounded-full bg-pink-100 px-2 py-0.5 text-xs font-semibold text-pink-600">
+                ★ Perma
+              </span>
+            )}
+
+            <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-700">
+              {selectedWrap.status}
+            </span>
+          </div>
+        </div>
 
         <div className="flex items-center gap-2">
-    {!isReadOnlyWrapView && (
-      <button
-        type="button"
-        onClick={() => {
-  closeViewWrapModal()
-  openEditWrapModal(selectedWrap)
-}}
-        className="cursor-pointer rounded-xl border px-3 py-1 text-sm font-semibold text-gray-700"
-      >
-        Edit
-      </button>
-    )}
+          {!isReadOnlyWrapView && (
+            <button
+              type="button"
+              onClick={() => {
+                closeViewWrapModal()
+                openEditWrapModal(selectedWrap)
+              }}
+              className="cursor-pointer rounded-xl border px-3 py-1 text-sm font-semibold text-gray-700"
+            >
+              Edit
+            </button>
+          )}
 
-        {selectedWrap.user_id !== currentUserId && (
-      <button
-        type="button"
-        className="cursor-pointer rounded-xl bg-pink-600 px-3 py-1 text-sm font-semibold text-white"
-      >
-        Follow
-      </button>
-    )}
-
-    <button
-      type="button"
-      onClick={closeViewWrapModal}
-      className="cursor-pointer rounded-full border px-3 py-1 text-sm text-gray-600"
-    >
-      Close
-    </button>
-  </div>
-</div>
+          <button
+            type="button"
+            onClick={closeViewWrapModal}
+            className="cursor-pointer rounded-full border px-3 py-1 text-sm text-gray-600"
+          >
+            Close
+          </button>
+        </div>
+      </div>
 
       <div className="mb-4 overflow-hidden rounded-3xl bg-gray-100 shadow-sm">
   <button
@@ -1614,6 +1630,20 @@ className="w-full cursor-pointer rounded-xl bg-gradient-to-r from-pink-500 to-ro
               <span className="font-semibold text-gray-900">Favourite:</span>{' '}
               {selectedWrap.is_favourite ? 'Yes' : 'No'}
             </p>
+
+                        {selectedWrap.for_sale && (
+              <p>
+                <span className="font-semibold text-gray-900">For Sale:</span>{' '}
+                {selectedWrap.for_sale_price_is_pm
+                  ? 'PM'
+                  : selectedWrap.for_sale_price !== null
+                  ? formatCurrency(
+                      selectedWrap.for_sale_price,
+                      selectedWrap.for_sale_currency || 'AUD'
+                    )
+                  : 'Yes'}
+              </p>
+            )}
 
             {selectedWrap.status === 'holiday' && (
               <p>
