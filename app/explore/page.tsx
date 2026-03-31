@@ -201,21 +201,24 @@ export default function Page() {
         likes: prev.likes + 1,
       }))
 
-            await supabase
+            const { data: existingLikeNotification } = await supabase
         .from('notifications')
-        .upsert(
-          {
-            recipient_user_id: selectedWrap.user_id,
-            actor_user_id: currentUserId,
-            wrap_id: selectedWrap.id,
-            type: 'like',
-            read_at: null,
-          },
-          {
-            onConflict: 'recipient_user_id,actor_user_id,wrap_id,type',
-            ignoreDuplicates: true,
-          }
-        )
+        .select('id')
+        .eq('recipient_user_id', selectedWrap.user_id)
+        .eq('actor_user_id', currentUserId)
+        .eq('wrap_id', selectedWrap.id)
+        .eq('type', 'like')
+        .maybeSingle()
+
+      if (!existingLikeNotification) {
+        await supabase.from('notifications').insert({
+          recipient_user_id: selectedWrap.user_id,
+          actor_user_id: currentUserId,
+          wrap_id: selectedWrap.id,
+          type: 'like',
+          read_at: null,
+        })
+      }
     }
 
     setSocialLoading(false)
@@ -259,21 +262,24 @@ export default function Page() {
         wishlists: prev.wishlists + 1,
       }))
 
-      await supabase
+      const { data: existingWishlistNotification } = await supabase
         .from('notifications')
-        .upsert(
-          {
-            recipient_user_id: selectedWrap.user_id,
-            actor_user_id: currentUserId,
-            wrap_id: selectedWrap.id,
-            type: 'wishlist',
-            read_at: null,
-          },
-          {
-            onConflict: 'recipient_user_id,actor_user_id,wrap_id,type',
-            ignoreDuplicates: true,
-          }
-        )
+        .select('id')
+        .eq('recipient_user_id', selectedWrap.user_id)
+        .eq('actor_user_id', currentUserId)
+        .eq('wrap_id', selectedWrap.id)
+        .eq('type', 'wishlist')
+        .maybeSingle()
+
+      if (!existingWishlistNotification) {
+        await supabase.from('notifications').insert({
+          recipient_user_id: selectedWrap.user_id,
+          actor_user_id: currentUserId,
+          wrap_id: selectedWrap.id,
+          type: 'wishlist',
+          read_at: null,
+        })
+      }
     }
 
     setSocialLoading(false)
