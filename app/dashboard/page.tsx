@@ -350,7 +350,9 @@ const reportTotals = useMemo(() => {
     totalSoldValue,
   }
 }, [reportRows])
-
+const unreadNotificationCount = useMemo(() => {
+  return notifications.filter((notification) => !notification.read_at).length
+}, [notifications])
   const loadData = useCallback(async () => {
     const {
       data: { user },
@@ -1227,7 +1229,20 @@ function exportReportCsv() {
       : 'text-gray-600'
   }`}
 >
-  Activity
+  <span className="flex items-center justify-center gap-2">
+    <span>Activity</span>
+    {unreadNotificationCount > 0 && (
+      <span
+        className={`rounded-full px-2 py-0.5 text-xs font-bold ${
+          mobileTab === 'activity'
+            ? 'bg-white text-pink-600'
+            : 'bg-pink-600 text-white'
+        }`}
+      >
+        {unreadNotificationCount}
+      </span>
+    )}
+  </span>
 </button>
           </div>
         </div>
