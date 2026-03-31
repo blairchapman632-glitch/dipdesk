@@ -47,7 +47,7 @@ type SocialCounts = {
 
 const WRAP_PLACEHOLDER =
   'https://placehold.co/800x800/fdf2f8/be185d?text=Wrap'
-
+const WRAP_PLACEHOLDER =
 function formatCurrency(
   value: number | null | undefined,
   currency: 'AUD' | 'USD' | 'EUR' = 'AUD'
@@ -93,54 +93,103 @@ const [selectedWrapCounts, setSelectedWrapCounts] = useState<SocialCounts>({
 const [hasLikedSelectedWrap, setHasLikedSelectedWrap] = useState(false)
 const [hasWishlistedSelectedWrap, setHasWishlistedSelectedWrap] = useState(false)
 const [socialLoading, setSocialLoading] = useState(false)
-  useEffect(() => {
-  async function load() {
-    setLoading(true)
+    useEffect(() => {
+    if (!userId) return
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
+    const cachedWraps = localStorage.getItem(getUserCollectionWrapsKey(userId))
+    const cachedProfile = localStorage.getItem(getUserCollectionProfileKey(userId))
+    const cachedFollow = localStorage.getItem(getUserCollectionFollowKey(userId))
 
-    const loggedInUserId = user?.id || null
-    setCurrentUserId(loggedInUserId)
-
-    const [{ data: profileData }, { data: wrapData }] = await Promise.all([
-      supabase
-        .from('profiles')
-        .select('id, full_name, username')
-        .eq('id', userId)
-        .single(),
-      supabase
-        .from('wraps')
-        .select(
-          'id, name, brand, description, purchase_date, purchased_from, purchase_country, status, on_loan_to, sold_to, sold_price, sold_currency, sold_date, is_favourite, for_sale, for_sale_price, for_sale_currency, for_sale_price_is_pm, wrap_images(id, image_url, is_primary, sort_order)'
-        )
-        .eq('user_id', userId)
-        .order('is_favourite', { ascending: false })
-        .order('purchase_date', { ascending: false }),
-    ])
-
-    if (loggedInUserId && loggedInUserId !== userId) {
-      const { data: followData } = await supabase
-        .from('follows')
-        .select('id')
-        .eq('follower_id', loggedInUserId)
-        .eq('following_id', userId)
-        .eq('status', 'accepted')
-        .maybeSingle()
-
-      setIsFollowing(!!followData)
-    } else {
-      setIsFollowing(false)
+    if (cachedWraps) {
+      try {
+        setWraps(JSON.parse(cachedWraps))
+        setLoading(false)
+      } catch {}
     }
 
-    setProfile(profileData || null)
-    setWraps((wrapData as Wrap[]) || [])
-    setLoading(false)
-  }
+    if (cachedProfile) {
+      try {
+        setProfile(JSON.parse(cachedProfile))
+      } catch {}
+    }
 
-  if (userId) load()
-}, [userId])
+    if (cachedFollow) {
+      try {
+        setIsFollowing(JSON.parse(cachedFollow))
+      } catch {}
+    }
+
+    async function load() {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+
+      const loggedInUserId = user?.id || null
+      setCurrentUserId(loggedInUserId)
+
+      const [{ data: profileData }, { data: wrapData }] = await Promise.all([
+        supabase
+          .from('profiles')
+          .select('id, full_name, username')
+          .eq('id', userId)
+          .single(),
+        supabase
+          .from('wraps')
+          .select(
+            'id, name, brand, description, purchase_date, purchased_from, purchase_country, status, on_loan_to, sold_to, sold_price, sold_currency, sold_date, is_favourite, for_sale, for_sale_price, for_sale_currency, for_sale_price_is_pm, wrap_images(id, image_url, is_primary, sort_order)'
+          )
+          .eq('user_id', userId)
+          .order('is_favourite', { ascending: false })
+          .order('purchase_date', { ascending: false }),
+      ])
+
+      let nextIsFollowing = false
+
+      if (loggedInUserId && loggedInUserId !== userId) {
+        const { data: followData } = await supabase
+          .from('follows')
+          .select('id')
+          .eq('follower_id', loggedInUserId)
+          .eq('following_id', userId)
+          .eq('status', 'accepted')
+          .maybeSingle()
+
+        nextIsFollowing = !!followData
+      }
+
+      setIsFollowing(nextIsFollowing)
+      localStorage.setItem(
+        getUserCollectionFollowKey(userId),
+        JSON.stringify(nextIsFollowing)
+      )
+
+      setProfile(profileData || null)
+      localStorage.setItem(
+        getUserCollectionProfileKey(userId),
+        JSON.stringify(profileData || null)
+      )
+
+      setWraps((wrapData as Wrap[]) || [])
+      localStorage.setItem(
+        getUserCollectionWrapsKey(userId),
+        JSON.stringify((wrapData as Wrap[]) || [])
+      )
+
+      setLoading(false)
+    }
+
+    load()
+
+    const handleFocus = () => {
+      load()
+    }
+
+    window.addEventListener('focus', handleFocus)
+
+    return () => {
+      window.removeEventListener('focus', handleFocus)
+    }
+  }, [userId])
 
   const collectionTitle = useMemo(() => {
   if (profile?.full_name?.trim()) {
@@ -339,7 +388,7 @@ const [socialLoading, setSocialLoading] = useState(false)
     setSocialLoading(false)
   }
 
-  if (loading) {
+   if (loading && wraps.length === 0 && !profile) {
     return (
       <AppLayout>
         <div className="space-y-6">
