@@ -82,6 +82,17 @@ const [isFollowing, setIsFollowing] = useState(false)
 const [toastMessage, setToastMessage] = useState('')
 
 const [selectedWrap, setSelectedWrap] = useState<Wrap | null>(null)
+const [selectedViewImage, setSelectedViewImage] = useState<string | null>(null)
+const [isViewWrapModalOpen, setIsViewWrapModalOpen] = useState(false)
+const [isImagePreviewOpen, setIsImagePreviewOpen] = useState(false)
+
+const [selectedWrapCounts, setSelectedWrapCounts] = useState<SocialCounts>({
+  likes: 0,
+  wishlists: 0,
+})
+const [hasLikedSelectedWrap, setHasLikedSelectedWrap] = useState(false)
+const [hasWishlistedSelectedWrap, setHasWishlistedSelectedWrap] = useState(false)
+const [socialLoading, setSocialLoading] = useState(false)
   useEffect(() => {
   async function load() {
     setLoading(true)
