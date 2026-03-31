@@ -127,8 +127,7 @@ export default function Page() {
       } catch {}
     }
 
-    async function loadWishlistPage() {
-      setLoading(true)
+        async function loadWishlistPage() {
 
       const {
         data: { user },
@@ -137,7 +136,7 @@ export default function Page() {
       const loggedInUserId = user?.id || null
       setCurrentUserId(loggedInUserId)
 
-      if (!loggedInUserId) {
+            if (!loggedInUserId) {
         setWishlistWraps([])
         setProfilesMap({})
         localStorage.removeItem(WISHLIST_WRAPS_KEY)
@@ -443,7 +442,7 @@ export default function Page() {
             <p className="text-sm text-gray-500">Wraps you have saved</p>
           </div>
 
-          {loading ? (
+                    {loading && activeWishlistWraps.length === 0 ? (
             <div className="rounded-2xl border border-dashed p-8 text-center">
               <p className="text-gray-600">Loading wishlist...</p>
             </div>
