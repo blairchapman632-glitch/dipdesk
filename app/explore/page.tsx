@@ -50,6 +50,16 @@ type FollowingUser = {
 }
 
 type ExploreUser = {
+  id: string
+  name: string
+  image_url: string
+  wrap_count: number
+}
+
+type SocialCounts = {
+  likes: number
+  wishlists: number
+}
 
 const WRAP_PLACEHOLDER =
   'https://placehold.co/800x800/fdf2f8/be185d?text=Wrap'
