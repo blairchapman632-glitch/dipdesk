@@ -291,6 +291,7 @@ const [hasLikedSelectedWrap, setHasLikedSelectedWrap] = useState(false)
 const [hasWishlistedSelectedWrap, setHasWishlistedSelectedWrap] = useState(false)
 const [socialLoading, setSocialLoading] = useState(false)
 const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+const [toastMessage, setToastMessage] = useState('')
 
   useEffect(() => {
   const cachedWraps = localStorage.getItem(EXPLORE_WRAPS_KEY)
