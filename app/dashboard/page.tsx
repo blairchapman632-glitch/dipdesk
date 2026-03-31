@@ -597,7 +597,6 @@ function closeViewWrapModal() {
   setIsReadOnlyWrapView(false)
 }
 async function handleNotificationClick(notification: NotificationItem) {
-  // mark as read
   if (!notification.read_at) {
     await supabase
       .from('notifications')
@@ -613,20 +612,6 @@ async function handleNotificationClick(notification: NotificationItem) {
     )
   }
 
-  if (notification.type === 'for_sale' && notification.wrap) {
-    openViewWrapModal(notification.wrap, true)
-    return
-  }
-
-  if (notification.actor_user_id) {
-    router.push(`/user/${notification.actor_user_id}`)
-    return
-  }
-
-  if (notification.wrap) {
-    openViewWrapModal(notification.wrap, true)
-  }
-}
   if (notification.type === 'for_sale' && notification.wrap) {
     openViewWrapModal(notification.wrap, true)
     return
