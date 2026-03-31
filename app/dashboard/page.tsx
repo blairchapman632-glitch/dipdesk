@@ -253,6 +253,10 @@ const [isSavingWrap, setIsSavingWrap] = useState(false)
 const [isUploadingImages, setIsUploadingImages] = useState(false)
 const [wrapForm, setWrapForm] = useState<WrapFormState>(EMPTY_WRAP_FORM)
 const [notifications, setNotifications] = useState<NotificationItem[]>([])
+const [selectedWrapCounts, setSelectedWrapCounts] = useState({
+  likes: 0,
+  wishlists: 0,
+})
     const router = useRouter()
 
   const handleLogout = async () => {
