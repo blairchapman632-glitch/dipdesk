@@ -1,11 +1,733 @@
+'use client'
+
 import AppLayout from '@/app/components/AppLayout'
+import { supabase } from '@/lib/supabase'
+import { useEffect, useMemo, useState } from 'react'
+import { useRouter } from 'next/navigation'
+
+type WrapImage = {
+  id: string
+  image_url: string
+  is_primary: boolean
+  sort_order: number
+}
+
+type Wrap = {
+  id: string
+  user_id: string
+  name: string
+  brand: string | null
+  description: string | null
+  purchase_date: string | null
+  purchased_from: string | null
+  purchase_country: string | null
+  status: 'active' | 'holiday' | 'departed'
+  on_loan_to: string | null
+  sold_to: string | null
+  sold_price: number | null
+  sold_currency: 'AUD' | 'USD' | 'EUR' | null
+  sold_date: string | null
+  is_favourite: boolean
+  for_sale: boolean
+  for_sale_price: number | null
+  for_sale_currency: 'AUD' | 'USD' | 'EUR' | null
+  for_sale_price_is_pm: boolean
+  wrap_images?: WrapImage[]
+}
+
+type Profile = {
+  id: string
+  full_name: string | null
+  username: string | null
+}
+
+type WishlistRow = {
+  id: string
+  wrap_id: string
+  wraps: Wrap | Wrap[] | null
+}
+
+type SocialCounts = {
+  likes: number
+  wishlists: number
+}
+
+const WRAP_PLACEHOLDER =
+  'https://placehold.co/800x800/fdf2f8/be185d?text=Wrap'
+
+function getPrimaryImage(wrap?: Wrap) {
+  if (!wrap?.wrap_images?.length) return WRAP_PLACEHOLDER
+
+  const primary =
+    wrap.wrap_images.find((image) => image.is_primary) ||
+    [...wrap.wrap_images].sort((a, b) => a.sort_order - b.sort_order)[0]
+
+  return primary?.image_url || WRAP_PLACEHOLDER
+}
+
+function getDisplayName(profile?: Profile) {
+  if (profile?.full_name?.trim()) {
+    return profile.full_name.split(' ')[0]
+  }
+
+  if (profile?.username?.trim()) {
+    return profile.username
+  }
+
+  return 'User'
+}
+
+function formatCurrency(
+  value: number | null | undefined,
+  currency: 'AUD' | 'USD' | 'EUR' = 'AUD'
+) {
+  if (value === null || value === undefined || Number.isNaN(value)) return ''
+  return new Intl.NumberFormat('en-AU', {
+    style: 'currency',
+    currency,
+    maximumFractionDigits: 0,
+  }).format(value)
+}
 
 export default function Page() {
+  const router = useRouter()
+
+  const [loading, setLoading] = useState(true)
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+  const [wishlistWraps, setWishlistWraps] = useState<Wrap[]>([])
+  const [profilesMap, setProfilesMap] = useState<Record<string, Profile>>({})
+  const [selectedWrap, setSelectedWrap] = useState<Wrap | null>(null)
+  const [selectedViewImage, setSelectedViewImage] = useState<string | null>(null)
+  const [isViewWrapModalOpen, setIsViewWrapModalOpen] = useState(false)
+  const [isImagePreviewOpen, setIsImagePreviewOpen] = useState(false)
+  const [selectedWrapCounts, setSelectedWrapCounts] = useState<SocialCounts>({
+    likes: 0,
+    wishlists: 0,
+  })
+  const [hasLikedSelectedWrap, setHasLikedSelectedWrap] = useState(false)
+  const [hasWishlistedSelectedWrap, setHasWishlistedSelectedWrap] = useState(false)
+  const [socialLoading, setSocialLoading] = useState(false)
+  const [toastMessage, setToastMessage] = useState('')
+
+  useEffect(() => {
+    async function loadWishlistPage() {
+      setLoading(true)
+
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+
+      const loggedInUserId = user?.id || null
+      setCurrentUserId(loggedInUserId)
+
+      if (!loggedInUserId) {
+        setWishlistWraps([])
+        setProfilesMap({})
+        setLoading(false)
+        return
+      }
+
+      const { data: wishlistData, error: wishlistError } = await supabase
+        .from('wishlists')
+        .select(`
+          id,
+          wrap_id,
+          wraps (
+            id,
+            user_id,
+            name,
+            brand,
+            description,
+            purchase_date,
+            purchased_from,
+            purchase_country,
+            status,
+            on_loan_to,
+            sold_to,
+            sold_price,
+            sold_currency,
+            sold_date,
+            is_favourite,
+            for_sale,
+            for_sale_price,
+            for_sale_currency,
+            for_sale_price_is_pm,
+            wrap_images (
+              id,
+              image_url,
+              is_primary,
+              sort_order
+            )
+          )
+        `)
+        .eq('user_id', loggedInUserId)
+        .order('created_at', { ascending: false })
+
+      if (wishlistError) {
+        console.error(wishlistError)
+        setWishlistWraps([])
+        setProfilesMap({})
+        setLoading(false)
+        return
+      }
+
+      const rows = ((wishlistData as WishlistRow[]) || []).filter(
+        (row) => row.wraps
+      )
+
+      const wraps = rows
+        .map((row) =>
+          Array.isArray(row.wraps) ? row.wraps[0] : row.wraps
+        )
+        .filter(Boolean) as Wrap[]
+
+      setWishlistWraps(wraps)
+
+      const uniqueUserIds = [...new Set(wraps.map((wrap) => wrap.user_id))]
+
+      if (uniqueUserIds.length === 0) {
+        setProfilesMap({})
+        setLoading(false)
+        return
+      }
+
+      const { data: profileData, error: profileError } = await supabase
+        .from('profiles')
+        .select('id, full_name, username')
+        .in('id', uniqueUserIds)
+
+      if (profileError) {
+        console.error(profileError)
+        setProfilesMap({})
+        setLoading(false)
+        return
+      }
+
+      const profileMap = ((profileData as Profile[]) || []).reduce<
+        Record<string, Profile>
+      >((accumulator, profile) => {
+        accumulator[profile.id] = profile
+        return accumulator
+      }, {})
+
+      setProfilesMap(profileMap)
+      setLoading(false)
+    }
+
+    loadWishlistPage()
+  }, [])
+
+  const activeWishlistWraps = useMemo(() => {
+    return wishlistWraps
+      .filter((wrap) => wrap.status === 'active' || wrap.status === 'holiday')
+      .sort((a, b) => a.name.localeCompare(b.name))
+  }, [wishlistWraps])
+
+  async function loadWrapSocialData(wrapId: string) {
+    const [
+      { count: likeCount },
+      { count: wishlistCount },
+      likedRowResult,
+      wishlistedRowResult,
+    ] = await Promise.all([
+      supabase
+        .from('wrap_likes')
+        .select('*', { count: 'exact', head: true })
+        .eq('wrap_id', wrapId),
+      supabase
+        .from('wishlists')
+        .select('*', { count: 'exact', head: true })
+        .eq('wrap_id', wrapId),
+      currentUserId
+        ? supabase
+            .from('wrap_likes')
+            .select('id')
+            .eq('wrap_id', wrapId)
+            .eq('user_id', currentUserId)
+            .maybeSingle()
+        : Promise.resolve({ data: null, error: null }),
+      currentUserId
+        ? supabase
+            .from('wishlists')
+            .select('id')
+            .eq('wrap_id', wrapId)
+            .eq('user_id', currentUserId)
+            .maybeSingle()
+        : Promise.resolve({ data: null, error: null }),
+    ])
+
+    setSelectedWrapCounts({
+      likes: likeCount || 0,
+      wishlists: wishlistCount || 0,
+    })
+    setHasLikedSelectedWrap(!!likedRowResult.data)
+    setHasWishlistedSelectedWrap(!!wishlistedRowResult.data)
+  }
+
+  async function openViewWrapModal(wrap: Wrap) {
+    const sortedImages = [...(wrap.wrap_images || [])].sort(
+      (a, b) => a.sort_order - b.sort_order
+    )
+
+    const primaryImage =
+      sortedImages.find((image) => image.is_primary)?.image_url ||
+      sortedImages[0]?.image_url ||
+      getPrimaryImage(wrap)
+
+    setSelectedWrap(wrap)
+    setSelectedViewImage(primaryImage)
+    setIsViewWrapModalOpen(true)
+    await loadWrapSocialData(wrap.id)
+  }
+
+  function closeViewWrapModal() {
+    setIsViewWrapModalOpen(false)
+    setSelectedWrap(null)
+    setSelectedViewImage(null)
+    setIsImagePreviewOpen(false)
+    setSelectedWrapCounts({ likes: 0, wishlists: 0 })
+    setHasLikedSelectedWrap(false)
+    setHasWishlistedSelectedWrap(false)
+    setSocialLoading(false)
+  }
+
+  async function handleToggleLike() {
+    if (!selectedWrap || !currentUserId || currentUserId === selectedWrap.user_id || socialLoading) return
+
+    setSocialLoading(true)
+
+    if (hasLikedSelectedWrap) {
+      const { error } = await supabase
+        .from('wrap_likes')
+        .delete()
+        .eq('wrap_id', selectedWrap.id)
+        .eq('user_id', currentUserId)
+
+      if (!error) {
+        setHasLikedSelectedWrap(false)
+        setSelectedWrapCounts((prev) => ({
+          ...prev,
+          likes: Math.max(0, prev.likes - 1),
+        }))
+      }
+
+      setSocialLoading(false)
+      return
+    }
+
+    const { error } = await supabase
+      .from('wrap_likes')
+      .insert({
+        wrap_id: selectedWrap.id,
+        user_id: currentUserId,
+      })
+
+    if (!error) {
+      setHasLikedSelectedWrap(true)
+      setSelectedWrapCounts((prev) => ({
+        ...prev,
+        likes: prev.likes + 1,
+      }))
+
+      await supabase.from('notifications').insert({
+        recipient_user_id: selectedWrap.user_id,
+        actor_user_id: currentUserId,
+        wrap_id: selectedWrap.id,
+        type: 'like',
+      })
+    }
+
+    setSocialLoading(false)
+  }
+
+  async function handleToggleWishlist() {
+    if (!selectedWrap || !currentUserId || socialLoading) return
+
+    setSocialLoading(true)
+
+    if (hasWishlistedSelectedWrap) {
+      const { error } = await supabase
+        .from('wishlists')
+        .delete()
+        .eq('wrap_id', selectedWrap.id)
+        .eq('user_id', currentUserId)
+
+      if (!error) {
+        setHasWishlistedSelectedWrap(false)
+        setSelectedWrapCounts((prev) => ({
+          ...prev,
+          wishlists: Math.max(0, prev.wishlists - 1),
+        }))
+        setWishlistWraps((prev) => prev.filter((wrap) => wrap.id !== selectedWrap.id))
+        setToastMessage('Removed from wishlist')
+        setTimeout(() => setToastMessage(''), 2000)
+        closeViewWrapModal()
+      }
+
+      setSocialLoading(false)
+      return
+    }
+
+    const { error } = await supabase
+      .from('wishlists')
+      .insert({
+        wrap_id: selectedWrap.id,
+        user_id: currentUserId,
+      })
+
+    if (!error) {
+      setHasWishlistedSelectedWrap(true)
+      setSelectedWrapCounts((prev) => ({
+        ...prev,
+        wishlists: prev.wishlists + 1,
+      }))
+      setWishlistWraps((prev) => {
+        if (prev.some((wrap) => wrap.id === selectedWrap.id)) return prev
+        return [selectedWrap, ...prev]
+      })
+
+      if (currentUserId !== selectedWrap.user_id) {
+        await supabase.from('notifications').insert({
+          recipient_user_id: selectedWrap.user_id,
+          actor_user_id: currentUserId,
+          wrap_id: selectedWrap.id,
+          type: 'wishlist',
+        })
+      }
+
+      setToastMessage('Added to wishlist')
+      setTimeout(() => setToastMessage(''), 2000)
+    }
+
+    setSocialLoading(false)
+  }
+
   return (
     <AppLayout>
-      <div className="text-lg font-semibold text-gray-700">
-        Coming soon
+      <div className="space-y-6">
+        <section className="rounded-3xl border bg-white p-4 shadow-sm xl:p-5">
+          <div className="mb-5">
+            <h1 className="text-2xl font-bold text-gray-900">Wishlist</h1>
+            <p className="text-sm text-gray-500">Wraps you have saved</p>
+          </div>
+
+          {loading ? (
+            <div className="rounded-2xl border border-dashed p-8 text-center">
+              <p className="text-gray-600">Loading wishlist...</p>
+            </div>
+          ) : activeWishlistWraps.length === 0 ? (
+            <div className="rounded-2xl border border-dashed p-8 text-center">
+              <p className="text-gray-600">No wishlist wraps yet</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-2 xl:grid-cols-4 xl:gap-4">
+              {activeWishlistWraps.map((wrap) => (
+                <button
+                  key={wrap.id}
+                  type="button"
+                  onClick={() => openViewWrapModal(wrap)}
+                  className="group flex cursor-pointer flex-col overflow-hidden rounded-xl border bg-white p-0 text-left shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-md xl:rounded-2xl"
+                >
+                  <div className="relative aspect-[3/4] w-full bg-gray-100 pointer-events-none">
+                    <img
+                      src={getPrimaryImage(wrap)}
+                      alt={wrap.name}
+                      className="h-full w-full object-cover object-[center_20%] transition duration-300 group-hover:scale-[1.03]"
+                    />
+
+                    {wrap.for_sale && (
+                      <div className="absolute left-2 top-2 rounded-xl bg-white/90 px-2 py-1 text-[10px] font-semibold text-amber-700 shadow">
+                        <div>🪓 For Sale</div>
+                        <div className="text-[10px] font-medium text-gray-700">
+                          {wrap.for_sale_price_is_pm
+                            ? 'PM'
+                            : wrap.for_sale_price !== null
+                            ? formatCurrency(
+                                wrap.for_sale_price,
+                                wrap.for_sale_currency || 'AUD'
+                              )
+                            : ''}
+                        </div>
+                      </div>
+                    )}
+
+                    {wrap.is_favourite && (
+                      <div className="absolute right-2 top-2 rounded-full bg-white/90 px-2 py-1 text-xs font-semibold text-pink-600 shadow">
+                        ★ Perma
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="space-y-1 p-3">
+                    <h3 className="line-clamp-1 text-sm font-bold text-gray-900 xl:text-base">
+                      {wrap.name}
+                    </h3>
+
+                    <p className="line-clamp-1 text-xs text-gray-500 xl:text-sm">
+                      {wrap.brand || 'No brand added'}
+                    </p>
+
+                    <span
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        router.push(`/user/${wrap.user_id}`)
+                      }}
+                      className="inline-flex cursor-pointer items-center gap-1 rounded-full bg-pink-50 px-2 py-1 text-xs font-semibold text-pink-600 hover:bg-pink-100"
+                    >
+                      {getDisplayName(profilesMap[wrap.user_id])}
+                    </span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </section>
+
+        {isViewWrapModalOpen && selectedWrap && (() => {
+          const sortedImages = [...(selectedWrap.wrap_images || [])].sort(
+            (a, b) => a.sort_order - b.sort_order
+          )
+
+          return (
+            <div
+              className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+              onClick={closeViewWrapModal}
+            >
+              <div
+                className="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="mb-6 flex items-start justify-between gap-4">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h2 className="text-2xl font-bold text-gray-900">
+                        {selectedWrap.name}
+                      </h2>
+
+                      {currentUserId && currentUserId !== selectedWrap.user_id && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={handleToggleLike}
+                            disabled={socialLoading}
+                            className={`rounded-full border px-3 py-1 text-sm font-semibold transition ${
+                              hasLikedSelectedWrap
+                                ? 'border-pink-200 bg-pink-50 text-pink-600'
+                                : 'border-gray-200 bg-white text-gray-700 hover:border-pink-200 hover:text-pink-600'
+                            }`}
+                          >
+                            ❤️ {selectedWrapCounts.likes}
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={handleToggleWishlist}
+                            disabled={socialLoading}
+                            className={`rounded-full border px-3 py-1 text-sm font-semibold transition ${
+                              hasWishlistedSelectedWrap
+                                ? 'border-amber-200 bg-amber-50 text-amber-700'
+                                : 'border-gray-200 bg-white text-gray-700 hover:border-amber-200 hover:text-amber-700'
+                            }`}
+                          >
+                            ⭐ {selectedWrapCounts.wishlists}
+                          </button>
+                        </>
+                      )}
+                    </div>
+
+                    <div className="mt-1 flex flex-wrap items-center gap-2">
+                      <p className="text-sm text-gray-500">
+                        {selectedWrap.brand || 'No brand added'}
+                      </p>
+
+                      {selectedWrap.is_favourite && (
+                        <span className="rounded-full bg-pink-100 px-2 py-0.5 text-xs font-semibold text-pink-600">
+                          ★ Perma
+                        </span>
+                      )}
+
+                      <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-700">
+                        {selectedWrap.status}
+                      </span>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={closeViewWrapModal}
+                    className="cursor-pointer rounded-full border px-3 py-1 text-sm text-gray-600"
+                  >
+                    Close
+                  </button>
+                </div>
+
+                <div className="mb-4 overflow-hidden rounded-3xl bg-gray-100 shadow-sm">
+                  <button
+                    type="button"
+                    onClick={() => setIsImagePreviewOpen(true)}
+                    className="block w-full cursor-zoom-in bg-black"
+                  >
+                    <img
+                      src={selectedViewImage || getPrimaryImage(selectedWrap)}
+                      alt={selectedWrap.name}
+                      className="h-[440px] w-full object-cover transition duration-300 hover:scale-[1.01]"
+                    />
+                  </button>
+                </div>
+
+                <p className="mb-4 text-xs text-gray-500">
+                  Click the main image to view larger
+                </p>
+
+                {sortedImages.length > 0 && (
+                  <div className="mb-6 grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-6">
+                    {sortedImages.map((image) => (
+                      <button
+                        key={image.id}
+                        type="button"
+                        onClick={() => setSelectedViewImage(image.image_url)}
+                        className={`overflow-hidden rounded-xl border transition duration-200 ${
+                          selectedViewImage === image.image_url
+                            ? 'border-pink-500 ring-2 ring-pink-200 shadow-sm'
+                            : 'border-gray-200 hover:border-pink-300 hover:shadow-sm'
+                        }`}
+                      >
+                        <img
+                          src={image.image_url}
+                          alt={selectedWrap.name}
+                          className="h-20 w-full object-cover transition duration-200 hover:scale-[1.02]"
+                        />
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                <div className="grid gap-5 md:grid-cols-2">
+                  <div className="rounded-2xl border bg-white p-5 shadow-sm">
+                    <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-400">
+                      Wrap Details
+                    </h3>
+
+                    <div className="space-y-2 text-sm text-gray-700">
+                      <p>
+                        <span className="font-semibold text-gray-900">Status:</span>{' '}
+                        {selectedWrap.status}
+                      </p>
+                      <p>
+                        <span className="font-semibold text-gray-900">Purchase Date:</span>{' '}
+                        {selectedWrap.purchase_date || '—'}
+                      </p>
+                      <p>
+                        <span className="font-semibold text-gray-900">Purchased From:</span>{' '}
+                        {selectedWrap.purchased_from || '—'}
+                      </p>
+                      <p>
+                        <span className="font-semibold text-gray-900">Country:</span>{' '}
+                        {selectedWrap.purchase_country || '—'}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border bg-white p-5 shadow-sm">
+                    <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-400">
+                      Extra Info
+                    </h3>
+
+                    <div className="space-y-2 text-sm text-gray-700">
+                      <p>
+                        <span className="font-semibold text-gray-900">Favourite:</span>{' '}
+                        {selectedWrap.is_favourite ? 'Yes' : 'No'}
+                      </p>
+
+                      {selectedWrap.for_sale && (
+                        <p>
+                          <span className="font-semibold text-gray-900">For Sale:</span>{' '}
+                          {selectedWrap.for_sale_price_is_pm
+                            ? 'PM'
+                            : selectedWrap.for_sale_price !== null
+                            ? formatCurrency(
+                                selectedWrap.for_sale_price,
+                                selectedWrap.for_sale_currency || 'AUD'
+                              )
+                            : 'Yes'}
+                        </p>
+                      )}
+
+                      {selectedWrap.status === 'holiday' && (
+                        <p>
+                          <span className="font-semibold text-gray-900">On Holiday With:</span>{' '}
+                          {selectedWrap.on_loan_to || '—'}
+                        </p>
+                      )}
+
+                      {selectedWrap.status === 'departed' && (
+                        <>
+                          <p>
+                            <span className="font-semibold text-gray-900">Sold To:</span>{' '}
+                            {selectedWrap.sold_to || '—'}
+                          </p>
+                          <p>
+                            <span className="font-semibold text-gray-900">Sold Date:</span>{' '}
+                            {selectedWrap.sold_date || '—'}
+                          </p>
+                          <p>
+                            <span className="font-semibold text-gray-900">Sold Price:</span>{' '}
+                            {selectedWrap.sold_price !== null
+                              ? formatCurrency(
+                                  selectedWrap.sold_price,
+                                  selectedWrap.sold_currency || 'AUD'
+                                )
+                              : '—'}
+                          </p>
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  {selectedWrap.description && (
+                    <div className="md:col-span-2 rounded-2xl border bg-white p-5 shadow-sm">
+                      <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-400">
+                        Description
+                      </h3>
+                      <p className="whitespace-pre-wrap text-sm text-gray-700">
+                        {selectedWrap.description}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )
+        })()}
+
+        {isImagePreviewOpen && selectedWrap && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4">
+            <div className="relative w-full max-w-6xl">
+              <button
+                type="button"
+                onClick={() => setIsImagePreviewOpen(false)}
+                className="absolute right-0 top-0 z-10 rounded-full bg-white/90 px-4 py-2 text-sm font-semibold text-gray-800 shadow"
+              >
+                Close
+              </button>
+
+              <img
+                src={selectedViewImage || getPrimaryImage(selectedWrap)}
+                alt={selectedWrap.name}
+                className="max-h-[90vh] w-full rounded-2xl bg-black object-contain"
+              />
+            </div>
+          </div>
+        )}
       </div>
+
+      {toastMessage && (
+        <div className="pointer-events-none fixed bottom-6 left-1/2 z-50 -translate-x-1/2">
+          <div className="rounded-2xl border border-white/20 bg-gray-900/90 px-5 py-3 text-sm font-semibold text-white shadow-2xl backdrop-blur">
+            {toastMessage}
+          </div>
+        </div>
+      )}
     </AppLayout>
   )
 }
