@@ -54,7 +54,8 @@ type SocialCounts = {
 
 const WRAP_PLACEHOLDER =
   'https://placehold.co/800x800/fdf2f8/be185d?text=Wrap'
-
+const WISHLIST_WRAPS_KEY = 'dipdesk_wishlist_wraps'
+const WISHLIST_PROFILES_KEY = 'dipdesk_wishlist_profiles'
 function getPrimaryImage(wrap?: Wrap) {
   if (!wrap?.wrap_images?.length) return WRAP_PLACEHOLDER
 
@@ -109,7 +110,23 @@ export default function Page() {
   const [socialLoading, setSocialLoading] = useState(false)
   const [toastMessage, setToastMessage] = useState('')
 
-  useEffect(() => {
+    useEffect(() => {
+    const cachedWraps = localStorage.getItem(WISHLIST_WRAPS_KEY)
+    const cachedProfiles = localStorage.getItem(WISHLIST_PROFILES_KEY)
+
+    if (cachedWraps) {
+      try {
+        setWishlistWraps(JSON.parse(cachedWraps))
+        setLoading(false)
+      } catch {}
+    }
+
+    if (cachedProfiles) {
+      try {
+        setProfilesMap(JSON.parse(cachedProfiles))
+      } catch {}
+    }
+
     async function loadWishlistPage() {
       setLoading(true)
 
@@ -123,6 +140,8 @@ export default function Page() {
       if (!loggedInUserId) {
         setWishlistWraps([])
         setProfilesMap({})
+        localStorage.removeItem(WISHLIST_WRAPS_KEY)
+        localStorage.removeItem(WISHLIST_PROFILES_KEY)
         setLoading(false)
         return
       }
@@ -182,11 +201,13 @@ export default function Page() {
         .filter(Boolean) as Wrap[]
 
       setWishlistWraps(wraps)
+      localStorage.setItem(WISHLIST_WRAPS_KEY, JSON.stringify(wraps))
 
       const uniqueUserIds = [...new Set(wraps.map((wrap) => wrap.user_id))]
 
       if (uniqueUserIds.length === 0) {
         setProfilesMap({})
+        localStorage.setItem(WISHLIST_PROFILES_KEY, JSON.stringify({}))
         setLoading(false)
         return
       }
@@ -211,10 +232,21 @@ export default function Page() {
       }, {})
 
       setProfilesMap(profileMap)
+      localStorage.setItem(WISHLIST_PROFILES_KEY, JSON.stringify(profileMap))
       setLoading(false)
     }
 
     loadWishlistPage()
+
+    const handleFocus = () => {
+      loadWishlistPage()
+    }
+
+    window.addEventListener('focus', handleFocus)
+
+    return () => {
+      window.removeEventListener('focus', handleFocus)
+    }
   }, [])
 
   const activeWishlistWraps = useMemo(() => {
