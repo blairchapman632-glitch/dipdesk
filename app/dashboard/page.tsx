@@ -41,7 +41,11 @@ type Wrap = {
   
   wrap_images?: WrapImage[]
 }
-
+type Profile = {
+  id: string
+  full_name: string | null
+  username: string | null
+}
 type Dip = {
   id: string
   title: string
