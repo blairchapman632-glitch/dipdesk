@@ -409,7 +409,7 @@ localStorage.setItem(DASHBOARD_EMAIL_KEY, userEmail)
   ,
   supabase
     .from('notifications')
-    .select('id, recipient_user_id, actor_user_id, wrap_id, type, created_at')
+        .select('id, recipient_user_id, actor_user_id, wrap_id, type, created_at, read_at')
     .eq('recipient_user_id', user.id)
     .order('created_at', { ascending: false })
     .limit(20)
