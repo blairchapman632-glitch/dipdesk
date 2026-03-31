@@ -50,11 +50,6 @@ type FollowingUser = {
 }
 
 type ExploreUser = {
-  id: string
-  name: string
-  image_url: string
-  wrap_count: number
-}
 
 const WRAP_PLACEHOLDER =
   'https://placehold.co/800x800/fdf2f8/be185d?text=Wrap'
@@ -90,7 +85,48 @@ function getDisplayName(profile?: Profile) {
 
 export default function Page() {
   const router = useRouter()
-  function openViewWrapModal(wrap: Wrap) {
+    async function loadWrapSocialData(wrapId: string) {
+    const [
+      { count: likeCount },
+      { count: wishlistCount },
+      likedRowResult,
+      wishlistedRowResult,
+    ] = await Promise.all([
+      supabase
+        .from('wrap_likes')
+        .select('*', { count: 'exact', head: true })
+        .eq('wrap_id', wrapId),
+      supabase
+        .from('wishlists')
+        .select('*', { count: 'exact', head: true })
+        .eq('wrap_id', wrapId),
+      currentUserId
+        ? supabase
+            .from('wrap_likes')
+            .select('id')
+            .eq('wrap_id', wrapId)
+            .eq('user_id', currentUserId)
+            .maybeSingle()
+        : Promise.resolve({ data: null, error: null }),
+      currentUserId
+        ? supabase
+            .from('wishlists')
+            .select('id')
+            .eq('wrap_id', wrapId)
+            .eq('user_id', currentUserId)
+            .maybeSingle()
+        : Promise.resolve({ data: null, error: null }),
+    ])
+
+    setSelectedWrapCounts({
+      likes: likeCount || 0,
+      wishlists: wishlistCount || 0,
+    })
+    setHasLikedSelectedWrap(!!likedRowResult.data)
+    setHasWishlistedSelectedWrap(!!wishlistedRowResult.data)
+  }
+
+  async function openViewWrapModal(wrap: Wrap) {
     const sortedImages = [...(wrap.wrap_images || [])].sort(
       (a, b) => a.sort_order - b.sort_order
     )
@@ -103,6 +139,7 @@ export default function Page() {
     setSelectedWrap(wrap)
     setSelectedViewImage(primaryImage)
     setIsViewWrapModalOpen(true)
+    await loadWrapSocialData(wrap.id)
   }
 
   function closeViewWrapModal() {
@@ -110,6 +147,108 @@ export default function Page() {
     setSelectedWrap(null)
     setSelectedViewImage(null)
     setIsImagePreviewOpen(false)
+    setSelectedWrapCounts({ likes: 0, wishlists: 0 })
+    setHasLikedSelectedWrap(false)
+    setHasWishlistedSelectedWrap(false)
+    setSocialLoading(false)
+  }
+
+  async function handleToggleLike() {
+    if (!selectedWrap || !currentUserId || currentUserId === selectedWrap.user_id || socialLoading) return
+
+    setSocialLoading(true)
+
+    if (hasLikedSelectedWrap) {
+      const { error } = await supabase
+        .from('wrap_likes')
+        .delete()
+        .eq('wrap_id', selectedWrap.id)
+        .eq('user_id', currentUserId)
+
+      if (!error) {
+        setHasLikedSelectedWrap(false)
+        setSelectedWrapCounts((prev) => ({
+          ...prev,
+          likes: Math.max(0, prev.likes - 1),
+        }))
+      }
+
+      setSocialLoading(false)
+      return
+    }
+
+    const { error } = await supabase
+      .from('wrap_likes')
+      .insert({
+        wrap_id: selectedWrap.id,
+        user_id: currentUserId,
+      })
+
+    if (!error) {
+      setHasLikedSelectedWrap(true)
+      setSelectedWrapCounts((prev) => ({
+        ...prev,
+        likes: prev.likes + 1,
+      }))
+
+      await supabase.from('notifications').insert({
+        recipient_user_id: selectedWrap.user_id,
+        actor_user_id: currentUserId,
+        wrap_id: selectedWrap.id,
+        type: 'like',
+      })
+    }
+
+    setSocialLoading(false)
+  }
+
+  async function handleToggleWishlist() {
+    if (!selectedWrap || !currentUserId || currentUserId === selectedWrap.user_id || socialLoading) return
+
+    setSocialLoading(true)
+
+    if (hasWishlistedSelectedWrap) {
+      const { error } = await supabase
+        .from('wishlists')
+        .delete()
+        .eq('wrap_id', selectedWrap.id)
+        .eq('user_id', currentUserId)
+
+      if (!error) {
+        setHasWishlistedSelectedWrap(false)
+        setSelectedWrapCounts((prev) => ({
+          ...prev,
+          wishlists: Math.max(0, prev.wishlists - 1),
+        }))
+      }
+
+      setSocialLoading(false)
+      return
+    }
+
+    const { error } = await supabase
+      .from('wishlists')
+      .insert({
+        wrap_id: selectedWrap.id,
+        user_id: currentUserId,
+      })
+
+    if (!error) {
+      setHasWishlistedSelectedWrap(true)
+      setSelectedWrapCounts((prev) => ({
+        ...prev,
+        wishlists: prev.wishlists + 1,
+      }))
+
+      await supabase.from('notifications').insert({
+        recipient_user_id: selectedWrap.user_id,
+        actor_user_id: currentUserId,
+        wrap_id: selectedWrap.id,
+        type: 'wishlist',
+      })
+    }
+
+    setSocialLoading(false)
   }
 
   function formatCurrency(
@@ -131,10 +270,6 @@ const [users, setUsers] = useState<ExploreUser[]>([])
 const [followingUsers, setFollowingUsers] = useState<FollowingUser[]>([])
 const [profilesMap, setProfilesMap] = useState<Record<string, Profile>>({})
   const [selectedWrap, setSelectedWrap] = useState<Wrap | null>(null)
-  const [selectedViewImage, setSelectedViewImage] = useState<string | null>(null)
-  const [isViewWrapModalOpen, setIsViewWrapModalOpen] = useState(false)
-  const [isImagePreviewOpen, setIsImagePreviewOpen] = useState(false)
-const [toastMessage, setToastMessage] = useState('')
 
   useEffect(() => {
   const cachedWraps = localStorage.getItem(EXPLORE_WRAPS_KEY)
@@ -172,7 +307,8 @@ const [toastMessage, setToastMessage] = useState('')
     data: { user },
   } = await supabase.auth.getUser()
 
-  const currentUserId = user?.id || null
+    const currentUserId = user?.id || null
+  setCurrentUserId(currentUserId)
 
       const { data: wrapData, error: wrapError } = await supabase
         .from('wraps')
@@ -587,11 +723,43 @@ setTimeout(() => setToastMessage(''), 2000)
                 className="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl"
                 onClick={(e) => e.stopPropagation()}
               >
-                <div className="mb-6 flex items-start justify-between gap-4">
-                  <div>
-                    <h2 className="text-2xl font-bold text-gray-900">
-                      {selectedWrap.name}
-                    </h2>
+                               <div className="mb-6 flex items-start justify-between gap-4">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h2 className="text-2xl font-bold text-gray-900">
+                        {selectedWrap.name}
+                      </h2>
+
+                      {currentUserId && currentUserId !== selectedWrap.user_id && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={handleToggleLike}
+                            disabled={socialLoading}
+                            className={`rounded-full border px-3 py-1 text-sm font-semibold transition ${
+                              hasLikedSelectedWrap
+                                ? 'border-pink-200 bg-pink-50 text-pink-600'
+                                : 'border-gray-200 bg-white text-gray-700 hover:border-pink-200 hover:text-pink-600'
+                            }`}
+                          >
+                            ❤️ {selectedWrapCounts.likes}
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={handleToggleWishlist}
+                            disabled={socialLoading}
+                            className={`rounded-full border px-3 py-1 text-sm font-semibold transition ${
+                              hasWishlistedSelectedWrap
+                                ? 'border-amber-200 bg-amber-50 text-amber-700'
+                                : 'border-gray-200 bg-white text-gray-700 hover:border-amber-200 hover:text-amber-700'
+                            }`}
+                          >
+                            ⭐ {selectedWrapCounts.wishlists}
+                          </button>
+                        </>
+                      )}
+                    </div>
 
                     <div className="mt-1 flex flex-wrap items-center gap-2">
                       <p className="text-sm text-gray-500">
