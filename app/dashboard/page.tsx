@@ -551,7 +551,7 @@ if (!notificationError && notificationData) {
     router.replace('/dashboard')
   }
 }, [router])
-function openViewWrapModal(wrap: Wrap, readOnly = false) {
+async function openViewWrapModal(wrap: Wrap, readOnly = false) {
   const sortedImages = [...(wrap.wrap_images || [])].sort(
     (a, b) => a.sort_order - b.sort_order
   )
@@ -565,6 +565,25 @@ function openViewWrapModal(wrap: Wrap, readOnly = false) {
   setSelectedViewImage(primaryImage)
   setIsReadOnlyWrapView(readOnly)
   setIsViewWrapModalOpen(true)
+
+  const [
+    { count: likeCount },
+    { count: wishlistCount }
+  ] = await Promise.all([
+    supabase
+      .from('wrap_likes')
+      .select('*', { count: 'exact', head: true })
+      .eq('wrap_id', wrap.id),
+    supabase
+      .from('wishlists')
+      .select('*', { count: 'exact', head: true })
+      .eq('wrap_id', wrap.id)
+  ])
+
+  setSelectedWrapCounts({
+    likes: likeCount || 0,
+    wishlists: wishlistCount || 0,
+  })
 }
 function closeViewWrapModal() {
   setIsViewWrapModalOpen(false)
