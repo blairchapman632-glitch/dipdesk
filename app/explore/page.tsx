@@ -201,12 +201,21 @@ export default function Page() {
         likes: prev.likes + 1,
       }))
 
-      await supabase.from('notifications').insert({
-        recipient_user_id: selectedWrap.user_id,
-        actor_user_id: currentUserId,
-        wrap_id: selectedWrap.id,
-        type: 'like',
-      })
+            await supabase
+        .from('notifications')
+        .upsert(
+          {
+            recipient_user_id: selectedWrap.user_id,
+            actor_user_id: currentUserId,
+            wrap_id: selectedWrap.id,
+            type: 'like',
+            read_at: null,
+          },
+          {
+            onConflict: 'recipient_user_id,actor_user_id,wrap_id,type',
+            ignoreDuplicates: true,
+          }
+        )
     }
 
     setSocialLoading(false)
@@ -250,12 +259,21 @@ export default function Page() {
         wishlists: prev.wishlists + 1,
       }))
 
-      await supabase.from('notifications').insert({
-        recipient_user_id: selectedWrap.user_id,
-        actor_user_id: currentUserId,
-        wrap_id: selectedWrap.id,
-        type: 'wishlist',
-      })
+      await supabase
+        .from('notifications')
+        .upsert(
+          {
+            recipient_user_id: selectedWrap.user_id,
+            actor_user_id: currentUserId,
+            wrap_id: selectedWrap.id,
+            type: 'wishlist',
+            read_at: null,
+          },
+          {
+            onConflict: 'recipient_user_id,actor_user_id,wrap_id,type',
+            ignoreDuplicates: true,
+          }
+        )
     }
 
     setSocialLoading(false)
