@@ -107,12 +107,14 @@ type NotificationRow = {
   wrap_id: string | null
   type: 'like' | 'wishlist' | 'for_sale'
   created_at: string
+  read_at: string | null
 }
 
 type NotificationItem = {
   id: string
   actor_user_id: string | null
   created_at: string
+  read_at: string | null
   type: 'like' | 'wishlist' | 'for_sale'
   actor_name: string
   wrap: Wrap | null
@@ -348,6 +350,9 @@ const reportTotals = useMemo(() => {
     totalSoldValue,
   }
 }, [reportRows])
+const unreadNotificationCount = useMemo(() => {
+  return notifications.filter((notification) => !notification.read_at).length
+}, [notifications])
   const loadData = useCallback(async () => {
     const {
       data: { user },
@@ -489,11 +494,12 @@ if (!notificationError && notificationData) {
   }
 
   const nextNotifications: NotificationItem[] = rows.map((row) => ({
-    id: row.id,
-    actor_user_id: row.actor_user_id,
-    created_at: row.created_at,
-    type: row.type,
-    actor_name: row.actor_user_id
+  id: row.id,
+  actor_user_id: row.actor_user_id,
+  created_at: row.created_at,
+  read_at: row.read_at,
+  type: row.type,
+  actor_name: row.actor_user_id
       ? ((actorMap[row.actor_user_id]?.full_name?.split(' ')[0]) ||
           actorMap[row.actor_user_id]?.username ||
           'Someone')
@@ -592,7 +598,37 @@ function closeViewWrapModal() {
   setIsImagePreviewOpen(false)
   setIsReadOnlyWrapView(false)
 }
-function handleNotificationClick(notification: NotificationItem) {
+async function handleNotificationClick(notification: NotificationItem) {
+  // mark as read
+  if (!notification.read_at) {
+    await supabase
+      .from('notifications')
+      .update({ read_at: new Date().toISOString() })
+      .eq('id', notification.id)
+
+    setNotifications((prev) =>
+      prev.map((n) =>
+        n.id === notification.id
+          ? { ...n, read_at: new Date().toISOString() }
+          : n
+      )
+    )
+  }
+
+  if (notification.type === 'for_sale' && notification.wrap) {
+    openViewWrapModal(notification.wrap, true)
+    return
+  }
+
+  if (notification.actor_user_id) {
+    router.push(`/user/${notification.actor_user_id}`)
+    return
+  }
+
+  if (notification.wrap) {
+    openViewWrapModal(notification.wrap, true)
+  }
+}
   if (notification.type === 'for_sale' && notification.wrap) {
     openViewWrapModal(notification.wrap, true)
     return
@@ -1200,16 +1236,23 @@ function exportReportCsv() {
             </button>
 
             <button
-              type="button"
-              onClick={() => setMobileTab('activity')}
-              className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${
-                mobileTab === 'activity'
-                  ? 'bg-gradient-to-r from-pink-500 to-rose-500 text-white shadow-sm'
-                  : 'text-gray-600'
-              }`}
-            >
-              Activity
-            </button>
+  type="button"
+  onClick={() => setMobileTab('activity')}
+  className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${
+    mobileTab === 'activity'
+      ? 'bg-gradient-to-r from-pink-500 to-rose-500 text-white shadow-sm'
+      : 'text-gray-600'
+  }`}
+>
+  <span className="flex items-center justify-center gap-2">
+    Activity
+    {unreadNotificationCount > 0 && (
+      <span className="rounded-full bg-white/90 px-2 py-0.5 text-xs font-bold text-pink-600">
+        {unreadNotificationCount}
+      </span>
+    )}
+  </span>
+</button>
           </div>
         </div>
 
