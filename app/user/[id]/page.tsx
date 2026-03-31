@@ -47,7 +47,11 @@ type SocialCounts = {
 
 const WRAP_PLACEHOLDER =
   'https://placehold.co/800x800/fdf2f8/be185d?text=Wrap'
-const WRAP_PLACEHOLDER =
+
+const getUserCollectionWrapsKey = (userId: string) => `dipdesk_user_collection_wraps_${userId}`
+const getUserCollectionProfileKey = (userId: string) => `dipdesk_user_collection_profile_${userId}`
+const getUserCollectionFollowKey = (userId: string) => `dipdesk_user_collection_follow_${userId}`
+
 function formatCurrency(
   value: number | null | undefined,
   currency: 'AUD' | 'USD' | 'EUR' = 'AUD'
