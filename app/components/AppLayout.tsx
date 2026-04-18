@@ -22,7 +22,7 @@ export default function AppLayout({
   ]
 
   return (
-    <div className="flex min-h-screen flex-col bg-gray-50">
+    <div className="flex min-h-dvh flex-col bg-gray-50">
       {!hideHeader && (
         <>
           {/* Desktop top nav */}
@@ -103,10 +103,10 @@ export default function AppLayout({
       )}
 
       <main
-        className={`flex-1 overflow-y-auto p-6 md:p-10 ${
-          !hideHeader ? 'pb-24 md:pb-10' : ''
-        }`}
-      >
+  className={`flex-1 p-6 md:p-10 ${
+    !hideHeader ? 'pb-24 md:pb-10' : ''
+  }`}
+>
         {children}
       </main>
     </div>
