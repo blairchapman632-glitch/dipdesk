@@ -44,6 +44,7 @@ type Profile = {
 type WishlistRow = {
   id: string
   wrap_id: string
+  notes: string | null
   wraps: Wrap | Wrap[] | null
 }
 
@@ -56,6 +57,7 @@ const WRAP_PLACEHOLDER =
   'https://placehold.co/800x800/fdf2f8/be185d?text=Wrap'
 const WISHLIST_WRAPS_KEY = 'dipdesk_wishlist_wraps'
 const WISHLIST_PROFILES_KEY = 'dipdesk_wishlist_profiles'
+const WISHLIST_NOTES_KEY = 'dipdesk_wishlist_notes'
 function getPrimaryImage(wrap?: Wrap) {
   if (!wrap?.wrap_images?.length) return WRAP_PLACEHOLDER
 
@@ -107,12 +109,16 @@ export default function Page() {
   })
   const [hasLikedSelectedWrap, setHasLikedSelectedWrap] = useState(false)
   const [hasWishlistedSelectedWrap, setHasWishlistedSelectedWrap] = useState(false)
-  const [socialLoading, setSocialLoading] = useState(false)
+    const [socialLoading, setSocialLoading] = useState(false)
+  const [wishlistNotesMap, setWishlistNotesMap] = useState<Record<string, string>>({})
+  const [selectedWrapNotes, setSelectedWrapNotes] = useState('')
+  const [savingNotes, setSavingNotes] = useState(false)
   const [toastMessage, setToastMessage] = useState('')
 
     useEffect(() => {
-    const cachedWraps = localStorage.getItem(WISHLIST_WRAPS_KEY)
+        const cachedWraps = localStorage.getItem(WISHLIST_WRAPS_KEY)
     const cachedProfiles = localStorage.getItem(WISHLIST_PROFILES_KEY)
+    const cachedNotes = localStorage.getItem(WISHLIST_NOTES_KEY)
 
     if (cachedWraps) {
       try {
@@ -121,9 +127,15 @@ export default function Page() {
       } catch {}
     }
 
-    if (cachedProfiles) {
+        if (cachedProfiles) {
       try {
         setProfilesMap(JSON.parse(cachedProfiles))
+      } catch {}
+    }
+
+    if (cachedNotes) {
+      try {
+        setWishlistNotesMap(JSON.parse(cachedNotes))
       } catch {}
     }
 
@@ -139,8 +151,9 @@ export default function Page() {
             if (!loggedInUserId) {
         setWishlistWraps([])
         setProfilesMap({})
-        localStorage.removeItem(WISHLIST_WRAPS_KEY)
+                localStorage.removeItem(WISHLIST_WRAPS_KEY)
         localStorage.removeItem(WISHLIST_PROFILES_KEY)
+        localStorage.removeItem(WISHLIST_NOTES_KEY)
         setLoading(false)
         return
       }
@@ -148,8 +161,9 @@ export default function Page() {
       const { data: wishlistData, error: wishlistError } = await supabase
         .from('wishlists')
         .select(`
-          id,
+                    id,
           wrap_id,
+          notes,
           wraps (
             id,
             user_id,
@@ -189,7 +203,7 @@ export default function Page() {
         return
       }
 
-      const rows = ((wishlistData as WishlistRow[]) || []).filter(
+            const rows = ((wishlistData as WishlistRow[]) || []).filter(
         (row) => row.wraps
       )
 
@@ -199,8 +213,15 @@ export default function Page() {
         )
         .filter(Boolean) as Wrap[]
 
-      setWishlistWraps(wraps)
+      const notesMap = rows.reduce<Record<string, string>>((acc, row) => {
+        acc[row.wrap_id] = row.notes || ''
+        return acc
+      }, {})
+
+            setWishlistWraps(wraps)
+      setWishlistNotesMap(notesMap)
       localStorage.setItem(WISHLIST_WRAPS_KEY, JSON.stringify(wraps))
+      localStorage.setItem(WISHLIST_NOTES_KEY, JSON.stringify(notesMap))
 
       const uniqueUserIds = [...new Set(wraps.map((wrap) => wrap.user_id))]
 
@@ -305,21 +326,24 @@ export default function Page() {
       sortedImages[0]?.image_url ||
       getPrimaryImage(wrap)
 
-    setSelectedWrap(wrap)
+        setSelectedWrap(wrap)
+    setSelectedWrapNotes(wishlistNotesMap[wrap.id] || '')
     setSelectedViewImage(primaryImage)
     setIsViewWrapModalOpen(true)
     await loadWrapSocialData(wrap.id)
   }
 
-  function closeViewWrapModal() {
+    function closeViewWrapModal() {
     setIsViewWrapModalOpen(false)
     setSelectedWrap(null)
+    setSelectedWrapNotes('')
     setSelectedViewImage(null)
     setIsImagePreviewOpen(false)
     setSelectedWrapCounts({ likes: 0, wishlists: 0 })
     setHasLikedSelectedWrap(false)
     setHasWishlistedSelectedWrap(false)
     setSocialLoading(false)
+    setSavingNotes(false)
   }
 
   async function handleToggleLike() {
@@ -370,7 +394,33 @@ export default function Page() {
 
     setSocialLoading(false)
   }
+  async function handleSaveWishlistNotes() {
+    if (!selectedWrap || !currentUserId || savingNotes) return
 
+    setSavingNotes(true)
+
+    const { error } = await supabase
+      .from('wishlists')
+      .update({
+        notes: selectedWrapNotes.trim() || null,
+      })
+      .eq('wrap_id', selectedWrap.id)
+      .eq('user_id', currentUserId)
+
+        if (!error) {
+      const updatedNotesMap = {
+        ...wishlistNotesMap,
+        [selectedWrap.id]: selectedWrapNotes.trim(),
+      }
+
+      setWishlistNotesMap(updatedNotesMap)
+      localStorage.setItem(WISHLIST_NOTES_KEY, JSON.stringify(updatedNotesMap))
+      setToastMessage('ISO notes saved')
+      setTimeout(() => setToastMessage(''), 2000)
+    }
+
+    setSavingNotes(false)
+  }
   async function handleToggleWishlist() {
     if (!selectedWrap || !currentUserId || socialLoading) return
 
@@ -389,7 +439,13 @@ export default function Page() {
           ...prev,
           wishlists: Math.max(0, prev.wishlists - 1),
         }))
-        setWishlistWraps((prev) => prev.filter((wrap) => wrap.id !== selectedWrap.id))
+                setWishlistWraps((prev) => prev.filter((wrap) => wrap.id !== selectedWrap.id))
+
+        const nextNotesMap = { ...wishlistNotesMap }
+        delete nextNotesMap[selectedWrap.id]
+
+        setWishlistNotesMap(nextNotesMap)
+        localStorage.setItem(WISHLIST_NOTES_KEY, JSON.stringify(nextNotesMap))
         setToastMessage('Removed from wishlist')
         setTimeout(() => setToastMessage(''), 2000)
         closeViewWrapModal()
@@ -401,9 +457,10 @@ export default function Page() {
 
     const { error } = await supabase
       .from('wishlists')
-      .insert({
+            .insert({
         wrap_id: selectedWrap.id,
         user_id: currentUserId,
+        notes: null,
       })
 
     if (!error) {
@@ -438,17 +495,17 @@ export default function Page() {
       <div className="space-y-6">
         <section className="rounded-3xl border bg-white p-4 shadow-sm xl:p-5">
           <div className="mb-5">
-            <h1 className="text-2xl font-bold text-gray-900">Wishlist</h1>
-            <p className="text-sm text-gray-500">Wraps you have saved</p>
+            <h1 className="text-2xl font-bold text-gray-900">ISO Wraps</h1>
+            <p className="text-sm text-gray-500">Your ISO Wraps</p>
           </div>
 
                     {loading && activeWishlistWraps.length === 0 ? (
             <div className="rounded-2xl border border-dashed p-8 text-center">
-              <p className="text-gray-600">Loading wishlist...</p>
+              <p className="text-gray-600">Loading ISO Wraps...</p>
             </div>
           ) : activeWishlistWraps.length === 0 ? (
             <div className="rounded-2xl border border-dashed p-8 text-center">
-              <p className="text-gray-600">No wishlist wraps yet</p>
+              <p className="text-gray-600">No ISO wraps yet</p>
             </div>
           ) : (
             <div className="grid grid-cols-2 gap-2 xl:grid-cols-4 xl:gap-4">
@@ -633,7 +690,7 @@ export default function Page() {
                   </div>
                 )}
 
-                <div className="grid gap-5 md:grid-cols-2">
+                                <div className="grid gap-5 md:grid-cols-3">
                   <div className="rounded-2xl border bg-white p-5 shadow-sm">
                     <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-400">
                       Wrap Details
@@ -714,7 +771,34 @@ export default function Page() {
                       )}
                     </div>
                   </div>
+<div className="rounded-2xl border bg-white p-5 shadow-sm md:col-span-1">
+  <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-400">
+    ISO Notes
+  </h3>
 
+  <textarea
+    value={selectedWrapNotes}
+    onChange={(e) => setSelectedWrapNotes(e.target.value)}
+    placeholder="Add notes about this wrap, e.g. sales history, prices seen, seller notes"
+    rows={8}
+    className="w-full rounded-2xl border border-gray-200 px-3 py-2 text-sm text-gray-700 outline-none transition focus:border-pink-300 focus:ring-2 focus:ring-pink-100"
+  />
+
+  <div className="mt-3 flex items-center justify-between gap-3">
+    <p className="text-xs text-gray-500">
+      Private note for your ISO list
+    </p>
+
+    <button
+      type="button"
+      onClick={handleSaveWishlistNotes}
+      disabled={savingNotes}
+      className="rounded-full bg-pink-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-pink-700 disabled:cursor-not-allowed disabled:opacity-60"
+    >
+      {savingNotes ? 'Saving...' : 'Save Notes'}
+    </button>
+  </div>
+</div>
                   {selectedWrap.description && (
                     <div className="md:col-span-2 rounded-2xl border bg-white p-5 shadow-sm">
                       <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-400">

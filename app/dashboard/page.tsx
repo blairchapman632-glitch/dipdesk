@@ -21,6 +21,7 @@ type Wrap = {
   name: string
   brand: string | null
   description: string | null
+  colour: string | null
   purchase_date: string | null
   purchase_price: number | null
   purchase_currency: CurrencyCode | null
@@ -82,7 +83,8 @@ type WrapFormState = {
   name: string
   brand: string
   description: string
-  purchase_date: string
+colour: string
+purchase_date: string
   purchase_price: string
   purchase_currency: CurrencyCode
   purchased_from: string
@@ -129,7 +131,8 @@ const EMPTY_WRAP_FORM: WrapFormState = {
   name: '',
   brand: '',
   description: '',
-  purchase_date: new Date().toISOString().slice(0, 10),
+colour: '',
+purchase_date: new Date().toISOString().slice(0, 10),
   purchase_price: '',
   purchase_currency: 'AUD',
   purchased_from: '',
@@ -395,7 +398,7 @@ localStorage.setItem(DASHBOARD_EMAIL_KEY, userEmail)
   supabase
     .from('wraps')
     .select(
-'id, name, brand, description, purchase_date, purchase_price, purchase_currency, purchased_from, purchase_country, status, on_loan_to, sold_to, sold_price, sold_currency, sold_date, is_favourite, for_sale, for_sale_price, for_sale_currency, for_sale_price_is_pm, created_at, wrap_images(id, image_url, is_primary, sort_order)'
+'id, name, brand, description, colour, purchase_date, purchase_price, purchase_currency, purchased_from, purchase_country, status, on_loan_to, sold_to, sold_price, sold_currency, sold_date, is_favourite, for_sale, for_sale_price, for_sale_currency, for_sale_price_is_pm, created_at, wrap_images(id, image_url, is_primary, sort_order)'
 )
     .eq('user_id', user.id)
     .order('is_favourite', { ascending: false })
@@ -404,7 +407,7 @@ localStorage.setItem(DASHBOARD_EMAIL_KEY, userEmail)
   supabase
   .from('wraps')
   .select(
-'id, name, brand, description, purchase_date, purchased_from, purchase_country, status, on_loan_to, sold_to, sold_price, sold_currency, sold_date, is_favourite, for_sale, for_sale_price, for_sale_currency, for_sale_price_is_pm, created_at, user_id, wrap_images(id, image_url, is_primary, sort_order)'
+'id, name, brand, description, colour, purchase_date, purchased_from, purchase_country, status, on_loan_to, sold_to, sold_price, sold_currency, sold_date, is_favourite, for_sale, for_sale_price, for_sale_currency, for_sale_price_is_pm, created_at, user_id, wrap_images(id, image_url, is_primary, sort_order)'
 )
   .order('created_at', { ascending: false })
   .limit(20)
@@ -480,7 +483,7 @@ if (!notificationError && notificationData) {
     const { data: notificationWrapData } = await supabase
       .from('wraps')
       .select(
-        'id, user_id, name, brand, description, purchase_date, purchase_price, purchase_currency, purchased_from, purchase_country, status, on_loan_to, sold_to, sold_price, sold_currency, sold_date, is_favourite, for_sale, for_sale_price, for_sale_currency, for_sale_price_is_pm, created_at, wrap_images(id, image_url, is_primary, sort_order)'
+        'id, user_id, name, brand, description, colour, purchase_date, purchase_price, purchase_currency, purchased_from, purchase_country, status, on_loan_to, sold_to, sold_price, sold_currency, sold_date, is_favourite, for_sale, for_sale_price, for_sale_currency, for_sale_price_is_pm, created_at, wrap_images(id, image_url, is_primary, sort_order)'
       )
       .in('id', wrapIds)
 
@@ -653,7 +656,8 @@ function closeReportModal() {
   name: wrap.name || '',
   brand: wrap.brand || '',
   description: wrap.description || '',
-  purchase_date: wrap.purchase_date || '',
+colour: (wrap as any).colour || '',
+purchase_date: wrap.purchase_date || '',
   purchase_price:
     wrap.purchase_price !== null && wrap.purchase_price !== undefined
       ? String(wrap.purchase_price)
@@ -968,6 +972,7 @@ const wrapPayload = {
   name: wrapForm.name.trim(),
   brand: wrapForm.brand.trim() || null,
   description: wrapForm.description.trim() || null,
+  colour: wrapForm.colour.trim() || null,
   purchase_date: wrapForm.purchase_date || null,
   purchase_price: wrapForm.purchase_price
     ? Number(wrapForm.purchase_price)
@@ -1997,7 +2002,7 @@ className="w-full cursor-pointer rounded-xl bg-gradient-to-r from-pink-500 to-ro
     />
   </div>
 
-  <div className="md:col-span-2">
+    <div className="md:col-span-2">
     <label className="mb-1 block text-sm font-medium text-gray-700">
       Description
     </label>
@@ -2007,6 +2012,18 @@ className="w-full cursor-pointer rounded-xl bg-gradient-to-r from-pink-500 to-ro
       onChange={(event) =>
         updateWrapForm('description', event.target.value)
       }
+      className="w-full rounded-xl border px-3 py-2 text-base text-gray-900 placeholder:text-gray-400 outline-none focus:border-pink-500 xl:text-sm"
+    />
+  </div>
+
+  <div>
+    <label className="mb-1 block text-sm font-medium text-gray-700">
+      Colour
+    </label>
+    <input
+      value={wrapForm.colour}
+      onChange={(event) => updateWrapForm('colour', event.target.value)}
+      placeholder="e.g. Blue, Rainbow, Earth tones"
       className="w-full rounded-xl border px-3 py-2 text-base text-gray-900 placeholder:text-gray-400 outline-none focus:border-pink-500 xl:text-sm"
     />
   </div>

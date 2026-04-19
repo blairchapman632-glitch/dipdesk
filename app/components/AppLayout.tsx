@@ -16,7 +16,7 @@ export default function AppLayout({
   const navItems = [
     { label: 'Home', href: '/dashboard' },
     { label: 'Explore', href: '/explore' },
-    { label: 'Wishlist', href: '/wishlist' },
+    { label: 'ISO', href: '/wishlist' },
     { label: 'Messages', href: '/messages' },
     { label: 'Tools', href: '/tools' },
   ]

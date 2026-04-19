@@ -296,11 +296,15 @@ export default function Page() {
       maximumFractionDigits: 0,
     }).format(value)
   }
-  const [searchTerm, setSearchTerm] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [latestWraps, setLatestWraps] = useState<Wrap[]>([])
-  
+    const [searchTerm, setSearchTerm] = useState('')
+  const [resultType, setResultType] = useState<'all' | 'wraps' | 'users' | 'for-sale'>('all')
+const [forSaleOnly, setForSaleOnly] = useState(false)
+const [loading, setLoading] = useState(false)
+const [searchLoading, setSearchLoading] = useState(false)
+const [latestWraps, setLatestWraps] = useState<Wrap[]>([])
+const [searchWraps, setSearchWraps] = useState<Wrap[]>([])
 const [users, setUsers] = useState<ExploreUser[]>([])
+const [searchUsers, setSearchUsers] = useState<ExploreUser[]>([])
 const [followingUsers, setFollowingUsers] = useState<FollowingUser[]>([])
 const [profilesMap, setProfilesMap] = useState<Record<string, Profile>>({})
 const [selectedWrap, setSelectedWrap] = useState<Wrap | null>(null)
@@ -472,34 +476,151 @@ return () => {
 }
   }, [])
 
-  const filteredUsers = useMemo(() => {
-    const term = searchTerm.trim().toLowerCase()
+      useEffect(() => {
+    const term = searchTerm.trim()
 
-    if (!term) return users
+    if (!term) {
+      setSearchUsers([])
+      setSearchWraps([])
+      setSearchLoading(false)
+      return
+    }
 
-    return users.filter((user) => user.name.toLowerCase().includes(term))
-  }, [users, searchTerm])
+            setSearchLoading(true)
 
-  const filteredWraps = useMemo(() => {
-    const term = searchTerm.trim().toLowerCase()
+    const timeout = setTimeout(async () => {
 
-    if (!term) return latestWraps
+      const { data: profileData, error: profileError } = await supabase
+        .from('profiles')
+        .select('id, full_name, username')
+        .or(`full_name.ilike.%${term}%,username.ilike.%${term}%`)
+        .limit(20)
 
-    return latestWraps.filter((wrap) => {
-      const wrapName = wrap.name.toLowerCase()
-      const brandName = (wrap.brand || '').toLowerCase()
-      const ownerName = getDisplayName(profilesMap[wrap.user_id]).toLowerCase()
+      if (profileError) {
+        console.error(profileError)
+        setSearchUsers([])
+      } else {
+                const matchedProfiles = (profileData as Profile[]) || []
+        const matchedUserIds = matchedProfiles.map((profile) => profile.id)
 
-      return (
-        wrapName.includes(term) ||
-        brandName.includes(term) ||
-        ownerName.includes(term)
-      )
-    })
-  }, [latestWraps, profilesMap, searchTerm])
+        let matchedUsers: ExploreUser[] = matchedProfiles.map((profile) => ({
+          id: profile.id,
+          name: getDisplayName(profile),
+          image_url: WRAP_PLACEHOLDER,
+          wrap_count: 0,
+        }))
+
+        if (matchedUserIds.length > 0) {
+          const { data: searchUserWrapData } = await supabase
+            .from('wraps')
+            .select(
+              'id, user_id, name, brand, description, colour, purchase_date, purchased_from, purchase_country, status, on_loan_to, sold_to, sold_price, sold_currency, sold_date, is_favourite, for_sale, for_sale_price, for_sale_currency, for_sale_price_is_pm, created_at, wrap_images(id, image_url, is_primary, sort_order)'
+            )
+            .in('user_id', matchedUserIds)
+            .order('created_at', { ascending: false })
+
+          const searchUserWraps = (searchUserWrapData as Wrap[]) || []
+
+          matchedUsers = matchedProfiles.map((profile) => {
+            const userWraps = searchUserWraps.filter((wrap) => wrap.user_id === profile.id)
+            const latestUserWrap = userWraps[0]
+
+            return {
+              id: profile.id,
+              name: getDisplayName(profile),
+              image_url: getPrimaryImage(latestUserWrap),
+              wrap_count: userWraps.length,
+            }
+          })
+        }
+
+        setSearchUsers(matchedUsers)
+      }
+
+      const { data: wrapData, error: wrapError } = await supabase
+        .from('wraps')
+        .select(
+          'id, user_id, name, brand, description, colour, purchase_date, purchased_from, purchase_country, status, on_loan_to, sold_to, sold_price, sold_currency, sold_date, is_favourite, for_sale, for_sale_price, for_sale_currency, for_sale_price_is_pm, created_at, wrap_images(id, image_url, is_primary, sort_order)'
+        )
+        .or(`name.ilike.%${term}%,brand.ilike.%${term}%,colour.ilike.%${term}%,description.ilike.%${term}%`)
+        .order('created_at', { ascending: false })
+        .limit(40)
+
+      if (wrapError) {
+        console.error(wrapError)
+        setSearchWraps([])
+        setSearchLoading(false)
+        return
+      }
+
+      const wraps = (wrapData as Wrap[]) || []
+      const wrapUserIds = [...new Set(wraps.map((wrap) => wrap.user_id))]
+
+      let wrapProfilesMap: Record<string, Profile> = { ...profilesMap }
+
+      if (wrapUserIds.length > 0) {
+        const { data: ownerProfiles } = await supabase
+          .from('profiles')
+          .select('id, full_name, username')
+          .in('id', wrapUserIds)
+
+        const ownerMap = ((ownerProfiles as Profile[]) || []).reduce<Record<string, Profile>>(
+          (accumulator, profile) => {
+            accumulator[profile.id] = profile
+            return accumulator
+          },
+          {}
+        )
+
+        wrapProfilesMap = { ...wrapProfilesMap, ...ownerMap }
+        setProfilesMap(wrapProfilesMap)
+      }
+
+      const lowerTerm = term.toLowerCase()
+
+      const wrapsWithOwnerMatch = wraps.filter((wrap) => {
+  if (forSaleOnly && !wrap.for_sale) return false
+        const ownerName = getDisplayName(wrapProfilesMap[wrap.user_id]).toLowerCase()
+
+        return (
+          wrap.name.toLowerCase().includes(lowerTerm) ||
+          (wrap.brand || '').toLowerCase().includes(lowerTerm) ||
+                    (wrap.description || '').toLowerCase().includes(lowerTerm) ||
+          ((wrap as any).colour || '').toLowerCase().includes(lowerTerm) ||
+          ownerName.includes(lowerTerm)
+        )
+      })
+
+            const sortedSearchWraps = [...wrapsWithOwnerMatch].sort((a, b) => {
+        if (a.for_sale === b.for_sale) return 0
+        return a.for_sale ? -1 : 1
+      })
+
+      setSearchWraps(sortedSearchWraps)
+      setSearchLoading(false)
+    }, 300)
+
+    return () => clearTimeout(timeout)
+    }, [searchTerm, profilesMap, forSaleOnly])
+
+  const baseUsers = searchTerm.trim() ? searchUsers : users
+const baseWraps = searchTerm.trim() ? searchWraps : latestWraps
+
+const filteredUsers =
+  resultType === 'wraps' || resultType === 'for-sale'
+    ? []
+    : baseUsers
+
+const filteredWraps =
+  resultType === 'users'
+    ? []
+    : resultType === 'for-sale'
+    ? baseWraps.filter((wrap) => wrap.for_sale)
+    : baseWraps
   const hasSearch = searchTerm.trim().length > 0
   const noResults =
     !loading &&
+    !searchLoading &&
     hasSearch &&
     filteredUsers.length === 0 &&
     filteredWraps.length === 0
@@ -507,9 +628,21 @@ return () => {
     <AppLayout>
       <div className="space-y-3">
         <section className="rounded-xl border bg-white px-3 py-3 shadow-sm">
-          <div className="relative">
-            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-400">
-              🔍
+                    <div className="relative">
+            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 leading-none">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="h-4 w-4"
+              >
+                <circle cx="11" cy="11" r="8"></circle>
+                <path d="m21 21-4.3-4.3"></path>
+              </svg>
             </span>
 
             <input
@@ -517,14 +650,64 @@ return () => {
               value={searchTerm}
               onChange={(event) => setSearchTerm(event.target.value)}
               placeholder="Discover collections and wraps"
-              className="w-full rounded-lg border px-10 py-2 text-sm text-gray-900 outline-none focus:border-pink-500"
+              className="w-full rounded-lg border pl-11 pr-3 py-2 text-sm text-gray-900 outline-none focus:border-pink-500"
             />
           </div>
+
+          <div className="mt-3 flex gap-2 overflow-x-auto">
+            <button
+              type="button"
+              onClick={() => setResultType('all')}
+              className={`whitespace-nowrap rounded-full border px-3 py-1 text-sm font-semibold ${
+                resultType === 'all'
+                  ? 'border-pink-500 bg-pink-500 text-white'
+                  : 'border-gray-200 bg-white text-gray-600'
+              }`}
+            >
+              All
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setResultType('wraps')}
+              className={`whitespace-nowrap rounded-full border px-3 py-1 text-sm font-semibold ${
+                resultType === 'wraps'
+                  ? 'border-pink-500 bg-pink-500 text-white'
+                  : 'border-gray-200 bg-white text-gray-600'
+              }`}
+            >
+              Wraps
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setResultType('users')}
+              className={`whitespace-nowrap rounded-full border px-3 py-1 text-sm font-semibold ${
+                resultType === 'users'
+                  ? 'border-pink-500 bg-pink-500 text-white'
+                  : 'border-gray-200 bg-white text-gray-600'
+              }`}
+            >
+              Users
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setResultType('for-sale')}
+              className={`whitespace-nowrap rounded-full border px-3 py-1 text-sm font-semibold ${
+                resultType === 'for-sale'
+                  ? 'border-pink-500 bg-pink-500 text-white'
+                  : 'border-gray-200 bg-white text-gray-600'
+              }`}
+            >
+              For Sale
+            </button>
+          </div>
         </section>
-        {noResults && (
+                        {hasSearch && filteredUsers.length === 0 && filteredWraps.length === 0 && (
           <section className="rounded-xl border bg-white px-3 py-4 shadow-sm">
             <p className="text-center text-sm text-gray-500">
-              No results found
+              {searchLoading ? 'Searching...' : 'No results found'}
             </p>
           </section>
         )}
