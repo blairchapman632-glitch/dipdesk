@@ -30,7 +30,14 @@ useEffect(() => {
         )
       } catch {}
     }
-async function loadUnreadCount() {
+const cachedUnread = localStorage.getItem('dipdesk_unread_count')
+    if (cachedUnread) {
+      try {
+        setUnreadCount(JSON.parse(cachedUnread))
+      } catch {}
+    }
+
+    async function loadUnreadCount() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
@@ -40,7 +47,9 @@ async function loadUnreadCount() {
         .eq('recipient_user_id', user.id)
         .is('read_at', null)
 
-      setUnreadCount(count || 0)
+      const next = count || 0
+      setUnreadCount(next)
+      localStorage.setItem('dipdesk_unread_count', JSON.stringify(next))
     }
 
     loadUnreadCount()
