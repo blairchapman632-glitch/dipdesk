@@ -186,11 +186,11 @@ export default function ConversationPage() {
   }
 
   return (
-    <AppLayout>
-      <div className="max-w-lg mx-auto flex flex-col h-[calc(100dvh-64px)] md:h-[calc(100vh-64px)]">
+    <AppLayout hideHeader={false}>
+      <div className="fixed inset-x-0 top-0 bottom-[80px] md:bottom-0 md:static md:h-[calc(100vh-80px)] max-w-lg md:mx-auto flex flex-col bg-gray-50">
 
         {/* Header */}
-        <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-100 bg-white flex-shrink-0">
+        <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-100 bg-white flex-shrink-0 sticky top-0 z-10 mt-0">
           <Link
             href="/messages"
             className="flex items-center gap-1 text-pink-500 hover:text-pink-600 font-semibold text-sm pr-2"
