@@ -461,7 +461,7 @@ if (profileData) {
   localStorage.setItem(DASHBOARD_WRAPS_KEY, JSON.stringify(safeWraps))
 }
 if (communityWrapData) {
-  const wraps = communityWrapData as Wrap[]
+  const wraps = communityWrapData as unknown as Wrap[]
   setCommunityWraps(wraps)
 
   const userIds = [...new Set(wraps.map(w => w.user_id))]
