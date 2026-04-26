@@ -20,8 +20,10 @@ type Wrap = {
   user_id: string
   name: string
   brand: string | null
-  description: string | null
+  size: string | null
+  material: string | null
   colour: string | null
+  dibs_user_id: string | null
   purchase_date: string | null
   purchase_price: number | null
   purchase_currency: CurrencyCode | null
@@ -82,8 +84,11 @@ type WrapFormState = {
   id: string | null
   name: string
   brand: string
-  description: string
-colour: string
+  size: string
+  material: string
+  colour: string
+  dibs_user_id: string | null
+  dibs_search: string
 purchase_date: string
   purchase_price: string
   purchase_currency: CurrencyCode
@@ -119,19 +124,25 @@ type NotificationItem = {
   read_at: string | null
   type: 'like' | 'wishlist' | 'for_sale'
   actor_name: string
+  actor_avatar: string | null
   wrap: Wrap | null
 }
 const DASHBOARD_EMAIL_KEY = 'dipdesk_dashboard_email'
 const DASHBOARD_DIPS_KEY = 'dipdesk_dashboard_dips'
 const DASHBOARD_WRAPS_KEY = 'dipdesk_dashboard_wraps'
 const DASHBOARD_NOTIFICATIONS_KEY = 'dipdesk_dashboard_notifications'
+const DASHBOARD_PROFILE_KEY = 'dipdesk_dashboard_profile'
+const DASHBOARD_ACTOR_AVATARS_KEY = 'dipdesk_dashboard_actor_avatars'
 
 const EMPTY_WRAP_FORM: WrapFormState = {
   id: null,
   name: '',
   brand: '',
-  description: '',
-colour: '',
+  size: '',
+  material: '',
+  colour: '',
+  dibs_user_id: null,
+  dibs_search: '',
 purchase_date: new Date().toISOString().slice(0, 10),
   purchase_price: '',
   purchase_currency: 'AUD',
@@ -241,7 +252,8 @@ export default function Dashboard() {
     const [mobileTab, setMobileTab] = useState<'collection' | 'activity'>('collection')
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [isAdmin, setIsAdmin] = useState(false)
-
+const [profile, setProfile] = useState<{ full_name: string | null; username: string | null; avatar_url: string | null } | null>(null)
+const [isUploadingAvatar, setIsUploadingAvatar] = useState(false)
   const [isWrapModalOpen, setIsWrapModalOpen] = useState(false)
 const [isViewWrapModalOpen, setIsViewWrapModalOpen] = useState(false)
 const [isReportModalOpen, setIsReportModalOpen] = useState(false)
@@ -256,6 +268,14 @@ const [isImagePreviewOpen, setIsImagePreviewOpen] = useState(false)
 const [isReadOnlyWrapView, setIsReadOnlyWrapView] = useState(false)
 const [isSavingWrap, setIsSavingWrap] = useState(false)
 const [isUploadingImages, setIsUploadingImages] = useState(false)
+const [dibsSearchResults, setDibsSearchResults] = useState<{id: string, name: string, username: string | null}[]>([])
+const [dibsSearchLoading, setDibsSearchLoading] = useState(false)
+const [purchasedFromResults, setPurchasedFromResults] = useState<{id: string, name: string, username: string | null}[]>([])
+const [purchasedFromLoading, setPurchasedFromLoading] = useState(false)
+const [brandSuggestions, setBrandSuggestions] = useState<string[]>([])
+const [materialSuggestions, setMaterialSuggestions] = useState<string[]>([])
+const [sizeSuggestions, setSizeSuggestions] = useState<string[]>([])
+const [colourSuggestions, setColourSuggestions] = useState<string[]>([])
 const [wrapForm, setWrapForm] = useState<WrapFormState>(EMPTY_WRAP_FORM)
 const [notifications, setNotifications] = useState<NotificationItem[]>([])
 const [selectedWrapCounts, setSelectedWrapCounts] = useState({
@@ -378,7 +398,16 @@ const userEmail = user.email || ''
 setIsAdmin(userEmail === 'paige.wilson26@outlook.com')
 setEmail(userEmail)
 localStorage.setItem(DASHBOARD_EMAIL_KEY, userEmail)
+const { data: profileData } = await supabase
+  .from('profiles')
+  .select('full_name, username, avatar_url')
+  .eq('id', user.id)
+  .single()
 
+if (profileData) {
+  setProfile(profileData)
+  localStorage.setItem(DASHBOARD_PROFILE_KEY, JSON.stringify(profileData))
+}
 
 
     const [
@@ -467,7 +496,7 @@ if (!notificationError && notificationData) {
   if (actorIds.length > 0) {
     const { data: actorProfileData } = await supabase
       .from('profiles')
-      .select('id, full_name, username')
+      .select('id, full_name, username, avatar_url')
       .in('id', actorIds)
 
     actorMap = ((actorProfileData as Profile[]) || []).reduce<Record<string, Profile>>(
@@ -507,11 +536,21 @@ if (!notificationError && notificationData) {
           actorMap[row.actor_user_id]?.username ||
           'Someone')
       : 'Someone',
-    wrap: row.wrap_id ? wrapMap[row.wrap_id] || null : null,
-  }))
+  actor_avatar: row.actor_user_id
+      ? (actorMap[row.actor_user_id] as any)?.avatar_url || null
+      : null,
+  wrap: row.wrap_id ? wrapMap[row.wrap_id] || null : null,
+}))
 
   setNotifications(nextNotifications)
   localStorage.setItem(DASHBOARD_NOTIFICATIONS_KEY, JSON.stringify(nextNotifications))
+  const actorAvatarMap: Record<string, string | null> = {}
+  nextNotifications.forEach((n) => {
+    if (n.actor_user_id) {
+      actorAvatarMap[n.actor_user_id] = n.actor_avatar
+    }
+  })
+  localStorage.setItem(DASHBOARD_ACTOR_AVATARS_KEY, JSON.stringify(actorAvatarMap))
 }
 
     setLoading(false)
@@ -547,6 +586,26 @@ if (!notificationError && notificationData) {
       } catch {
         localStorage.removeItem(DASHBOARD_NOTIFICATIONS_KEY)
       }
+    }
+
+    const cachedProfile = localStorage.getItem(DASHBOARD_PROFILE_KEY)
+    if (cachedProfile) {
+      try {
+        setProfile(JSON.parse(cachedProfile))
+      } catch {}
+    }
+
+    const cachedActorAvatars = localStorage.getItem(DASHBOARD_ACTOR_AVATARS_KEY)
+    if (cachedActorAvatars) {
+      try {
+        const avatarMap = JSON.parse(cachedActorAvatars)
+        setNotifications((prev) =>
+          prev.map((n) => ({
+            ...n,
+            actor_avatar: n.actor_user_id ? avatarMap[n.actor_user_id] ?? n.actor_avatar : n.actor_avatar,
+          }))
+        )
+      } catch {}
     }
 
     setLoading(false)
@@ -631,6 +690,51 @@ async function handleNotificationClick(notification: NotificationItem) {
     openViewWrapModal(notification.wrap, true)
   }
 }
+async function uploadAvatar(file: File) {
+  if (!currentUserId) return
+
+  setIsUploadingAvatar(true)
+
+  const fileExt = file.name.split('.').pop() || 'jpg'
+  const fileName = `${currentUserId}/avatar.${fileExt}`
+
+  const { error: uploadError } = await supabase.storage
+    .from('avatars')
+    .upload(fileName, file, { upsert: true })
+
+  if (uploadError) {
+    console.error(uploadError)
+    setIsUploadingAvatar(false)
+    return
+  }
+
+  const { data } = supabase.storage
+    .from('avatars')
+    .getPublicUrl(fileName)
+
+  const avatarUrl = `${data.publicUrl}?t=${Date.now()}`
+
+  const { error: updateError } = await supabase
+    .from('profiles')
+    .update({ avatar_url: avatarUrl })
+    .eq('id', currentUserId)
+
+  if (!updateError) {
+    setProfile((prev) => prev ? { ...prev, avatar_url: avatarUrl } : prev)
+  }
+
+  setIsUploadingAvatar(false)
+}
+
+function getInitials(name: string | null | undefined) {
+  if (!name?.trim()) return '?'
+  return name
+    .trim()
+    .split(' ')
+    .slice(0, 2)
+    .map((word) => word[0].toUpperCase())
+    .join('')
+}
 function openReportModal() {
   setIsReportModalOpen(true)
 }
@@ -638,6 +742,107 @@ function openReportModal() {
 function closeReportModal() {
   setIsReportModalOpen(false)
 }
+useEffect(() => {
+    const term = wrapForm.brand.trim()
+    if (!term || term.length < 1) { setBrandSuggestions([]); return }
+    const timeout = setTimeout(async () => {
+      const { data } = await supabase.from('wraps').select('brand').ilike('brand', `%${term}%`).limit(10)
+      const unique = [...new Set(((data as any[]) || []).map((w) => w.brand).filter(Boolean))] as string[]
+      setBrandSuggestions(unique.sort())
+    }, 200)
+    return () => clearTimeout(timeout)
+  }, [wrapForm.brand])
+
+  useEffect(() => {
+    const term = wrapForm.material.trim()
+    if (!term || term.length < 1) { setMaterialSuggestions([]); return }
+    const timeout = setTimeout(async () => {
+      const { data } = await supabase.from('wraps').select('material').ilike('material', `%${term}%`).limit(10)
+      const unique = [...new Set(((data as any[]) || []).map((w) => w.material).filter(Boolean))] as string[]
+      setMaterialSuggestions(unique.sort())
+    }, 200)
+    return () => clearTimeout(timeout)
+  }, [wrapForm.material])
+
+  useEffect(() => {
+    const term = wrapForm.size.trim()
+    if (!term || term.length < 1) { setSizeSuggestions([]); return }
+    const timeout = setTimeout(async () => {
+      const { data } = await supabase.from('wraps').select('size').ilike('size', `%${term}%`).limit(10)
+      const unique = [...new Set(((data as any[]) || []).map((w) => w.size).filter(Boolean))] as string[]
+      setSizeSuggestions(unique.sort())
+    }, 200)
+    return () => clearTimeout(timeout)
+  }, [wrapForm.size])
+
+  useEffect(() => {
+    const term = wrapForm.colour.trim()
+    if (!term || term.length < 1) { setColourSuggestions([]); return }
+    const timeout = setTimeout(async () => {
+      const { data } = await supabase.from('wraps').select('colour').ilike('colour', `%${term}%`).limit(10)
+      const unique = [...new Set(((data as any[]) || []).map((w) => w.colour).filter(Boolean))] as string[]
+      setColourSuggestions(unique.sort())
+    }, 200)
+    return () => clearTimeout(timeout)
+  }, [wrapForm.colour])
+useEffect(() => {
+    const term = wrapForm.purchased_from.trim()
+
+    if (!term || term.length < 2) {
+      setPurchasedFromResults([])
+      return
+    }
+
+    setPurchasedFromLoading(true)
+
+    const timeout = setTimeout(async () => {
+      const { data } = await supabase
+        .from('profiles')
+        .select('id, full_name, username')
+        .or(`full_name.ilike.%${term}%,username.ilike.%${term}%`)
+        .limit(5)
+
+      setPurchasedFromResults(
+        ((data as any[]) || []).map((p) => ({
+          id: p.id,
+          name: p.full_name || p.username || 'User',
+          username: p.username,
+        }))
+      )
+      setPurchasedFromLoading(false)
+    }, 300)
+
+    return () => clearTimeout(timeout)
+  }, [wrapForm.purchased_from])
+useEffect(() => {
+    const term = wrapForm.dibs_search.trim()
+
+    if (!term) {
+      setDibsSearchResults([])
+      return
+    }
+
+    setDibsSearchLoading(true)
+
+    const timeout = setTimeout(async () => {
+      const { data } = await supabase
+        .from('profiles')
+        .select('id, full_name, username')
+        .or(`full_name.ilike.%${term}%,username.ilike.%${term}%`)
+        .limit(5)
+
+      setDibsSearchResults(
+        ((data as any[]) || []).map((p) => ({
+          id: p.id,
+          name: p.full_name || p.username || 'User',
+          username: p.username,
+        }))
+      )
+      setDibsSearchLoading(false)
+    }, 300)
+
+    return () => clearTimeout(timeout)
+  }, [wrapForm.dibs_search])
   function openNewWrapModal() {
     setWrapForm({
       ...EMPTY_WRAP_FORM,
@@ -655,8 +860,11 @@ function closeReportModal() {
   id: wrap.id,
   name: wrap.name || '',
   brand: wrap.brand || '',
-  description: wrap.description || '',
-colour: (wrap as any).colour || '',
+  size: (wrap as any).size || '',
+  material: (wrap as any).material || '',
+  colour: (wrap as any).colour || '',
+  dibs_user_id: (wrap as any).dibs_user_id || null,
+  dibs_search: '',
 purchase_date: wrap.purchase_date || '',
   purchase_price:
     wrap.purchase_price !== null && wrap.purchase_price !== undefined
@@ -971,15 +1179,16 @@ const wrapPayload = {
   user_id: currentUserId,
   name: wrapForm.name.trim(),
   brand: wrapForm.brand.trim() || null,
-  description: wrapForm.description.trim() || null,
+  size: wrapForm.size.trim() || null,
+  material: wrapForm.material.trim() || null,
   colour: wrapForm.colour.trim() || null,
+  dibs_user_id: wrapForm.dibs_user_id || null,
   purchase_date: wrapForm.purchase_date || null,
   purchase_price: wrapForm.purchase_price
     ? Number(wrapForm.purchase_price)
     : null,
   purchase_currency: wrapForm.purchase_currency || 'AUD',
   purchased_from: wrapForm.purchased_from.trim() || null,
-  purchase_country: wrapForm.purchase_country.trim() || null,
   status: wrapForm.status,
   on_loan_to:
     wrapForm.status === 'holiday' ? wrapForm.on_loan_to.trim() || null : null,
@@ -1211,6 +1420,7 @@ function exportReportCsv() {
   return (
         <AppLayout>
       <div className="space-y-6">
+        
         <div className="xl:hidden">
           <div className="grid grid-cols-2 rounded-2xl border bg-white p-1 shadow-sm">
             <button
@@ -1448,11 +1658,17 @@ className="w-full cursor-pointer rounded-xl bg-gradient-to-r from-pink-500 to-ro
                     className="w-full cursor-pointer rounded-2xl border bg-white p-3 text-left shadow-sm transition hover:shadow-md"
                   >
                     <div className="flex items-center gap-3">
-                      <img
-                        src={imageUrl}
-                        alt={wrapName}
-                        className="h-12 w-12 shrink-0 rounded-xl object-cover object-[center_30%]"
-                      />
+                      {notification.actor_avatar ? (
+                        <img
+                          src={notification.actor_avatar}
+                          alt={notification.actor_name}
+                          className="h-12 w-12 shrink-0 rounded-full object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-pink-500 to-rose-500 text-sm font-bold text-white">
+                          {getInitials(notification.actor_name)}
+                        </div>
+                      )}
 
                       <div className="min-w-0 flex-1">
                         <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">
@@ -1991,32 +2207,85 @@ className="w-full cursor-pointer rounded-xl bg-gradient-to-r from-pink-500 to-ro
     />
   </div>
 
-  <div>
+  <div className="relative">
     <label className="mb-1 block text-sm font-medium text-gray-700">
       Brand
     </label>
     <input
       value={wrapForm.brand}
       onChange={(event) => updateWrapForm('brand', event.target.value)}
+      placeholder="e.g. Didymos, Oscha"
       className="w-full rounded-xl border px-3 py-2 text-base text-gray-900 placeholder:text-gray-400 outline-none focus:border-pink-500 xl:text-sm"
     />
+    {brandSuggestions.length > 0 && (
+      <div className="absolute z-10 mt-1 w-full rounded-xl border bg-white shadow-lg">
+        {brandSuggestions.map((s) => (
+          <button
+            key={s}
+            type="button"
+            onClick={() => { updateWrapForm('brand', s); setBrandSuggestions([]) }}
+            className="flex w-full px-3 py-2 text-left text-sm hover:bg-pink-50 first:rounded-t-xl last:rounded-b-xl"
+          >
+            {s}
+          </button>
+        ))}
+      </div>
+    )}
   </div>
 
-    <div className="md:col-span-2">
+    <div className="relative">
     <label className="mb-1 block text-sm font-medium text-gray-700">
-      Description
+      Size / STIH
     </label>
-    <textarea
-      rows={4}
-      value={wrapForm.description}
-      onChange={(event) =>
-        updateWrapForm('description', event.target.value)
-      }
+    <input
+      value={wrapForm.size}
+      onChange={(event) => updateWrapForm('size', event.target.value)}
+      placeholder="e.g. Size 6, 4.2m"
       className="w-full rounded-xl border px-3 py-2 text-base text-gray-900 placeholder:text-gray-400 outline-none focus:border-pink-500 xl:text-sm"
     />
+    {sizeSuggestions.length > 0 && (
+      <div className="absolute z-10 mt-1 w-full rounded-xl border bg-white shadow-lg">
+        {sizeSuggestions.map((s) => (
+          <button
+            key={s}
+            type="button"
+            onClick={() => { updateWrapForm('size', s); setSizeSuggestions([]) }}
+            className="flex w-full px-3 py-2 text-left text-sm hover:bg-pink-50 first:rounded-t-xl last:rounded-b-xl"
+          >
+            {s}
+          </button>
+        ))}
+      </div>
+    )}
   </div>
 
-  <div>
+  <div className="relative">
+    <label className="mb-1 block text-sm font-medium text-gray-700">
+      Blend / Material
+    </label>
+    <input
+      value={wrapForm.material}
+      onChange={(event) => updateWrapForm('material', event.target.value)}
+      placeholder="e.g. 100% cotton, linen/cotton"
+      className="w-full rounded-xl border px-3 py-2 text-base text-gray-900 placeholder:text-gray-400 outline-none focus:border-pink-500 xl:text-sm"
+    />
+    {materialSuggestions.length > 0 && (
+      <div className="absolute z-10 mt-1 w-full rounded-xl border bg-white shadow-lg">
+        {materialSuggestions.map((s) => (
+          <button
+            key={s}
+            type="button"
+            onClick={() => { updateWrapForm('material', s); setMaterialSuggestions([]) }}
+            className="flex w-full px-3 py-2 text-left text-sm hover:bg-pink-50 first:rounded-t-xl last:rounded-b-xl"
+          >
+            {s}
+          </button>
+        ))}
+      </div>
+    )}
+  </div>
+
+  <div className="relative">
     <label className="mb-1 block text-sm font-medium text-gray-700">
       Colour
     </label>
@@ -2026,6 +2295,83 @@ className="w-full cursor-pointer rounded-xl bg-gradient-to-r from-pink-500 to-ro
       placeholder="e.g. Blue, Rainbow, Earth tones"
       className="w-full rounded-xl border px-3 py-2 text-base text-gray-900 placeholder:text-gray-400 outline-none focus:border-pink-500 xl:text-sm"
     />
+    {colourSuggestions.length > 0 && (
+      <div className="absolute z-10 mt-1 w-full rounded-xl border bg-white shadow-lg">
+        {colourSuggestions.map((s) => (
+          <button
+            key={s}
+            type="button"
+            onClick={() => { updateWrapForm('colour', s); setColourSuggestions([]) }}
+            className="flex w-full px-3 py-2 text-left text-sm hover:bg-pink-50 first:rounded-t-xl last:rounded-b-xl"
+          >
+            {s}
+          </button>
+        ))}
+      </div>
+    )}
+  </div>
+
+  <div className="relative">
+    <label className="mb-1 block text-sm font-medium text-gray-700">
+      Dibs
+    </label>
+    <input
+      value={wrapForm.dibs_search}
+      onChange={(event) => {
+        updateWrapForm('dibs_search', event.target.value)
+        updateWrapForm('dibs_user_id', null)
+      }}
+      placeholder="Search for a user..."
+      className="w-full rounded-xl border px-3 py-2 text-base text-gray-900 placeholder:text-gray-400 outline-none focus:border-pink-500 xl:text-sm"
+    />
+
+    {dibsSearchLoading && (
+      <p className="mt-1 text-xs text-gray-400">Searching...</p>
+    )}
+
+    {dibsSearchResults.length > 0 && !wrapForm.dibs_user_id && (
+      <div className="absolute z-10 mt-1 w-full rounded-xl border bg-white shadow-lg">
+        {dibsSearchResults.map((user) => (
+          <button
+            key={user.id}
+            type="button"
+            onClick={() => {
+              updateWrapForm('dibs_user_id', user.id)
+              updateWrapForm('dibs_search', user.name)
+              setDibsSearchResults([])
+            }}
+            className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-pink-50 first:rounded-t-xl last:rounded-b-xl"
+          >
+            <span className="font-semibold text-gray-900">{user.name}</span>
+            {user.username && (
+              <span className="text-gray-400">@{user.username}</span>
+            )}
+          </button>
+        ))}
+      </div>
+    )}
+
+    {wrapForm.dibs_user_id && (
+      <div className="mt-1 flex items-center gap-2">
+        <p className="text-xs text-pink-600 font-medium">
+          ✓ Dibs linked to {wrapForm.dibs_search}
+        </p>
+        <button
+          type="button"
+          onClick={() => {
+            updateWrapForm('dibs_user_id', null)
+            updateWrapForm('dibs_search', '')
+          }}
+          className="text-xs text-gray-400 hover:text-red-500"
+        >
+          Remove
+        </button>
+      </div>
+    )}
+
+    <p className="mt-1 text-xs text-gray-500">
+      First right to buy if listed for sale
+    </p>
   </div>
 
   <div>
@@ -2042,7 +2388,7 @@ className="w-full cursor-pointer rounded-xl bg-gradient-to-r from-pink-500 to-ro
     />
   </div>
 
-  <div>
+  <div className="relative">
     <label className="mb-1 block text-sm font-medium text-gray-700">
       Purchased From
     </label>
@@ -2051,8 +2397,34 @@ className="w-full cursor-pointer rounded-xl bg-gradient-to-r from-pink-500 to-ro
       onChange={(event) =>
         updateWrapForm('purchased_from', event.target.value)
       }
+      placeholder="Search user or type a name..."
       className="w-full rounded-xl border px-3 py-2 text-base text-gray-900 placeholder:text-gray-400 outline-none focus:border-pink-500 xl:text-sm"
     />
+
+    {purchasedFromLoading && (
+      <p className="mt-1 text-xs text-gray-400">Searching...</p>
+    )}
+
+    {purchasedFromResults.length > 0 && (
+      <div className="absolute z-10 mt-1 w-full rounded-xl border bg-white shadow-lg">
+        {purchasedFromResults.map((user) => (
+          <button
+            key={user.id}
+            type="button"
+            onClick={() => {
+              updateWrapForm('purchased_from', user.name)
+              setPurchasedFromResults([])
+            }}
+            className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-pink-50 first:rounded-t-xl last:rounded-b-xl"
+          >
+            <span className="font-semibold text-gray-900">{user.name}</span>
+            {user.username && (
+              <span className="text-gray-400">@{user.username}</span>
+            )}
+          </button>
+        ))}
+      </div>
+    )}
   </div>
 
     <div>
@@ -2096,18 +2468,7 @@ Record own currency for accurate reporting
 </p>
   </div>
 
-  <div>
-    <label className="mb-1 block text-sm font-medium text-gray-700">
-      Country Purchased From
-    </label>
-    <input
-      value={wrapForm.purchase_country}
-      onChange={(event) =>
-        updateWrapForm('purchase_country', event.target.value)
-      }
-      className="w-full rounded-xl border px-3 py-2 text-base text-gray-900 placeholder:text-gray-400 outline-none focus:border-pink-500 xl:text-sm"
-    />
-  </div>
+  
 
   <div className="md:col-span-2">
 <label className="mb-2 block text-sm font-medium text-gray-700">

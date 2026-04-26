@@ -68,6 +68,7 @@ const EXPLORE_WRAPS_KEY = 'dipdesk_explore_wraps'
 const EXPLORE_USERS_KEY = 'dipdesk_explore_users'
 const EXPLORE_FOLLOWING_KEY = 'dipdesk_explore_following'
 const EXPLORE_PROFILES_KEY = 'dipdesk_explore_profiles'
+const EXPLORE_AVATARS_KEY = 'dipdesk_explore_avatars'
 
 function getPrimaryImage(wrap?: Wrap) {
   if (!wrap?.wrap_images?.length) return WRAP_PLACEHOLDER
@@ -296,9 +297,20 @@ export default function Page() {
       maximumFractionDigits: 0,
     }).format(value)
   }
+  const [avatarMap, setAvatarMap] = useState<Record<string, string | null>>({})
     const [searchTerm, setSearchTerm] = useState('')
   const [resultType, setResultType] = useState<'all' | 'wraps' | 'users' | 'for-sale'>('all')
-const [forSaleOnly, setForSaleOnly] = useState(false)
+  const [forSaleOnly, setForSaleOnly] = useState(false)
+  const [filterBrand, setFilterBrand] = useState('')
+  const [filterSize, setFilterSize] = useState('')
+  const [filterColour, setFilterColour] = useState('')
+  const [filterMaterial, setFilterMaterial] = useState('')
+  const [filterOptions, setFilterOptions] = useState<{
+    brands: string[]
+    sizes: string[]
+    colours: string[]
+    materials: string[]
+  }>({ brands: [], sizes: [], colours: [], materials: [] })
 const [loading, setLoading] = useState(false)
 const [searchLoading, setSearchLoading] = useState(false)
 const [latestWraps, setLatestWraps] = useState<Wrap[]>([])
@@ -352,6 +364,13 @@ const [toastMessage, setToastMessage] = useState('')
     } catch {}
   }
 
+  const cachedAvatars = localStorage.getItem(EXPLORE_AVATARS_KEY)
+  if (cachedAvatars) {
+    try {
+      setAvatarMap(JSON.parse(cachedAvatars))
+    } catch {}
+  }
+
     async function loadExploreData() {
   const {
     data: { user },
@@ -389,7 +408,7 @@ localStorage.setItem(EXPLORE_WRAPS_KEY, JSON.stringify(wraps))
 
       const { data: profileData, error: profileError } = await supabase
         .from('profiles')
-        .select('id, full_name, username')
+        .select('id, full_name, username, avatar_url')
         .in('id', uniqueUserIds)
 
       if (profileError) {
@@ -413,6 +432,12 @@ localStorage.setItem(EXPLORE_WRAPS_KEY, JSON.stringify(wraps))
       setProfilesMap(profileMap)
       localStorage.setItem(EXPLORE_PROFILES_KEY, JSON.stringify(profileMap))
 localStorage.setItem(EXPLORE_PROFILES_KEY, JSON.stringify(profileMap))
+const nextAvatarMap: Record<string, string | null> = {}
+      profiles.forEach((p: any) => {
+        nextAvatarMap[p.id] = p.avatar_url || null
+      })
+      setAvatarMap(nextAvatarMap)
+      localStorage.setItem(EXPLORE_AVATARS_KEY, JSON.stringify(nextAvatarMap))
       const usersFromWraps: ExploreUser[] = uniqueUserIds.slice(0, 12).map((userId) => {
         const userWraps = wraps.filter((wrap) => wrap.user_id === userId)
         const latestUserWrap = userWraps[0]
@@ -464,7 +489,33 @@ setLoading(false)
     }
 
     loadExploreData()
+async function loadFilterOptions() {
+  const { data } = await supabase
+    .from('wraps')
+    .select('brand, size, colour, material')
 
+  const wraps = (data as any[]) || []
+
+  const unique = (key: string) => {
+    const seen = new Map<string, string>()
+    wraps.forEach((w) => {
+      const val = w[key]
+      if (val && !seen.has(val.toLowerCase())) {
+        seen.set(val.toLowerCase(), val)
+      }
+    })
+    return [...seen.values()].sort()
+  }
+
+  setFilterOptions({
+    brands: unique('brand'),
+    sizes: unique('size'),
+    colours: unique('colour'),
+    materials: unique('material'),
+  })
+}
+
+loadFilterOptions()
 const handleFocus = () => {
   loadExploreData()
 }
@@ -611,12 +662,19 @@ const filteredUsers =
     ? []
     : baseUsers
 
-const filteredWraps =
+const filteredWraps = (
   resultType === 'users'
     ? []
     : resultType === 'for-sale'
     ? baseWraps.filter((wrap) => wrap.for_sale)
     : baseWraps
+).filter((wrap) => {
+  if (filterBrand && (wrap.brand || '').toLowerCase() !== filterBrand.toLowerCase()) return false
+  if (filterSize && ((wrap as any).size || '').toLowerCase() !== filterSize.toLowerCase()) return false
+  if (filterColour && ((wrap as any).colour || '').toLowerCase() !== filterColour.toLowerCase()) return false
+  if (filterMaterial && ((wrap as any).material || '').toLowerCase() !== filterMaterial.toLowerCase()) return false
+  return true
+})
   const hasSearch = searchTerm.trim().length > 0
   const noResults =
     !loading &&
@@ -703,6 +761,68 @@ const filteredWraps =
               For Sale
             </button>
           </div>
+
+          {/* Filter dropdowns */}
+          <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
+            <select
+              value={filterBrand}
+              onChange={(e) => setFilterBrand(e.target.value)}
+              className={`whitespace-nowrap rounded-full border px-3 py-1 text-sm ${filterBrand ? 'border-pink-500 bg-pink-50 text-pink-700 font-semibold' : 'border-gray-200 bg-white text-gray-600'}`}
+            >
+              <option value="">All Brands</option>
+              {filterOptions.brands.map((b) => (
+                <option key={b} value={b}>{b}</option>
+              ))}
+            </select>
+
+            <select
+              value={filterSize}
+              onChange={(e) => setFilterSize(e.target.value)}
+              className={`whitespace-nowrap rounded-full border px-3 py-1 text-sm ${filterSize ? 'border-pink-500 bg-pink-50 text-pink-700 font-semibold' : 'border-gray-200 bg-white text-gray-600'}`}
+            >
+              <option value="">All Sizes</option>
+              {filterOptions.sizes.map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+
+            <select
+              value={filterColour}
+              onChange={(e) => setFilterColour(e.target.value)}
+              className={`whitespace-nowrap rounded-full border px-3 py-1 text-sm ${filterColour ? 'border-pink-500 bg-pink-50 text-pink-700 font-semibold' : 'border-gray-200 bg-white text-gray-600'}`}
+            >
+              <option value="">All Colours</option>
+              {filterOptions.colours.map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+
+            <select
+              value={filterMaterial}
+              onChange={(e) => setFilterMaterial(e.target.value)}
+              className={`whitespace-nowrap rounded-full border px-3 py-1 text-sm ${filterMaterial ? 'border-pink-500 bg-pink-50 text-pink-700 font-semibold' : 'border-gray-200 bg-white text-gray-600'}`}
+            >
+              <option value="">All Blends</option>
+              {filterOptions.materials.map((m) => (
+                <option key={m} value={m}>{m}</option>
+              ))}
+            </select>
+
+            {(filterBrand || filterSize || filterColour || filterMaterial) && (
+              <button
+                type="button"
+                onClick={() => {
+                  setFilterBrand('')
+                  setFilterSize('')
+                  setFilterColour('')
+                  setFilterMaterial('')
+                }}
+                className="whitespace-nowrap rounded-full border border-red-200 px-3 py-1 text-sm font-semibold text-red-500"
+              >
+                Clear
+              </button>
+            )}
+          </div>
         </section>
                         {hasSearch && filteredUsers.length === 0 && filteredWraps.length === 0 && (
           <section className="rounded-xl border bg-white px-3 py-4 shadow-sm">
@@ -732,12 +852,18 @@ const filteredWraps =
             onClick={() => router.push(`/user/${user.id}`)}
             className="flex w-[160px] shrink-0 cursor-pointer flex-col items-center rounded-lg border bg-white px-2 py-2 text-center shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-md sm:w-[170px]"
           >
-            <img
-  src={user.image_url}
-  loading="lazy"
-              alt={user.name}
-              className="mb-1.5 h-16 w-16 rounded-full object-cover pointer-events-none"
-            />
+            {avatarMap[user.id] ? (
+              <img
+                src={avatarMap[user.id]!}
+                loading="lazy"
+                alt={user.name}
+                className="mb-1.5 h-16 w-16 rounded-full object-cover pointer-events-none"
+              />
+            ) : (
+              <div className="mb-1.5 flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-pink-500 to-rose-500 text-xl font-bold text-white pointer-events-none">
+                {user.name?.[0]?.toUpperCase() || '?'}
+              </div>
+            )}
 
             <p className="line-clamp-1 text-sm font-semibold text-gray-900 pointer-events-none">
               {user.name}
@@ -776,12 +902,18 @@ const filteredWraps =
                     onClick={() => router.push(`/user/${user.id}`)}
                     className="flex w-[160px] shrink-0 cursor-pointer flex-col items-center rounded-lg border bg-white px-2 py-2 text-center shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-md sm:w-[170px]"
                   >
-                    <img
-  src={user.image_url}
-  loading="lazy"
-                      alt={user.name}
-                      className="mb-1.5 h-16 w-16 rounded-full object-cover pointer-events-none"
-                    />
+                    {avatarMap[user.id] ? (
+                      <img
+                        src={avatarMap[user.id]!}
+                        loading="lazy"
+                        alt={user.name}
+                        className="mb-1.5 h-16 w-16 rounded-full object-cover pointer-events-none"
+                      />
+                    ) : (
+                      <div className="mb-1.5 flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-pink-500 to-rose-500 text-xl font-bold text-white pointer-events-none">
+                        {user.name?.[0]?.toUpperCase() || '?'}
+                      </div>
+                    )}
 
                     <p className="line-clamp-1 text-sm font-semibold text-gray-900 pointer-events-none">
                       {user.name}
@@ -1066,20 +1198,24 @@ setTimeout(() => setToastMessage(''), 2000)
 
                     <div className="space-y-2 text-sm text-gray-700">
                       <p>
-                        <span className="font-semibold text-gray-900">Status:</span>{' '}
-                        {selectedWrap.status}
+                        <span className="font-semibold text-gray-900">Brand:</span>{' '}
+                        {selectedWrap.brand || '—'}
                       </p>
                       <p>
-                        <span className="font-semibold text-gray-900">Purchase Date:</span>{' '}
-                        {selectedWrap.purchase_date || '—'}
+                        <span className="font-semibold text-gray-900">Size / STIH:</span>{' '}
+                        {(selectedWrap as any).size || '—'}
+                      </p>
+                      <p>
+                        <span className="font-semibold text-gray-900">Blend:</span>{' '}
+                        {(selectedWrap as any).material || '—'}
+                      </p>
+                      <p>
+                        <span className="font-semibold text-gray-900">Colour:</span>{' '}
+                        {(selectedWrap as any).colour || '—'}
                       </p>
                       <p>
                         <span className="font-semibold text-gray-900">Purchased From:</span>{' '}
                         {selectedWrap.purchased_from || '—'}
-                      </p>
-                      <p>
-                        <span className="font-semibold text-gray-900">Country:</span>{' '}
-                        {selectedWrap.purchase_country || '—'}
                       </p>
                     </div>
                   </div>

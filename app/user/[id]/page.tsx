@@ -16,10 +16,11 @@ type Wrap = {
   id: string
   name: string
   brand: string | null
-  description: string | null
+  size: string | null
+  material: string | null
+  colour: string | null
   purchase_date: string | null
   purchased_from: string | null
-  purchase_country: string | null
   status: 'active' | 'holiday' | 'departed'
   on_loan_to: string | null
   sold_to: string | null
@@ -140,7 +141,7 @@ const [socialLoading, setSocialLoading] = useState(false)
         supabase
           .from('wraps')
           .select(
-            'id, name, brand, description, purchase_date, purchased_from, purchase_country, status, on_loan_to, sold_to, sold_price, sold_currency, sold_date, is_favourite, for_sale, for_sale_price, for_sale_currency, for_sale_price_is_pm, wrap_images(id, image_url, is_primary, sort_order)'
+            'id, name, brand, size, material, colour, purchase_date, purchased_from, status, on_loan_to, sold_to, sold_price, sold_currency, sold_date, is_favourite, for_sale, for_sale_price, for_sale_currency, for_sale_price_is_pm, wrap_images(id, image_url, is_primary, sort_order)'
           )
           .eq('user_id', userId)
           .order('is_favourite', { ascending: false })
@@ -721,20 +722,24 @@ const [socialLoading, setSocialLoading] = useState(false)
 
                     <div className="space-y-2 text-sm text-gray-700">
                       <p>
-                        <span className="font-semibold text-gray-900">Status:</span>{' '}
-                        {selectedWrap.status}
+                        <span className="font-semibold text-gray-900">Brand:</span>{' '}
+                        {selectedWrap.brand || '—'}
                       </p>
                       <p>
-                        <span className="font-semibold text-gray-900">Purchase Date:</span>{' '}
-                        {selectedWrap.purchase_date || '—'}
+                        <span className="font-semibold text-gray-900">Size / STIH:</span>{' '}
+                        {selectedWrap.size || '—'}
+                      </p>
+                      <p>
+                        <span className="font-semibold text-gray-900">Blend:</span>{' '}
+                        {selectedWrap.material || '—'}
+                      </p>
+                      <p>
+                        <span className="font-semibold text-gray-900">Colour:</span>{' '}
+                        {selectedWrap.colour || '—'}
                       </p>
                       <p>
                         <span className="font-semibold text-gray-900">Purchased From:</span>{' '}
                         {selectedWrap.purchased_from || '—'}
-                      </p>
-                      <p>
-                        <span className="font-semibold text-gray-900">Country:</span>{' '}
-                        {selectedWrap.purchase_country || '—'}
                       </p>
                     </div>
                   </div>
