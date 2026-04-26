@@ -1423,7 +1423,7 @@ function exportReportCsv() {
       <div className="space-y-6">
         
         <div className="xl:hidden">
-          <div className="grid grid-cols-2 rounded-2xl border bg-white p-1 shadow-sm">
+          <div className="grid grid-cols-2 rounded-xl border bg-white p-1 shadow-sm">
             <button
               type="button"
               onClick={() => setMobileTab('collection')}
@@ -1469,18 +1469,18 @@ function exportReportCsv() {
               mobileTab === 'activity' ? 'hidden xl:block' : 'block'
             }`}
           >
-<div className="mb-5 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between xl:gap-4">  <h2 className="text-2xl font-bold text-gray-900">
+<div className="mb-5 flex items-center justify-between gap-3">
+  <h2 className="text-2xl font-bold text-gray-900">
     Your Collection
   </h2>
 
   <button
     type="button"
     onClick={openNewWrapModal}
-className="w-full cursor-pointer rounded-xl bg-gradient-to-r from-pink-500 to-rose-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:opacity-90 xl:order-3 xl:w-auto xl:px-4 xl:py-2 xl:text-sm xl:ml-1" >
+    className="shrink-0 cursor-pointer rounded-xl bg-gradient-to-r from-pink-500 to-rose-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:opacity-90"
+  >
     Add Wrap
   </button>
-
-
 </div>
 
             {loading && wraps.length === 0 ? (
