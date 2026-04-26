@@ -20,6 +20,7 @@ type Wrap = {
   user_id: string
   name: string
   brand: string | null
+  description: string | null
   size: string | null
   material: string | null
   colour: string | null
@@ -41,7 +42,6 @@ type Wrap = {
   for_sale_currency: CurrencyCode | null
   for_sale_price_is_pm: boolean
   created_at: string
-  
   wrap_images?: WrapImage[]
 }
 type Profile = {
