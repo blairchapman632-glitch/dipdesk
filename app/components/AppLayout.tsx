@@ -17,6 +17,7 @@ export default function AppLayout({
   const [avatar, setAvatar] = useState<string | null>(null)
   const [initials, setInitials] = useState('')
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
+  const [unreadCount, setUnreadCount] = useState(0)
 useEffect(() => {
     const cached = localStorage.getItem('dipdesk_dashboard_profile')
     if (cached) {
@@ -29,7 +30,20 @@ useEffect(() => {
         )
       } catch {}
     }
+async function loadUnreadCount() {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
 
+      const { count } = await supabase
+        .from('notifications')
+        .select('*', { count: 'exact', head: true })
+        .eq('recipient_user_id', user.id)
+        .is('read_at', null)
+
+      setUnreadCount(count || 0)
+    }
+
+    loadUnreadCount()
     async function loadAvatar() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
@@ -185,14 +199,19 @@ useEffect(() => {
           key={item.href}
           href={item.href}
           prefetch={true}
-          className={`flex min-h-[64px] flex-col items-center justify-center gap-1 rounded-xl px-1 py-2 text-xs font-semibold ${
+          className={`relative flex min-h-[64px] flex-col items-center justify-center gap-1 rounded-xl px-1 py-2 text-xs font-semibold ${
             isActive
               ? 'bg-pink-600 text-white'
               : 'bg-white text-gray-600 border border-gray-200 active:bg-gray-100'
           }`}
         >
-          <span className="pointer-events-none leading-none">
+          <span className="pointer-events-none leading-none relative">
             {icon}
+            {item.label === 'Home' && unreadCount > 0 && (
+              <span className="absolute -right-2 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-pink-600 text-[9px] font-bold text-white">
+                {unreadCount > 9 ? '9+' : unreadCount}
+              </span>
+            )}
           </span>
 
           <span className="pointer-events-none leading-none">

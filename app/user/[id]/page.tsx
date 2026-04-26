@@ -86,7 +86,7 @@ const [loading, setLoading] = useState(true)
 const [currentUserId, setCurrentUserId] = useState<string | null>(null)
 const [isFollowing, setIsFollowing] = useState(false)
 const [toastMessage, setToastMessage] = useState('')
-
+const [profileAvatar, setProfileAvatar] = useState<string | null>(null)
 const [selectedWrap, setSelectedWrap] = useState<Wrap | null>(null)
 const [selectedViewImage, setSelectedViewImage] = useState<string | null>(null)
 const [isViewWrapModalOpen, setIsViewWrapModalOpen] = useState(false)
@@ -136,7 +136,7 @@ const [socialLoading, setSocialLoading] = useState(false)
       const [{ data: profileData }, { data: wrapData }] = await Promise.all([
         supabase
           .from('profiles')
-          .select('id, full_name, username')
+          .select('id, full_name, username, avatar_url')
           .eq('id', userId)
           .single(),
         supabase
@@ -170,6 +170,7 @@ const [socialLoading, setSocialLoading] = useState(false)
       )
 
       setProfile(profileData || null)
+      setProfileAvatar((profileData as any)?.avatar_url || null)
       localStorage.setItem(
         getUserCollectionProfileKey(userId),
         JSON.stringify(profileData || null)
@@ -411,13 +412,26 @@ const [socialLoading, setSocialLoading] = useState(false)
       <div className="space-y-6">
         <section className="rounded-3xl border bg-white p-2 shadow-sm xl:p-5">
           <div className="mb-5 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-  <div>
-    <h1 className="text-2xl font-bold text-gray-900">
-      {collectionTitle}
-    </h1>
-    <p className="text-sm text-gray-500">
-      View wraps in this collection
-    </p>
+  <div className="flex items-center gap-3">
+    {profileAvatar ? (
+      <img
+        src={profileAvatar}
+        alt={collectionTitle}
+        className="h-14 w-14 rounded-full object-cover ring-2 ring-pink-200 shrink-0"
+      />
+    ) : (
+      <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-pink-500 to-rose-500 text-lg font-bold text-white ring-2 ring-pink-200">
+        {profile?.full_name?.[0]?.toUpperCase() || profile?.username?.[0]?.toUpperCase() || '?'}
+      </div>
+    )}
+    <div>
+      <h1 className="text-2xl font-bold text-gray-900">
+        {collectionTitle}
+      </h1>
+      <p className="text-sm text-gray-500">
+        View wraps in this collection
+      </p>
+    </div>
   </div>
 
     <div className="flex w-full flex-col gap-2 xl:w-auto xl:flex-row">
