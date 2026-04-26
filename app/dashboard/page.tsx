@@ -48,6 +48,7 @@ type Profile = {
   id: string
   full_name: string | null
   username: string | null
+  avatar_url?: string | null
 }
 type Dip = {
   id: string
@@ -516,7 +517,7 @@ if (!notificationError && notificationData) {
       )
       .in('id', wrapIds)
 
-    wrapMap = ((notificationWrapData as Wrap[]) || []).reduce<Record<string, Wrap>>(
+    wrapMap = ((notificationWrapData as unknown as Wrap[]) || []).reduce<Record<string, Wrap>>(
       (accumulator, wrap) => {
         accumulator[wrap.id] = wrap
         return accumulator
