@@ -457,7 +457,6 @@ if (profileData) {
 
     if (!wrapError && wrapData) {
   const safeWraps = (wrapData as unknown as Wrap[]) || []
-  console.log('safeWraps FULL', JSON.stringify(safeWraps, null, 2))
   setWraps(safeWraps)
   localStorage.setItem(DASHBOARD_WRAPS_KEY, JSON.stringify(safeWraps))
 }
@@ -668,13 +667,16 @@ async function handleNotificationClick(notification: NotificationItem) {
       .update({ read_at: new Date().toISOString() })
       .eq('id', notification.id)
 
-    setNotifications((prev) =>
-      prev.map((n) =>
+    setNotifications((prev) => {
+      const updated = prev.map((n) =>
         n.id === notification.id
           ? { ...n, read_at: new Date().toISOString() }
           : n
       )
-    )
+      const newUnread = updated.filter((n) => !n.read_at).length
+      localStorage.setItem('dipdesk_unread_count', JSON.stringify(newUnread))
+      return updated
+    })
   }
 
   if (notification.type === 'for_sale' && notification.wrap) {

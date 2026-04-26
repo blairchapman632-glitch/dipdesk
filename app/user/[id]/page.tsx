@@ -53,6 +53,7 @@ const WRAP_PLACEHOLDER =
 const getUserCollectionWrapsKey = (userId: string) => `dipdesk_user_collection_wraps_${userId}`
 const getUserCollectionProfileKey = (userId: string) => `dipdesk_user_collection_profile_${userId}`
 const getUserCollectionFollowKey = (userId: string) => `dipdesk_user_collection_follow_${userId}`
+const getUserCollectionAvatarKey = (userId: string) => `dipdesk_user_collection_avatar_${userId}`
 
 function formatCurrency(
   value: number | null | undefined,
@@ -124,7 +125,12 @@ const [socialLoading, setSocialLoading] = useState(false)
         setIsFollowing(JSON.parse(cachedFollow))
       } catch {}
     }
-
+const cachedAvatar = localStorage.getItem(getUserCollectionAvatarKey(userId))
+    if (cachedAvatar) {
+      try {
+        setProfileAvatar(JSON.parse(cachedAvatar))
+      } catch {}
+    }
     async function load() {
       const {
         data: { user },
@@ -170,7 +176,9 @@ const [socialLoading, setSocialLoading] = useState(false)
       )
 
       setProfile(profileData || null)
-      setProfileAvatar((profileData as any)?.avatar_url || null)
+      const avatarUrl = (profileData as any)?.avatar_url || null
+      setProfileAvatar(avatarUrl)
+      localStorage.setItem(getUserCollectionAvatarKey(userId), JSON.stringify(avatarUrl))
       localStorage.setItem(
         getUserCollectionProfileKey(userId),
         JSON.stringify(profileData || null)
