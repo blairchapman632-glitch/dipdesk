@@ -18,6 +18,7 @@ export default function AppLayout({
   const [avatar, setAvatar] = useState<string | null>(null)
   const [initials, setInitials] = useState('')
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
   const [unreadCount, setUnreadCount] = useState(0)
 useEffect(() => {
     const cached = localStorage.getItem('dipdesk_dashboard_profile')
@@ -81,6 +82,8 @@ const cachedUnread = localStorage.getItem('dipdesk_unread_count')
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
 
+    const preview = URL.createObjectURL(file)
+    setAvatarPreview(preview)
     setUploadingAvatar(true)
 
     try {
@@ -111,6 +114,7 @@ const cachedUnread = localStorage.getItem('dipdesk_unread_count')
     await supabase.from('profiles').update({ avatar_url: avatarUrl }).eq('id', user.id)
 
     setAvatar(avatarUrl)
+    setAvatarPreview(null)
     setUploadingAvatar(false)
 
     const cached = localStorage.getItem('dipdesk_dashboard_profile')
@@ -166,15 +170,15 @@ const cachedUnread = localStorage.getItem('dipdesk_unread_count')
               </nav>
 
               <label className="group relative cursor-pointer shrink-0" title="Click to update photo">
-                {avatar ? (
+                {avatarPreview || avatar ? (
                   <img
-                    src={avatar}
+                    src={avatarPreview || avatar!}
                     alt="Your avatar"
                     className="h-9 w-9 rounded-full object-cover ring-2 ring-pink-200"
                   />
                 ) : (
                   <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-pink-500 to-rose-500 text-sm font-bold text-white ring-2 ring-pink-200">
-                    {uploadingAvatar ? '...' : (initials || '?')}
+                    {initials || '?'}
                   </div>
                 )}
                 <div className="absolute inset-0 flex items-center justify-center rounded-full bg-black/40 opacity-0 transition group-hover:opacity-100">
@@ -242,15 +246,15 @@ const cachedUnread = localStorage.getItem('dipdesk_unread_count')
     })}
 
           <label className="group relative flex min-h-[64px] cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border border-gray-200 px-1 py-2">
-            {avatar ? (
+            {avatarPreview || avatar ? (
               <img
-                src={avatar}
+                src={avatarPreview || avatar!}
                 alt="You"
                 className="h-7 w-7 rounded-full object-cover ring-2 ring-pink-200 pointer-events-none"
               />
             ) : (
               <div className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-pink-500 to-rose-500 text-xs font-bold text-white pointer-events-none">
-                {uploadingAvatar ? '...' : (initials || '?')}
+                {initials || '?'}
               </div>
             )}
             <span className="pointer-events-none text-xs font-semibold leading-none text-gray-600">
