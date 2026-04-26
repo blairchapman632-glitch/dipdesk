@@ -283,6 +283,7 @@ const [selectedWrapCounts, setSelectedWrapCounts] = useState({
   likes: 0,
   wishlists: 0,
 })
+const [isClearingNotifications, setIsClearingNotifications] = useState(false)
     const router = useRouter()
 
   const handleLogout = async () => {
@@ -737,6 +738,41 @@ function getInitials(name: string | null | undefined) {
     .slice(0, 2)
     .map((word) => word[0].toUpperCase())
     .join('')
+}
+async function markAllNotificationsRead() {
+  if (!currentUserId) return
+
+  await supabase
+    .from('notifications')
+    .update({ read_at: new Date().toISOString() })
+    .eq('recipient_user_id', currentUserId)
+    .is('read_at', null)
+
+  setNotifications((prev) => {
+    const updated = prev.map((n) => ({ ...n, read_at: new Date().toISOString() }))
+    localStorage.setItem(DASHBOARD_NOTIFICATIONS_KEY, JSON.stringify(updated))
+    localStorage.setItem('dipdesk_unread_count', JSON.stringify(0))
+    return updated
+  })
+}
+
+async function clearAllNotifications() {
+  if (!currentUserId) return
+
+  const confirmed = window.confirm('Delete all notifications permanently?')
+  if (!confirmed) return
+
+  setIsClearingNotifications(true)
+
+  await supabase
+    .from('notifications')
+    .delete()
+    .eq('recipient_user_id', currentUserId)
+
+  setNotifications([])
+  localStorage.setItem(DASHBOARD_NOTIFICATIONS_KEY, JSON.stringify([]))
+  localStorage.setItem('dipdesk_unread_count', JSON.stringify(0))
+  setIsClearingNotifications(false)
 }
 function openReportModal() {
   setIsReportModalOpen(true)
@@ -1621,14 +1657,31 @@ function exportReportCsv() {
           >
             <div className="mb-2 flex items-center justify-between gap-3 xl:mb-4">
               <div>
-                
                 <h2 className="text-xl font-bold text-gray-900 xl:text-2xl">Activity</h2>
                 <p className="text-sm text-gray-500">
                   Updates and quick links.
                 </p>
               </div>
 
-              
+              {notifications.length > 0 && (
+                <div className="flex shrink-0 flex-col gap-1">
+                  <button
+                    type="button"
+                    onClick={markAllNotificationsRead}
+                    className="rounded-lg border px-2 py-1 text-xs font-semibold text-gray-600 hover:bg-gray-50"
+                  >
+                    Mark all read
+                  </button>
+                  <button
+                    type="button"
+                    onClick={clearAllNotifications}
+                    disabled={isClearingNotifications}
+                    className="rounded-lg border border-red-200 px-2 py-1 text-xs font-semibold text-red-500 hover:bg-red-50 disabled:opacity-50"
+                  >
+                    {isClearingNotifications ? 'Clearing...' : 'Clear all'}
+                  </button>
+                </div>
+              )}
             </div>
 
                        <div className="space-y-2 xl:space-y-3">
@@ -1658,7 +1711,11 @@ function exportReportCsv() {
                     key={notification.id}
                     type="button"
                     onClick={() => handleNotificationClick(notification)}
-                    className="w-full cursor-pointer rounded-2xl border bg-white p-3 text-left shadow-sm transition hover:shadow-md"
+                    className={`w-full cursor-pointer rounded-2xl border p-3 text-left shadow-sm transition hover:shadow-md ${
+                      !notification.read_at
+                        ? 'border-l-4 border-l-pink-500 bg-pink-50'
+                        : 'bg-white'
+                    }`}
                   >
                     <div className="flex items-center gap-3">
                       {notification.actor_avatar ? (
