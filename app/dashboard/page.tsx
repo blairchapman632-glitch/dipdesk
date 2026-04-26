@@ -661,13 +661,8 @@ function closeViewWrapModal() {
   setIsImagePreviewOpen(false)
   setIsReadOnlyWrapView(false)
 }
-async function handleNotificationClick(notification: NotificationItem) {
+function handleNotificationClick(notification: NotificationItem) {
   if (!notification.read_at) {
-    await supabase
-      .from('notifications')
-      .update({ read_at: new Date().toISOString() })
-      .eq('id', notification.id)
-
     setNotifications((prev) => {
       const updated = prev.map((n) =>
         n.id === notification.id
@@ -676,8 +671,15 @@ async function handleNotificationClick(notification: NotificationItem) {
       )
       const newUnread = updated.filter((n) => !n.read_at).length
       localStorage.setItem('dipdesk_unread_count', JSON.stringify(newUnread))
+      localStorage.setItem(DASHBOARD_NOTIFICATIONS_KEY, JSON.stringify(updated))
       return updated
     })
+
+    supabase
+      .from('notifications')
+      .update({ read_at: new Date().toISOString() })
+      .eq('id', notification.id)
+      .then(() => {})
   }
 
   if (notification.type === 'for_sale' && notification.wrap) {
