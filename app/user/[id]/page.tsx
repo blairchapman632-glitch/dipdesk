@@ -16,6 +16,7 @@ type Wrap = {
   id: string
   name: string
   brand: string | null
+  description: string | null
   size: string | null
   material: string | null
   colour: string | null
