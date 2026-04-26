@@ -455,7 +455,7 @@ if (profileData) {
     }
 
     if (!wrapError && wrapData) {
-  const safeWraps = (wrapData as Wrap[]) || []
+  const safeWraps = (wrapData as unknown as Wrap[]) || []
   console.log('safeWraps FULL', JSON.stringify(safeWraps, null, 2))
   setWraps(safeWraps)
   localStorage.setItem(DASHBOARD_WRAPS_KEY, JSON.stringify(safeWraps))
