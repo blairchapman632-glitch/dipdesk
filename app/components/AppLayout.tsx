@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
+import imageCompression from 'browser-image-compression'
 
 export default function AppLayout({
   children,
@@ -81,6 +82,16 @@ const cachedUnread = localStorage.getItem('dipdesk_unread_count')
     if (!user) return
 
     setUploadingAvatar(true)
+
+    try {
+      file = await imageCompression(file, {
+        maxSizeMB: 0.3,
+        maxWidthOrHeight: 400,
+        useWebWorker: true,
+      })
+    } catch (error) {
+      console.error('avatar compression error', error)
+    }
 
     const fileExt = file.name.split('.').pop() || 'jpg'
     const fileName = `${user.id}/avatar.${fileExt}`
