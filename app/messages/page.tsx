@@ -1,10 +1,171 @@
-import AppLayout from '@/app/components/AppLayout'
+'use client'
 
-export default function Page() {
+import { useEffect, useState } from 'react'
+import { supabase } from '@/lib/supabase'
+import AppLayout from '@/app/components/AppLayout'
+import Link from 'next/link'
+
+interface Conversation {
+  id: string
+  participant_1_id: string
+  participant_2_id: string
+  last_message: string | null
+  last_message_at: string
+  other_user?: {
+    id: string
+    full_name: string
+    avatar_url: string | null
+  }
+}
+
+export default function MessagesPage() {
+  const [conversations, setConversations] = useState<Conversation[]>([])
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+  const CACHE_KEY = 'wrapapp_conversations_cache'
+
+  useEffect(() => {
+    // Load from cache instantly
+    const cached = localStorage.getItem(CACHE_KEY)
+    if (cached) {
+      try {
+        setConversations(JSON.parse(cached))
+        setLoading(false)
+      } catch {}
+    }
+
+    const init = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+      setCurrentUserId(user.id)
+      await fetchConversations(user.id)
+    }
+    init()
+  }, [])
+
+  const fetchConversations = async (userId: string) => {
+    const { data, error } = await supabase
+      .from('conversations')
+      .select('*')
+      .or(`participant_1_id.eq.${userId},participant_2_id.eq.${userId}`)
+      .order('last_message_at', { ascending: false })
+
+    if (error) {
+      console.error('Error fetching conversations:', error)
+      setLoading(false)
+      return
+    }
+
+    if (!data || data.length === 0) {
+      setConversations([])
+      setLoading(false)
+      return
+    }
+
+    // Collect all other user IDs in one go
+    const otherUserIds = data.map((conv) =>
+      conv.participant_1_id === userId ? conv.participant_2_id : conv.participant_1_id
+    )
+
+    // Single query for all profiles at once
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('id, full_name, avatar_url')
+      .in('id', otherUserIds)
+
+    const profileMap = Object.fromEntries((profiles || []).map((p) => [p.id, p]))
+
+    const enriched = data.map((conv) => {
+      const otherUserId = conv.participant_1_id === userId
+        ? conv.participant_2_id
+        : conv.participant_1_id
+      return { ...conv, other_user: profileMap[otherUserId] || undefined }
+    })
+
+    setConversations(enriched)
+    localStorage.setItem(CACHE_KEY, JSON.stringify(enriched))
+    setLoading(false)
+  }
+
+  const formatTime = (timestamp: string) => {
+    const date = new Date(timestamp)
+    const now = new Date()
+    const diff = now.getTime() - date.getTime()
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24))
+
+    if (days === 0) return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    if (days === 1) return 'Yesterday'
+    if (days < 7) return date.toLocaleDateString([], { weekday: 'short' })
+    return date.toLocaleDateString([], { month: 'short', day: 'numeric' })
+  }
+
   return (
     <AppLayout>
-      <div className="text-lg font-semibold text-gray-700">
-        Coming soon
+      <div className="max-w-lg mx-auto">
+        {/* Header */}
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+          <h1 className="text-xl font-bold text-gray-900">Messages</h1>
+        </div>
+
+        {/* Content */}
+        {loading ? (
+          <div className="flex justify-center py-20">
+            <div className="w-6 h-6 border-2 border-gray-300 border-t-gray-700 rounded-full animate-spin" />
+          </div>
+        ) : conversations.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-20 px-4 text-center">
+            <div className="text-5xl mb-4">💬</div>
+            <p className="text-gray-900 font-semibold text-lg">No messages yet</p>
+            <p className="text-gray-500 text-sm mt-1">
+              Start a conversation by visiting someone's profile
+            </p>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-3 p-4">
+            {conversations.map((conv) => (
+              <Link
+                key={conv.id}
+                href={`/messages/${conv.id}`}
+                className="flex items-center gap-3 p-3 bg-white rounded-2xl border border-gray-200 hover:border-pink-300 hover:bg-pink-50 active:bg-pink-100 transition-all shadow-sm cursor-pointer"
+              >
+                {/* Avatar */}
+                <div className="w-12 h-12 rounded-full bg-pink-100 flex-shrink-0 overflow-hidden">
+                  {conv.other_user?.avatar_url ? (
+                    <img
+                      src={conv.other_user.avatar_url}
+                      alt={conv.other_user.full_name}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-pink-500 font-semibold text-lg">
+                      {conv.other_user?.full_name?.[0]?.toUpperCase() || '?'}
+                    </div>
+                  )}
+                </div>
+
+                {/* Text */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-gray-900 text-sm">
+                      {conv.other_user?.full_name || 'Unknown user'}
+                    </span>
+                    <span className="text-xs text-gray-400 flex-shrink-0 ml-2">
+                      {formatTime(conv.last_message_at)}
+                    </span>
+                  </div>
+                  <p className="text-sm text-gray-500 truncate mt-0.5">
+                    {conv.last_message || 'No messages yet'}
+                  </p>
+                </div>
+
+                {/* Arrow */}
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </Link>
+            ))}
+          </div>
+        )}
       </div>
     </AppLayout>
   )

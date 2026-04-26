@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import AppLayout from '@/app/components/AppLayout'
 
@@ -80,6 +80,7 @@ function getPrimaryImage(wrap?: Wrap) {
 export default function UserCollectionPage() {
   const params = useParams()
   const userId = params.id as string
+  const router = useRouter()
 
   const [profile, setProfile] = useState<Profile | null>(null)
 const [wraps, setWraps] = useState<Wrap[]>([])
@@ -444,6 +445,43 @@ const cachedAvatar = localStorage.getItem(getUserCollectionAvatarKey(userId))
 
     <div className="flex w-full flex-col gap-2 xl:w-auto xl:flex-row">
     {currentUserId !== userId && (
+  <>
+  <button
+    type="button"
+    onClick={async () => {
+      if (!currentUserId) return
+      
+      // Check if conversation already exists
+      const { data: existing } = await supabase
+        .from('conversations')
+        .select('id')
+        .or(`and(participant_1_id.eq.${currentUserId},participant_2_id.eq.${userId}),and(participant_1_id.eq.${userId},participant_2_id.eq.${currentUserId})`)
+        .maybeSingle()
+
+      if (existing) {
+        router.push(`/messages/${existing.id}`)
+        return
+      }
+
+      const { data: newConv } = await supabase
+        .from('conversations')
+        .insert({
+          participant_1_id: currentUserId,
+          participant_2_id: userId,
+          last_message: null,
+          last_message_at: new Date().toISOString()
+        })
+        .select('id')
+        .single()
+
+      if (newConv) {
+        router.push(`/messages/${newConv.id}`)
+      }
+    }}
+    className="w-full cursor-pointer rounded-xl px-4 py-2 text-sm font-semibold text-white shadow-sm xl:w-auto bg-gray-800 hover:bg-gray-900"
+  >
+    💬 Message
+  </button>
   <button
     type="button"
     onClick={async () => {
@@ -483,6 +521,7 @@ const cachedAvatar = localStorage.getItem(getUserCollectionAvatarKey(userId))
   >
     {isFollowing ? 'Following ✓' : 'Follow'}
   </button>
+  </>
 )}
 
     
