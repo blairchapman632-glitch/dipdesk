@@ -187,7 +187,7 @@ export default function ConversationPage() {
 
   return (
     <AppLayout>
-      <div className="max-w-lg mx-auto flex flex-col h-[calc(100vh-64px)]">
+      <div className="max-w-lg mx-auto flex flex-col h-[calc(100dvh-64px)] md:h-[calc(100vh-64px)]">
 
         {/* Header */}
         <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-100 bg-white flex-shrink-0">
