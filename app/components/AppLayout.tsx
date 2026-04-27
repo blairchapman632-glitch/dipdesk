@@ -172,7 +172,6 @@ const cachedUnread = localStorage.getItem('dipdesk_unread_count')
     { label: 'Explore', href: '/explore' },
     { label: 'ISO ⭐', href: '/wishlist' },
     { label: 'Messages', href: '/messages' },
-    { label: 'Tools', href: '/tools' },
   ]
 
   return (
@@ -216,10 +215,10 @@ const cachedUnread = localStorage.getItem('dipdesk_unread_count')
                 })}
               </nav>
 
-              <label className="group relative cursor-pointer shrink-0" title="Click to update photo">
-                {avatarPreview || avatar ? (
+              <Link href="/tools" className="group relative cursor-pointer shrink-0">
+                {avatar ? (
                   <img
-                    src={avatarPreview || avatar!}
+                    src={avatar}
                     alt="Your avatar"
                     className="h-9 w-9 rounded-full object-cover ring-2 ring-pink-200"
                   />
@@ -230,25 +229,16 @@ const cachedUnread = localStorage.getItem('dipdesk_unread_count')
                 )}
                 <div className="absolute inset-0 flex items-center justify-center rounded-full bg-black/40 opacity-0 transition group-hover:opacity-100">
                   <span className="text-[10px] font-semibold text-white leading-tight text-center px-1">
-                    {uploadingAvatar ? '...' : 'Update'}
+                    Me
                   </span>
                 </div>
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0]
-                    if (file) handleAvatarUpload(file)
-                  }}
-                />
-              </label>
+              </Link>
             </div>
           </header>
 
           {/* Phone bottom nav */}
 <nav className="fixed inset-x-0 bottom-0 z-50 border-t bg-white md:hidden">
-  <div className="grid grid-cols-6 gap-1 px-2 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+  <div className="grid grid-cols-5 gap-1 px-2 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
     {navItems.map((item) => {
       const isActive = pathname === item.href
 
@@ -304,10 +294,13 @@ const cachedUnread = localStorage.getItem('dipdesk_unread_count')
       )
     })}
 
-          <label className="group relative flex min-h-[64px] cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border border-gray-200 px-1 py-2">
-            {avatarPreview || avatar ? (
+          <Link
+            href="/tools"
+            className="flex min-h-[64px] flex-col items-center justify-center gap-1 rounded-xl border border-gray-200 px-1 py-2"
+          >
+            {avatar ? (
               <img
-                src={avatarPreview || avatar!}
+                src={avatar}
                 alt="You"
                 className="h-7 w-7 rounded-full object-cover ring-2 ring-pink-200 pointer-events-none"
               />
@@ -319,16 +312,7 @@ const cachedUnread = localStorage.getItem('dipdesk_unread_count')
             <span className="pointer-events-none text-xs font-semibold leading-none text-gray-600">
               Me
             </span>
-            <input
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={(e) => {
-                const file = e.target.files?.[0]
-                if (file) handleAvatarUpload(file)
-              }}
-            />
-          </label>
+          </Link>
   </div>
 </nav>
         </>

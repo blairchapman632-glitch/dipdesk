@@ -271,12 +271,16 @@ const cachedAvatar = localStorage.getItem(getUserCollectionAvatarKey(userId))
         : Promise.resolve({ data: null, error: null }),
     ])
 
-    setSelectedWrapCounts({
+    const counts = {
       likes: likeCount || 0,
       wishlists: wishlistCount || 0,
-    })
-    setHasLikedSelectedWrap(!!likedRowResult.data)
-    setHasWishlistedSelectedWrap(!!wishlistedRowResult.data)
+      hasLiked: !!likedRowResult.data,
+      hasWishlisted: !!wishlistedRowResult.data,
+    }
+    setSelectedWrapCounts({ likes: counts.likes, wishlists: counts.wishlists })
+    setHasLikedSelectedWrap(counts.hasLiked)
+    setHasWishlistedSelectedWrap(counts.hasWishlisted)
+    localStorage.setItem(`dipdesk_social_${wrapId}`, JSON.stringify(counts))
   }
 
   async function openViewWrapModal(wrap: Wrap) {
@@ -292,6 +296,19 @@ const cachedAvatar = localStorage.getItem(getUserCollectionAvatarKey(userId))
     setSelectedWrap(wrap)
     setSelectedViewImage(primaryImage)
     setIsViewWrapModalOpen(true)
+
+    // Show cached counts instantly
+    const cachedSocial = localStorage.getItem(`dipdesk_social_${wrap.id}`)
+    if (cachedSocial) {
+      try {
+        const parsed = JSON.parse(cachedSocial)
+        setSelectedWrapCounts({ likes: parsed.likes, wishlists: parsed.wishlists })
+        setHasLikedSelectedWrap(parsed.hasLiked)
+        setHasWishlistedSelectedWrap(parsed.hasWishlisted)
+      } catch {}
+    }
+
+    // Fetch fresh in background
     await loadWrapSocialData(wrap.id)
   }
 

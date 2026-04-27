@@ -129,12 +129,16 @@ export default function Page() {
         : Promise.resolve({ data: null, error: null }),
     ])
 
-    setSelectedWrapCounts({
+    const counts = {
       likes: likeCount || 0,
       wishlists: wishlistCount || 0,
-    })
-    setHasLikedSelectedWrap(!!likedRowResult.data)
-    setHasWishlistedSelectedWrap(!!wishlistedRowResult.data)
+      hasLiked: !!likedRowResult.data,
+      hasWishlisted: !!wishlistedRowResult.data,
+    }
+    setSelectedWrapCounts({ likes: counts.likes, wishlists: counts.wishlists })
+    setHasLikedSelectedWrap(counts.hasLiked)
+    setHasWishlistedSelectedWrap(counts.hasWishlisted)
+    localStorage.setItem(`dipdesk_social_${wrapId}`, JSON.stringify(counts))
   }
 
   async function openViewWrapModal(wrap: Wrap) {
@@ -150,6 +154,19 @@ export default function Page() {
     setSelectedWrap(wrap)
     setSelectedViewImage(primaryImage)
     setIsViewWrapModalOpen(true)
+
+    // Show cached social counts instantly
+    const cachedSocial = localStorage.getItem(`dipdesk_social_${wrap.id}`)
+    if (cachedSocial) {
+      try {
+        const parsed = JSON.parse(cachedSocial)
+        setSelectedWrapCounts({ likes: parsed.likes, wishlists: parsed.wishlists })
+        setHasLikedSelectedWrap(parsed.hasLiked)
+        setHasWishlistedSelectedWrap(parsed.hasWishlisted)
+      } catch {}
+    }
+
+    // Fetch fresh in background
     await loadWrapSocialData(wrap.id)
   }
 
@@ -393,9 +410,9 @@ const [toastMessage, setToastMessage] = useState('')
         return
       }
 
-      const wraps = (wrapData as Wrap[]) || []
+      const wraps = ((wrapData as Wrap[]) || []).filter(w => w.user_id !== currentUserId)
       setLatestWraps(wraps)
-localStorage.setItem(EXPLORE_WRAPS_KEY, JSON.stringify(wraps))
+      localStorage.setItem(EXPLORE_WRAPS_KEY, JSON.stringify(wraps))
       const uniqueUserIds = [...new Set(wraps.map((wrap) => wrap.user_id))]
 
       if (uniqueUserIds.length === 0) {
@@ -554,12 +571,14 @@ return () => {
                 const matchedProfiles = (profileData as Profile[]) || []
         const matchedUserIds = matchedProfiles.map((profile) => profile.id)
 
-        let matchedUsers: ExploreUser[] = matchedProfiles.map((profile) => ({
-          id: profile.id,
-          name: getDisplayName(profile),
-          image_url: WRAP_PLACEHOLDER,
-          wrap_count: 0,
-        }))
+        let matchedUsers: ExploreUser[] = matchedProfiles
+          .filter((profile) => profile.id !== currentUserId)
+          .map((profile) => ({
+            id: profile.id,
+            name: getDisplayName(profile),
+            image_url: WRAP_PLACEHOLDER,
+            wrap_count: 0,
+          }))
 
         if (matchedUserIds.length > 0) {
           const { data: searchUserWrapData } = await supabase
@@ -630,6 +649,7 @@ return () => {
       const lowerTerm = term.toLowerCase()
 
       const wrapsWithOwnerMatch = wraps.filter((wrap) => {
+  if (wrap.user_id === currentUserId) return false
   if (forSaleOnly && !wrap.for_sale) return false
         const ownerName = getDisplayName(wrapProfilesMap[wrap.user_id]).toLowerCase()
 
@@ -763,7 +783,7 @@ const filteredWraps = (
           </div>
 
           {/* Filter dropdowns */}
-          <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
+          <div className="mt-2 grid grid-cols-2 gap-2 md:flex md:flex-row md:overflow-x-auto md:pb-1">
             <select
               value={filterBrand}
               onChange={(e) => setFilterBrand(e.target.value)}
@@ -831,53 +851,7 @@ const filteredWraps = (
             </p>
           </section>
         )}
-        <section className="rounded-xl border bg-white px-3 py-3 shadow-sm">
-  <div className="mb-2">
-    <h2 className="text-sm font-bold text-gray-900">Following</h2>
-  </div>
-
-  {loading && latestWraps.length === 0 ? (
-    <p className="text-sm text-gray-500">Loading following...</p>
-  ) : followingUsers.length === 0 ? (
-    <div className="rounded-lg border border-dashed px-3 py-4 text-center">
-      <p className="text-sm text-gray-500">No following yet</p>
-    </div>
-  ) : (
-    <div className="-mx-3 overflow-x-auto px-3 pb-1 sm:mx-0 sm:px-0">
-      <div className="flex gap-2 sm:flex-wrap">
-        {followingUsers.map((user) => (
-          <button
-            key={user.id}
-            type="button"
-            onClick={() => router.push(`/user/${user.id}`)}
-            className="flex w-[160px] shrink-0 cursor-pointer flex-col items-center rounded-lg border bg-white px-2 py-2 text-center shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-md sm:w-[170px]"
-          >
-            {avatarMap[user.id] ? (
-              <img
-                src={avatarMap[user.id]!}
-                loading="lazy"
-                alt={user.name}
-                className="mb-1.5 h-16 w-16 rounded-full object-cover pointer-events-none"
-              />
-            ) : (
-              <div className="mb-1.5 flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-pink-500 to-rose-500 text-xl font-bold text-white pointer-events-none">
-                {user.name?.[0]?.toUpperCase() || '?'}
-              </div>
-            )}
-
-            <p className="line-clamp-1 text-sm font-semibold text-gray-900 pointer-events-none">
-              {user.name}
-            </p>
-
-            <p className="mt-0.5 text-xs text-gray-500 pointer-events-none">
-              {user.wrap_count} wrap{user.wrap_count === 1 ? '' : 's'}
-            </p>
-          </button>
-        ))}
-      </div>
-    </div>
-  )}
-</section>
+        
 
         <section className="rounded-xl border bg-white px-3 py-3 shadow-sm">
           <div className="mb-2">
