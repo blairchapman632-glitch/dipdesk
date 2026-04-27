@@ -1097,6 +1097,17 @@ setTimeout(() => setToastMessage(''), 2000)
                     </div>
 
                     <div className="mt-1 flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          closeViewWrapModal()
+                          router.push(`/user/${selectedWrap.user_id}`)
+                        }}
+                        className="inline-flex items-center rounded-full bg-pink-50 px-2 py-1 text-xs font-semibold text-pink-600 hover:bg-pink-100"
+                      >
+                        {getDisplayName(profilesMap[selectedWrap.user_id])}
+                      </button>
+                      <span className="text-gray-300">·</span>
                       <p className="text-sm text-gray-500">
                         {selectedWrap.brand || 'No brand added'}
                       </p>

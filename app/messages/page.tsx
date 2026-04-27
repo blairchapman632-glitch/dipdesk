@@ -23,6 +23,10 @@ export default function MessagesPage() {
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [searchTerm, setSearchTerm] = useState('')
+  const [showNewMessage, setShowNewMessage] = useState(false)
+  const [userSearch, setUserSearch] = useState('')
+  const [userResults, setUserResults] = useState<{id: string, full_name: string, avatar_url: string | null}[]>([])
   const CACHE_KEY = 'wrapapp_conversations_cache'
 
   useEffect(() => {
@@ -121,7 +125,114 @@ export default function MessagesPage() {
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
           <h1 className="text-xl font-bold text-gray-900">Messages</h1>
+          <button
+            type="button"
+            onClick={() => setShowNewMessage(true)}
+            className="w-8 h-8 bg-pink-500 rounded-full flex items-center justify-center"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+          </button>
         </div>
+
+        {/* Search */}
+        <div className="px-4 py-2 border-b border-gray-100">
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="Search conversations..."
+            className="w-full bg-gray-100 rounded-full px-4 py-2 text-sm outline-none text-gray-900 placeholder-gray-400"
+          />
+        </div>
+
+        {/* New message modal */}
+        {showNewMessage && (
+          <div className="fixed inset-0 z-50 bg-black/40 flex items-end md:items-center justify-center p-4">
+            <div className="bg-white rounded-3xl w-full max-w-lg p-5 shadow-2xl">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="font-bold text-gray-900 text-lg">New Message</h2>
+                <button onClick={() => { setShowNewMessage(false); setUserSearch(''); setUserResults([]) }} className="text-gray-400 hover:text-gray-600">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              <input
+                type="text"
+                value={userSearch}
+                onChange={async (e) => {
+                  setUserSearch(e.target.value)
+                  const term = e.target.value.trim()
+                  if (!term) { setUserResults([]); return }
+                  const { data } = await supabase
+                    .from('profiles')
+                    .select('id, full_name, avatar_url')
+                    .ilike('full_name', `%${term}%`)
+                    .neq('id', currentUserId)
+                    .limit(8)
+                  setUserResults(data || [])
+                }}
+                placeholder="Search for a user..."
+                className="w-full bg-gray-100 rounded-full px-4 py-2 text-sm outline-none text-gray-900 placeholder-gray-400 mb-3"
+                autoFocus
+              />
+              <div className="space-y-2 max-h-64 overflow-y-auto">
+                {userResults.map((user) => (
+                  <button
+                    key={user.id}
+                    type="button"
+                    onClick={async () => {
+                      const { data: existing } = await supabase
+                        .from('conversations')
+                        .select('id')
+                        .or(`and(participant_1_id.eq.${currentUserId},participant_2_id.eq.${user.id}),and(participant_1_id.eq.${user.id},participant_2_id.eq.${currentUserId})`)
+                        .maybeSingle()
+
+                      if (existing) {
+                        setShowNewMessage(false)
+                        window.location.href = `/messages/${existing.id}`
+                        return
+                      }
+
+                      const { data: newConv } = await supabase
+                        .from('conversations')
+                        .insert({
+                          participant_1_id: currentUserId,
+                          participant_2_id: user.id,
+                          last_message: null,
+                          last_message_at: new Date().toISOString()
+                        })
+                        .select('id')
+                        .single()
+
+                      if (newConv) {
+                        setShowNewMessage(false)
+                        window.location.href = `/messages/${newConv.id}`
+                      }
+                    }}
+                    className="flex items-center gap-3 w-full p-2 rounded-xl hover:bg-gray-50 active:bg-gray-100"
+                  >
+                    <div className="w-10 h-10 rounded-full bg-pink-100 overflow-hidden flex-shrink-0">
+                      {user.avatar_url ? (
+                        <img src={user.avatar_url} alt={user.full_name} className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-pink-500 font-semibold">
+                          {user.full_name?.[0]?.toUpperCase() || '?'}
+                        </div>
+                      )}
+                    </div>
+                    <span className="font-semibold text-gray-900 text-sm">{user.full_name}</span>
+                  </button>
+                ))}
+                {userSearch.trim() && userResults.length === 0 && (
+                  <p className="text-sm text-gray-400 text-center py-4">No users found</p>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Content */}
         {loading ? (
@@ -138,7 +249,9 @@ export default function MessagesPage() {
           </div>
         ) : (
           <div className="flex flex-col gap-3 p-4">
-            {conversations.map((conv) => (
+            {conversations
+              .filter(conv => !searchTerm.trim() || conv.other_user?.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) || conv.last_message?.toLowerCase().includes(searchTerm.toLowerCase()))
+              .map((conv) => (
               <Link
                 key={conv.id}
                 href={`/messages/${conv.id}`}

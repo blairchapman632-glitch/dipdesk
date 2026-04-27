@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useRef } from 'react'
+import imageCompression from 'browser-image-compression'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
@@ -11,6 +12,7 @@ interface Message {
   conversation_id: string
   sender_id: string
   content: string
+  image_url: string | null
   created_at: string
   read: boolean
 }
@@ -30,7 +32,10 @@ export default function ConversationPage() {
   const [otherUser, setOtherUser] = useState<OtherUser | null>(null)
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
-  const bottomRef = useRef<HTMLDivElement>(null)
+  const [sendingImage, setSendingImage] = useState(false)
+  const [imagePreview, setImagePreview] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  
   const inputRef = useRef<HTMLInputElement>(null)
   const MESSAGES_CACHE_KEY = `wrapapp_messages_${id}`
   const USER_CACHE_KEY = `wrapapp_thread_user_${id}`
@@ -110,10 +115,7 @@ export default function ConversationPage() {
     return () => { supabase.removeChannel(channel) }
   }, [id])
 
-  // Scroll to bottom when messages change
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
+  
 
   const fetchConversation = async (userId: string) => {
     const { data: conv } = await supabase
@@ -170,7 +172,66 @@ export default function ConversationPage() {
     // Force AppLayout to re-read the count
     window.dispatchEvent(new Event('storage'))
   }
+const sendImage = async (file: File) => {
+    if (!currentUserId || sendingImage) return
+    setSendingImage(true)
 
+    try {
+      file = await imageCompression(file, {
+        maxSizeMB: 1,
+        maxWidthOrHeight: 1200,
+        useWebWorker: true,
+      })
+    } catch {}
+
+    const fileExt = file.name.split('.').pop() || 'jpg'
+    const fileName = `${currentUserId}/${Date.now()}.${fileExt}`
+
+    const { error: uploadError } = await supabase.storage
+      .from('message-images')
+      .upload(fileName, file)
+
+    if (uploadError) {
+      setSendingImage(false)
+      return
+    }
+
+    const { data } = supabase.storage
+      .from('message-images')
+      .getPublicUrl(fileName)
+
+    const imageUrl = data.publicUrl
+
+    // Optimistically add image message
+    const optimisticMessage: Message = {
+      id: `temp-${Date.now()}`,
+      conversation_id: id as string,
+      sender_id: currentUserId,
+      content: '📷 Photo',
+      image_url: imageUrl,
+      created_at: new Date().toISOString(),
+      read: false,
+    }
+    setMessages(prev => {
+      const updated = [...prev, optimisticMessage]
+      localStorage.setItem(MESSAGES_CACHE_KEY, JSON.stringify(updated))
+      return updated
+    })
+
+    await supabase.from('messages').insert({
+      conversation_id: id,
+      sender_id: currentUserId,
+      content: '📷 Photo',
+      image_url: imageUrl,
+    })
+
+    await supabase.from('conversations').update({
+      last_message: '📷 Photo',
+      last_message_at: new Date().toISOString()
+    }).eq('id', id)
+
+    setSendingImage(false)
+  }
   const sendMessage = async () => {
     if (!newMessage.trim() || !currentUserId || sending) return
     setSending(true)
@@ -184,6 +245,7 @@ export default function ConversationPage() {
       conversation_id: id as string,
       sender_id: currentUserId,
       content,
+      image_url: null,
       created_at: new Date().toISOString(),
       read: false,
     }
@@ -242,6 +304,17 @@ export default function ConversationPage() {
     })
   }
 
+  const formatDateGroup = (timestamp: string) => {
+    const date = new Date(timestamp)
+    const now = new Date()
+    const yesterday = new Date(now)
+    yesterday.setDate(yesterday.getDate() - 1)
+
+    if (date.toDateString() === now.toDateString()) return 'Today'
+    if (date.toDateString() === yesterday.toDateString()) return 'Yesterday'
+    return date.toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'short' })
+  }
+
   return (
     <AppLayout hideHeader={false}>
       <div className="fixed inset-x-0 top-0 bottom-[72px] md:bottom-0 md:static md:h-[calc(100vh-80px)] max-w-lg md:mx-auto flex flex-col bg-gray-50">
@@ -268,13 +341,47 @@ export default function ConversationPage() {
             )}
           </div>
 
-          <span className="font-semibold text-gray-900">
+          <span className="font-semibold text-gray-900 flex-1">
             {otherUser?.full_name || 'Loading...'}
           </span>
+
+          <button
+            type="button"
+            onClick={async () => {
+              const confirmed = window.confirm('Delete this conversation?')
+              if (!confirmed) return
+
+              await supabase
+                .from('conversations')
+                .delete()
+                .eq('id', id)
+
+              // Clear cache
+              localStorage.removeItem(MESSAGES_CACHE_KEY)
+              localStorage.removeItem(USER_CACHE_KEY)
+              const convCache = localStorage.getItem('wrapapp_conversations_cache')
+              if (convCache) {
+                try {
+                  const convs = JSON.parse(convCache)
+                  localStorage.setItem('wrapapp_conversations_cache', JSON.stringify(
+                    convs.filter((c: any) => c.id !== id)
+                  ))
+                } catch {}
+              }
+
+              router.push('/messages')
+            }}
+            className="text-gray-400 hover:text-red-500 transition-colors p-1"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+          </button>
         </div>
 
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-2 scrollbar-hide" style={{ scrollbarWidth: 'none' }}>
+        <div className="flex-1 overflow-y-auto px-4 py-4 scrollbar-hide flex flex-col-reverse" style={{ scrollbarWidth: 'none' }}>
+          <div className="flex flex-col space-y-2">
           {loading ? (
             <div className="flex justify-center py-10">
               <div className="w-6 h-6 border-2 border-gray-300 border-t-gray-700 rounded-full animate-spin" />
@@ -290,8 +397,21 @@ export default function ConversationPage() {
               const prevMsg = messages[index - 1]
               const isFirstUnread = isUnread && (index === 0 || prevMsg?.read || prevMsg?.sender_id === currentUserId)
 
+              const msgDate = new Date(msg.created_at).toDateString()
+              const prevDate = prevMsg ? new Date(prevMsg.created_at).toDateString() : null
+              const showDateGroup = msgDate !== prevDate
+
               return (
                 <div key={msg.id}>
+                  {showDateGroup && (
+                    <div className="flex items-center gap-2 my-3">
+                      <div className="flex-1 h-px bg-gray-200" />
+                      <span className="text-xs text-gray-400 font-semibold px-2">
+                        {formatDateGroup(msg.created_at)}
+                      </span>
+                      <div className="flex-1 h-px bg-gray-200" />
+                    </div>
+                  )}
                   {isFirstUnread && (
                     <div className="flex items-center gap-2 my-2">
                       <div className="flex-1 h-px bg-pink-200" />
@@ -300,28 +420,68 @@ export default function ConversationPage() {
                     </div>
                   )}
                   <div className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
-                    <div className={`max-w-[75%] px-4 py-2 rounded-2xl text-sm ${
-                      isMe
-                        ? 'bg-pink-500 text-white rounded-br-sm'
-                        : isUnread
-                        ? 'bg-white border border-pink-200 text-gray-900 rounded-bl-sm shadow-sm'
-                        : 'bg-gray-100 text-gray-900 rounded-bl-sm'
-                    }`}>
-                      <p>{msg.content}</p>
-                      <p className={`text-xs mt-1 ${isMe ? 'text-pink-100' : 'text-gray-400'}`}>
-                        {formatTime(msg.created_at)}
-                      </p>
-                    </div>
+                    {msg.image_url ? (
+                      <div className="max-w-[75%]">
+                        <img
+                          src={msg.image_url}
+                          alt="Photo"
+                          className="rounded-2xl object-cover cursor-pointer max-w-[220px]"
+                          onClick={() => window.open(msg.image_url!, '_blank')}
+                        />
+                        <p className={`text-xs mt-1 px-1 ${isMe ? 'text-right text-gray-400' : 'text-gray-400'}`}>
+                          {formatTime(msg.created_at)}
+                        </p>
+                      </div>
+                    ) : (
+                      <div className={`max-w-[75%] px-4 py-2 rounded-2xl text-sm ${
+                        isMe
+                          ? 'bg-pink-500 text-white rounded-br-sm'
+                          : isUnread
+                          ? 'bg-white border border-pink-200 text-gray-900 rounded-bl-sm shadow-sm'
+                          : 'bg-gray-100 text-gray-900 rounded-bl-sm'
+                      }`}>
+                        <p>{msg.content}</p>
+                        <p className={`text-xs mt-1 ${isMe ? 'text-pink-100' : 'text-gray-400'}`}>
+                          {formatTime(msg.created_at)}
+                        </p>
+                      </div>
+                    )}
                   </div>
                 </div>
               )
             })
           )}
-          <div ref={bottomRef} />
+          </div>
         </div>
 
         {/* Input bar */}
-        <div className="flex-shrink-0 border-t border-gray-100 bg-white px-4 py-3 flex items-center gap-3">
+        <div className="flex-shrink-0 border-t border-gray-100 bg-white px-4 py-3 flex items-center gap-2">
+          {/* Image button */}
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={sendingImage}
+            className="w-10 h-10 bg-pink-100 rounded-full flex items-center justify-center flex-shrink-0 disabled:opacity-40 active:bg-pink-200 transition-colors"
+          >
+            {sendingImage ? (
+              <div className="w-4 h-4 border-2 border-pink-400 border-t-pink-600 rounded-full animate-spin" />
+            ) : (
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 text-pink-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+            )}
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0]
+              if (file) sendImage(file)
+            }}
+          />
+
           <input
             ref={inputRef}
             type="text"
