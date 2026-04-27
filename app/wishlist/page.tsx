@@ -640,13 +640,59 @@ export default function Page() {
                     </div>
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={closeViewWrapModal}
-                    className="cursor-pointer rounded-full border px-3 py-1 text-sm text-gray-600"
-                  >
-                    Close
-                  </button>
+                  <div className="flex items-center gap-2">
+                    {selectedWrap.for_sale && currentUserId && currentUserId !== selectedWrap.user_id && (
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const sellerId = selectedWrap.user_id
+
+                          const { data: existing } = await supabase
+                            .from('conversations')
+                            .select('id')
+                            .or(`and(participant_1_id.eq.${currentUserId},participant_2_id.eq.${sellerId}),and(participant_1_id.eq.${sellerId},participant_2_id.eq.${currentUserId})`)
+                            .maybeSingle()
+
+                          if (existing) {
+                            closeViewWrapModal()
+                            router.push(`/messages/${existing.id}`)
+                            return
+                          }
+
+                          const { data: newConv } = await supabase
+                            .from('conversations')
+                            .insert({
+                              participant_1_id: currentUserId,
+                              participant_2_id: sellerId,
+                              last_message: `Hi, is your ${selectedWrap.name} still available?`,
+                              last_message_at: new Date().toISOString()
+                            })
+                            .select('id')
+                            .single()
+
+                          if (newConv) {
+                            await supabase.from('messages').insert({
+                              conversation_id: newConv.id,
+                              sender_id: currentUserId,
+                              content: `Hi, is your ${selectedWrap.name} still available?`
+                            })
+                            closeViewWrapModal()
+                            router.push(`/messages/${newConv.id}`)
+                          }
+                        }}
+                        className="cursor-pointer rounded-xl bg-amber-500 hover:bg-amber-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm transition"
+                      >
+                        🪓 Contact Seller
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={closeViewWrapModal}
+                      className="cursor-pointer rounded-full border px-3 py-1 text-sm text-gray-600"
+                    >
+                      Close
+                    </button>
+                  </div>
                 </div>
 
                 <div className="mb-4 overflow-hidden rounded-3xl bg-gray-100 shadow-sm">

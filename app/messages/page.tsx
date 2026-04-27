@@ -11,6 +11,7 @@ interface Conversation {
   participant_2_id: string
   last_message: string | null
   last_message_at: string
+  has_unread?: boolean
   other_user?: {
     id: string
     full_name: string
@@ -25,7 +26,7 @@ export default function MessagesPage() {
   const CACHE_KEY = 'wrapapp_conversations_cache'
 
   useEffect(() => {
-    // Load from cache instantly
+    // Show cached conversations instantly
     const cached = localStorage.getItem(CACHE_KEY)
     if (cached) {
       try {
@@ -38,6 +39,8 @@ export default function MessagesPage() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
       setCurrentUserId(user.id)
+      // Only show spinner if no cache
+      if (!cached) setLoading(true)
       await fetchConversations(user.id)
     }
     init()
@@ -67,19 +70,32 @@ export default function MessagesPage() {
       conv.participant_1_id === userId ? conv.participant_2_id : conv.participant_1_id
     )
 
-    // Single query for all profiles at once
-    const { data: profiles } = await supabase
-      .from('profiles')
-      .select('id, full_name, avatar_url')
-      .in('id', otherUserIds)
+    // Fetch profiles and unread messages in parallel
+    const [{ data: profiles }, { data: unreadData }] = await Promise.all([
+      supabase
+        .from('profiles')
+        .select('id, full_name, avatar_url')
+        .in('id', otherUserIds),
+      supabase
+        .from('messages')
+        .select('conversation_id')
+        .eq('read', false)
+        .neq('sender_id', userId)
+        .in('conversation_id', data.map(c => c.id))
+    ])
 
     const profileMap = Object.fromEntries((profiles || []).map((p) => [p.id, p]))
+    const unreadConvIds = new Set((unreadData || []).map(m => m.conversation_id))
 
     const enriched = data.map((conv) => {
       const otherUserId = conv.participant_1_id === userId
         ? conv.participant_2_id
         : conv.participant_1_id
-      return { ...conv, other_user: profileMap[otherUserId] || undefined }
+      return {
+        ...conv,
+        other_user: profileMap[otherUserId] || undefined,
+        has_unread: unreadConvIds.has(conv.id)
+      }
     })
 
     setConversations(enriched)
@@ -126,7 +142,11 @@ export default function MessagesPage() {
               <Link
                 key={conv.id}
                 href={`/messages/${conv.id}`}
-                className="flex items-center gap-3 p-3 bg-white rounded-2xl border border-gray-200 hover:border-pink-300 hover:bg-pink-50 active:bg-pink-100 transition-all shadow-sm cursor-pointer"
+                className={`flex items-center gap-3 p-3 rounded-2xl border transition-all shadow-sm cursor-pointer hover:border-pink-300 hover:bg-pink-50 active:bg-pink-100 ${
+                  conv.has_unread
+                    ? 'bg-pink-50 border-pink-200'
+                    : 'bg-white border-gray-200'
+                }`}
               >
                 {/* Avatar */}
                 <div className="w-12 h-12 rounded-full bg-pink-100 flex-shrink-0 overflow-hidden">
@@ -146,7 +166,7 @@ export default function MessagesPage() {
                 {/* Text */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between">
-                    <span className="font-semibold text-gray-900 text-sm">
+                    <span className={`text-sm ${conv.has_unread ? 'font-bold text-gray-900' : 'font-semibold text-gray-900'}`}>
                       {conv.other_user?.full_name || 'Unknown user'}
                     </span>
                     <span className="text-xs text-gray-400 flex-shrink-0 ml-2">
@@ -158,10 +178,14 @@ export default function MessagesPage() {
                   </p>
                 </div>
 
-                {/* Arrow */}
-                <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
+                {/* Unread dot or arrow */}
+                {conv.has_unread ? (
+                  <div className="w-3 h-3 rounded-full bg-pink-500 flex-shrink-0" />
+                ) : (
+                  <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                )}
               </Link>
             ))}
           </div>

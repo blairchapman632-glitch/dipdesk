@@ -288,6 +288,7 @@ const [isClearingNotifications, setIsClearingNotifications] = useState(false)
 
   const handleLogout = async () => {
     await supabase.auth.signOut()
+    localStorage.clear()
     router.replace('/')
   }
 
@@ -766,10 +767,16 @@ async function clearAllNotifications() {
 
   setIsClearingNotifications(true)
 
-  await supabase
+  const { error } = await supabase
     .from('notifications')
     .delete()
     .eq('recipient_user_id', currentUserId)
+
+  if (error) {
+    console.error('Clear notifications error:', error)
+    setIsClearingNotifications(false)
+    return
+  }
 
   setNotifications([])
   localStorage.setItem(DASHBOARD_NOTIFICATIONS_KEY, JSON.stringify([]))

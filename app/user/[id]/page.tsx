@@ -725,6 +725,49 @@ const cachedAvatar = localStorage.getItem(getUserCollectionAvatarKey(userId))
                   </div>
 
                   <div className="flex items-center gap-2">
+                    {selectedWrap.for_sale && currentUserId && currentUserId !== userId && (
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const { data: existing } = await supabase
+                            .from('conversations')
+                            .select('id')
+                            .or(`and(participant_1_id.eq.${currentUserId},participant_2_id.eq.${userId}),and(participant_1_id.eq.${userId},participant_2_id.eq.${currentUserId})`)
+                            .maybeSingle()
+
+                          if (existing) {
+                            closeViewWrapModal()
+                            router.push(`/messages/${existing.id}`)
+                            return
+                          }
+
+                          const { data: newConv } = await supabase
+                            .from('conversations')
+                            .insert({
+                              participant_1_id: currentUserId,
+                              participant_2_id: userId,
+                              last_message: `Hi, is your ${selectedWrap.name} still available?`,
+                              last_message_at: new Date().toISOString()
+                            })
+                            .select('id')
+                            .single()
+
+                          if (newConv) {
+                            // Add opening message
+                            await supabase.from('messages').insert({
+                              conversation_id: newConv.id,
+                              sender_id: currentUserId,
+                              content: `Hi, is your ${selectedWrap.name} still available?`
+                            })
+                            closeViewWrapModal()
+                            router.push(`/messages/${newConv.id}`)
+                          }
+                        }}
+                        className="cursor-pointer rounded-xl bg-amber-500 hover:bg-amber-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm transition"
+                      >
+                        🪓 Contact Seller
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={closeViewWrapModal}

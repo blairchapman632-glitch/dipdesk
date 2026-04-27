@@ -20,6 +20,19 @@ export default function AppLayout({
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
   const [unreadCount, setUnreadCount] = useState(0)
+const [unreadMessages, setUnreadMessages] = useState(0)
+useEffect(() => {
+    const handleStorage = () => {
+      const cached = localStorage.getItem('dipdesk_unread_messages')
+      if (cached) {
+        try {
+          setUnreadMessages(JSON.parse(cached))
+        } catch {}
+      }
+    }
+    window.addEventListener('storage', handleStorage)
+    return () => window.removeEventListener('storage', handleStorage)
+  }, [])
 useEffect(() => {
     const cached = localStorage.getItem('dipdesk_dashboard_profile')
     if (cached) {
@@ -39,19 +52,48 @@ const cachedUnread = localStorage.getItem('dipdesk_unread_count')
       } catch {}
     }
 
+    const cachedUnreadMessages = localStorage.getItem('dipdesk_unread_messages')
+    if (cachedUnreadMessages) {
+      try {
+        setUnreadMessages(JSON.parse(cachedUnreadMessages))
+      } catch {}
+    }
+
     async function loadUnreadCount() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
-      const { count } = await supabase
+      // Notification count
+      const { count: notifCount } = await supabase
         .from('notifications')
         .select('*', { count: 'exact', head: true })
         .eq('recipient_user_id', user.id)
         .is('read_at', null)
 
-      const next = count || 0
-      setUnreadCount(next)
-      localStorage.setItem('dipdesk_unread_count', JSON.stringify(next))
+      setUnreadCount(notifCount || 0)
+      localStorage.setItem('dipdesk_unread_count', JSON.stringify(notifCount || 0))
+
+      // Get my conversation IDs
+      const { data: convData } = await supabase
+        .from('conversations')
+        .select('id')
+        .or(`participant_1_id.eq.${user.id},participant_2_id.eq.${user.id}`)
+
+      const convIds = (convData || []).map((c) => c.id)
+
+      if (convIds.length === 0) return
+
+      // Count unread messages in my conversations
+      const { count: msgCount } = await supabase
+        .from('messages')
+        .select('*', { count: 'exact', head: true })
+        .eq('read', false)
+        .neq('sender_id', user.id)
+        .in('conversation_id', convIds)
+
+      console.log('unread messages count:', msgCount)
+      setUnreadMessages(msgCount || 0)
+      localStorage.setItem('dipdesk_unread_messages', JSON.stringify(msgCount || 0))
     }
 
     loadUnreadCount()
@@ -157,13 +199,18 @@ const cachedUnread = localStorage.getItem('dipdesk_unread_count')
                       key={item.href}
                       type="button"
                       onClick={() => router.push(item.href)}
-                      className={`cursor-pointer rounded-xl px-4 py-2 text-sm font-semibold transition ${
+                      className={`relative cursor-pointer rounded-xl px-4 py-2 text-sm font-semibold transition ${
                         isActive
                           ? 'bg-pink-600 text-white'
                           : 'border border-gray-200 bg-white text-gray-700 hover:bg-gray-100'
                       }`}
                     >
                       {item.label}
+                      {item.label === 'Messages' && unreadMessages > 0 && (
+                        <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-pink-600 text-[9px] font-bold text-white">
+                          {unreadMessages > 9 ? '9+' : unreadMessages}
+                        </span>
+                      )}
                     </button>
                   )
                 })}
@@ -213,7 +260,14 @@ const cachedUnread = localStorage.getItem('dipdesk_unread_count')
         ) : item.label === 'ISO ⭐' ? (
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
         ) : item.label === 'Messages' ? (
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          <span className="relative">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            {unreadMessages > 0 && (
+              <span className="absolute -right-2 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-pink-600 text-[9px] font-bold text-white">
+                {unreadMessages > 9 ? '9+' : unreadMessages}
+              </span>
+            )}
+          </span>
         ) : (
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
         )
@@ -234,6 +288,11 @@ const cachedUnread = localStorage.getItem('dipdesk_unread_count')
             {item.label === 'Home' && unreadCount > 0 && (
               <span className="absolute -right-2 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-pink-600 text-[9px] font-bold text-white">
                 {unreadCount > 9 ? '9+' : unreadCount}
+              </span>
+            )}
+            {item.label === 'Messages' && unreadMessages > 0 && (
+              <span className="absolute -right-2 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-pink-600 text-[9px] font-bold text-white">
+                {unreadMessages > 9 ? '9+' : unreadMessages}
               </span>
             )}
           </span>

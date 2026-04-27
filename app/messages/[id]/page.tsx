@@ -84,7 +84,26 @@ export default function ConversationPage() {
         table: 'messages',
         filter: `conversation_id=eq.${id}`
       }, (payload) => {
-        setMessages(prev => [...prev, payload.new as Message])
+        const newMsg = payload.new as Message
+        setMessages(prev => {
+          // Skip if message already exists (optimistic or duplicate)
+          if (prev.some(m => m.id === newMsg.id)) return prev
+          // Replace optimistic message if same sender and content
+          const optimisticIndex = prev.findIndex(
+            m => m.id.startsWith('temp-') &&
+            m.sender_id === newMsg.sender_id &&
+            m.content === newMsg.content
+          )
+          if (optimisticIndex !== -1) {
+            const updated = [...prev]
+            updated[optimisticIndex] = newMsg
+            localStorage.setItem(MESSAGES_CACHE_KEY, JSON.stringify(updated))
+            return updated
+          }
+          const updated = [...prev, newMsg]
+          localStorage.setItem(MESSAGES_CACHE_KEY, JSON.stringify(updated))
+          return updated
+        })
       })
       .subscribe()
 
@@ -141,6 +160,15 @@ export default function ConversationPage() {
       .update({ read: true })
       .eq('conversation_id', id)
       .neq('sender_id', userId)
+
+    // Update unread badge instantly
+    const cached = localStorage.getItem('dipdesk_unread_messages')
+    const current = cached ? JSON.parse(cached) : 0
+    const newCount = Math.max(0, current - 1)
+    localStorage.setItem('dipdesk_unread_messages', JSON.stringify(newCount))
+
+    // Force AppLayout to re-read the count
+    window.dispatchEvent(new Event('storage'))
   }
 
   const sendMessage = async () => {
@@ -149,6 +177,21 @@ export default function ConversationPage() {
 
     const content = newMessage.trim()
     setNewMessage('')
+
+    // Optimistically add message to UI instantly
+    const optimisticMessage: Message = {
+      id: `temp-${Date.now()}`,
+      conversation_id: id as string,
+      sender_id: currentUserId,
+      content,
+      created_at: new Date().toISOString(),
+      read: false,
+    }
+    setMessages(prev => {
+      const updated = [...prev, optimisticMessage]
+      localStorage.setItem(MESSAGES_CACHE_KEY, JSON.stringify(updated))
+      return updated
+    })
 
     const { error } = await supabase
       .from('messages')
@@ -159,6 +202,20 @@ export default function ConversationPage() {
       })
 
     if (!error) {
+      // Update conversation preview cache instantly
+      const convCache = localStorage.getItem('wrapapp_conversations_cache')
+      if (convCache) {
+        try {
+          const convs = JSON.parse(convCache)
+          const updated = convs.map((c: any) =>
+            c.id === id
+              ? { ...c, last_message: content, last_message_at: new Date().toISOString() }
+              : c
+          )
+          localStorage.setItem('wrapapp_conversations_cache', JSON.stringify(updated))
+        } catch {}
+      }
+
       await supabase
         .from('conversations')
         .update({
@@ -227,19 +284,34 @@ export default function ConversationPage() {
               <p className="text-gray-400 text-sm">No messages yet. Say hi! 👋</p>
             </div>
           ) : (
-            messages.map((msg) => {
+            messages.map((msg, index) => {
               const isMe = msg.sender_id === currentUserId
+              const isUnread = !isMe && !msg.read
+              const prevMsg = messages[index - 1]
+              const isFirstUnread = isUnread && (index === 0 || prevMsg?.read || prevMsg?.sender_id === currentUserId)
+
               return (
-                <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
-                  <div className={`max-w-[75%] px-4 py-2 rounded-2xl text-sm ${
-                    isMe
-                      ? 'bg-pink-500 text-white rounded-br-sm'
-                      : 'bg-gray-100 text-gray-900 rounded-bl-sm'
-                  }`}>
-                    <p>{msg.content}</p>
-                    <p className={`text-xs mt-1 ${isMe ? 'text-pink-100' : 'text-gray-400'}`}>
-                      {formatTime(msg.created_at)}
-                    </p>
+                <div key={msg.id}>
+                  {isFirstUnread && (
+                    <div className="flex items-center gap-2 my-2">
+                      <div className="flex-1 h-px bg-pink-200" />
+                      <span className="text-xs text-pink-400 font-semibold">New messages</span>
+                      <div className="flex-1 h-px bg-pink-200" />
+                    </div>
+                  )}
+                  <div className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
+                    <div className={`max-w-[75%] px-4 py-2 rounded-2xl text-sm ${
+                      isMe
+                        ? 'bg-pink-500 text-white rounded-br-sm'
+                        : isUnread
+                        ? 'bg-white border border-pink-200 text-gray-900 rounded-bl-sm shadow-sm'
+                        : 'bg-gray-100 text-gray-900 rounded-bl-sm'
+                    }`}>
+                      <p>{msg.content}</p>
+                      <p className={`text-xs mt-1 ${isMe ? 'text-pink-100' : 'text-gray-400'}`}>
+                        {formatTime(msg.created_at)}
+                      </p>
+                    </div>
                   </div>
                 </div>
               )
