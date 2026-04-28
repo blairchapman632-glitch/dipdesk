@@ -113,7 +113,7 @@ type NotificationRow = {
   recipient_user_id: string
   actor_user_id: string | null
   wrap_id: string | null
-  type: 'like' | 'wishlist' | 'for_sale'
+  type: 'like' | 'wishlist' | 'for_sale' | 'comment'
   created_at: string
   read_at: string | null
 }
@@ -123,7 +123,7 @@ type NotificationItem = {
   actor_user_id: string | null
   created_at: string
   read_at: string | null
-  type: 'like' | 'wishlist' | 'for_sale'
+  type: 'like' | 'wishlist' | 'for_sale' | 'comment'
   actor_name: string
   actor_avatar: string | null
   wrap: Wrap | null
