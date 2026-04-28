@@ -15,6 +15,9 @@ export default function Page() {
   const [fullName, setFullName] = useState('')
   const [uploading, setUploading] = useState(false)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+  const [bio, setBio] = useState('')
+  const [savingBio, setSavingBio] = useState(false)
+  const [bioSaved, setBioSaved] = useState(false)
 
   const isAdmin =
     typeof window !== 'undefined' &&
@@ -27,6 +30,7 @@ export default function Page() {
         const p = JSON.parse(cached)
         setAvatar(p.avatar_url || null)
         setFullName(p.full_name || p.username || '')
+        setBio(p.bio || '')
       } catch {}
     }
 
@@ -37,14 +41,15 @@ export default function Page() {
 
       const { data } = await supabase
         .from('profiles')
-        .select('full_name, username, avatar_url')
+        .select('full_name, username, avatar_url, bio')
         .eq('id', user.id)
         .single()
 
       if (data) {
         setAvatar(data.avatar_url || null)
         setFullName(data.full_name || data.username || '')
-        localStorage.setItem(DASHBOARD_PROFILE_KEY, JSON.stringify(data))
+        setBio((data as any).bio || '')
+        localStorage.setItem(DASHBOARD_PROFILE_KEY, JSON.stringify({ ...data, id: user.id }))
       }
     }
     load()
@@ -130,6 +135,46 @@ export default function Page() {
           <div>
             <p className="font-bold text-gray-900 text-lg">{fullName || 'Your Profile'}</p>
             <p className="text-sm text-gray-500">Tap photo to update</p>
+          </div>
+        </div>
+
+        {/* Bio */}
+        <div className="rounded-2xl border bg-white p-5 shadow-sm">
+          <label className="mb-2 block text-sm font-semibold text-gray-700">
+            Bio
+          </label>
+          <textarea
+            value={bio}
+            onChange={(e) => setBio(e.target.value)}
+            placeholder="Tell the wrap community about yourself..."
+            rows={3}
+            maxLength={200}
+            className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-700 outline-none focus:border-pink-300 focus:ring-2 focus:ring-pink-100 resize-none"
+          />
+          <div className="mt-2 flex items-center justify-between">
+            <p className="text-xs text-gray-400">{bio.length}/200</p>
+            <button
+              type="button"
+              disabled={savingBio}
+              onClick={async () => {
+                if (!currentUserId) return
+                setSavingBio(true)
+                await supabase.from('profiles').update({ bio: bio.trim() || null }).eq('id', currentUserId)
+                const cached = localStorage.getItem(DASHBOARD_PROFILE_KEY)
+                if (cached) {
+                  try {
+                    const p = JSON.parse(cached)
+                    localStorage.setItem(DASHBOARD_PROFILE_KEY, JSON.stringify({ ...p, bio: bio.trim() || null }))
+                  } catch {}
+                }
+                setSavingBio(false)
+                setBioSaved(true)
+                setTimeout(() => setBioSaved(false), 2000)
+              }}
+              className="rounded-xl bg-pink-500 px-4 py-1.5 text-sm font-semibold text-white disabled:opacity-50"
+            >
+              {savingBio ? 'Saving...' : bioSaved ? 'Saved ✓' : 'Save Bio'}
+            </button>
           </div>
         </div>
 
