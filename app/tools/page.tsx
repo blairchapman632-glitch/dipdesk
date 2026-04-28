@@ -135,6 +135,14 @@ export default function Page() {
 
         <button
           type="button"
+          onClick={() => router.push('/wishlist')}
+          className="w-full rounded-xl border px-4 py-3 text-left font-semibold text-gray-700 hover:bg-gray-50"
+        >
+          ⭐ ISO Wraps
+        </button>
+
+        <button
+          type="button"
           onClick={() => router.push('/dashboard?report=true')}
           className="w-full rounded-xl border px-4 py-3 text-left font-semibold text-gray-700 hover:bg-gray-50"
         >

@@ -1700,10 +1700,14 @@ function exportReportCsv() {
                 const imageUrl = getPrimaryImage(wrap || undefined)
 
                 const title =
-                  notification.type === 'like'
+                  notification.type === 'like' && notification.wrap
                     ? `${notification.actor_name} liked your wrap`
+                    : notification.type === 'like' && !notification.wrap
+                    ? `${notification.actor_name} liked your WDYWT post`
                     : notification.type === 'wishlist'
                     ? `${notification.actor_name} added your wrap to their wishlist`
+                    : notification.type === 'comment'
+                    ? `${notification.actor_name} commented on your WDYWT post`
                     : `${wrapName} from your wishlist is now for sale`
 
                 const meta =

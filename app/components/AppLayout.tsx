@@ -113,7 +113,7 @@ const cachedUnread = localStorage.getItem('dipdesk_unread_count')
         setInitials(
           name.trim().split(' ').slice(0, 2).map((w: string) => w[0].toUpperCase()).join('')
         )
-        localStorage.setItem('dipdesk_dashboard_profile', JSON.stringify(data))
+        localStorage.setItem('dipdesk_dashboard_profile', JSON.stringify({ ...data, id: user.id }))
       }
     }
 
@@ -169,8 +169,8 @@ const cachedUnread = localStorage.getItem('dipdesk_unread_count')
   }
   const navItems = [
     { label: 'Home', href: '/dashboard' },
+    { label: 'WDYWT', href: '/wdywt' },
     { label: 'Explore', href: '/explore' },
-    { label: 'ISO ⭐', href: '/wishlist' },
     { label: 'Messages', href: '/messages' },
   ]
 
@@ -247,8 +247,8 @@ const cachedUnread = localStorage.getItem('dipdesk_unread_count')
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
         ) : item.label === 'Explore' ? (
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-        ) : item.label === 'ISO ⭐' ? (
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+        ) : item.label === 'WDYWT' ? (
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
         ) : item.label === 'Messages' ? (
           <span className="relative">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
