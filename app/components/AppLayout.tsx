@@ -237,8 +237,8 @@ const cachedUnread = localStorage.getItem('dipdesk_unread_count')
           </header>
 
           {/* Phone bottom nav */}
-<nav className="fixed inset-x-0 bottom-0 z-50 border-t bg-white md:hidden" style={{paddingBottom: 'env(safe-area-inset-bottom)'}}>
-  <div className="grid grid-cols-5 gap-1 px-2 pt-2 pb-2">
+<nav className="fixed inset-x-0 bottom-0 z-50 border-t bg-white md:hidden">
+  <div className="grid grid-cols-5 gap-1 px-2 pt-2" style={{paddingBottom: 'calc(0.5rem + env(safe-area-inset-bottom))'}}>
     {navItems.map((item) => {
       const isActive = pathname === item.href
 
@@ -267,7 +267,7 @@ const cachedUnread = localStorage.getItem('dipdesk_unread_count')
           key={item.href}
           href={item.href}
           prefetch={true}
-          className={`relative flex min-h-[64px] flex-col items-center justify-center gap-1 rounded-xl px-1 py-2 text-xs font-semibold ${
+          className={`relative flex min-h-[56px] flex-col items-center justify-center gap-1 rounded-xl px-1 py-2 text-xs font-semibold ${
             isActive
               ? 'bg-pink-600 text-white'
               : 'bg-white text-gray-600 border border-gray-200 active:bg-gray-100'
@@ -296,7 +296,7 @@ const cachedUnread = localStorage.getItem('dipdesk_unread_count')
 
           <Link
             href="/tools"
-            className="flex min-h-[64px] flex-col items-center justify-center gap-1 rounded-xl border border-gray-200 px-1 py-2"
+            className="flex min-h-[56px] flex-col items-center justify-center gap-1 rounded-xl border border-gray-200 px-1 py-2"
           >
             {avatar ? (
               <img
