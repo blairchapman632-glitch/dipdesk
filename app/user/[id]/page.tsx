@@ -49,6 +49,7 @@ type SocialCounts = {
 
 type WDYWTPost = {
   id: string
+  user_id: string
   photo_url: string
   caption: string | null
   created_at: string
