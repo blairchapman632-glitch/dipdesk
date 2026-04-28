@@ -237,8 +237,8 @@ const cachedUnread = localStorage.getItem('dipdesk_unread_count')
           </header>
 
           {/* Phone bottom nav */}
-<nav className="fixed inset-x-0 bottom-0 z-50 border-t bg-white md:hidden">
-  <div className="grid grid-cols-5 gap-1 px-2 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+<nav className="fixed inset-x-0 bottom-0 z-50 border-t bg-white md:hidden" style={{paddingBottom: 'env(safe-area-inset-bottom)'}}>
+  <div className="grid grid-cols-5 gap-1 px-2 pt-2 pb-2">
     {navItems.map((item) => {
       const isActive = pathname === item.href
 
@@ -320,7 +320,7 @@ const cachedUnread = localStorage.getItem('dipdesk_unread_count')
 
       <main
   className={`flex-1 p-6 md:p-10 ${
-    !hideHeader ? 'pb-24 md:pb-10' : ''
+    !hideHeader ? 'pb-28 md:pb-10' : ''
   }`}
 >
         {children}
