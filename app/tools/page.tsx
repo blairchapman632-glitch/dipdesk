@@ -206,6 +206,13 @@ export default function Page() {
           📊 Report
         </button>
 
+        
+          href="mailto:blairchapman632@gmail.com?subject=WrapApp Feedback&body=Hi Paige %26 Blair,%0A%0A"
+          className="block w-full rounded-xl border border-pink-200 bg-pink-50 px-4 py-3 text-left font-semibold text-pink-600 hover:bg-pink-100"
+        >
+          💬 Send Feedback
+        </a>
+
         {isAdmin && (
           <button
             type="button"
