@@ -174,6 +174,20 @@ const cachedUnread = localStorage.getItem('dipdesk_unread_count')
     { label: 'Messages', href: '/messages' },
   ]
 
+  const [showSplash, setShowSplash] = useState(() => {
+    if (typeof window === 'undefined') return false
+    return !localStorage.getItem('dipdesk_splashed')
+  })
+
+  useEffect(() => {
+    if (!showSplash) return
+    const timer = setTimeout(() => {
+      setShowSplash(false)
+      localStorage.setItem('dipdesk_splashed', '1')
+    }, 1800)
+    return () => clearTimeout(timer)
+  }, [showSplash])
+
   const [showInstallBanner, setShowInstallBanner] = useState(false)
   const [installPrompt, setInstallPrompt] = useState<any>(null)
   const [isIOS, setIsIOS] = useState(false)
@@ -226,6 +240,24 @@ const cachedUnread = localStorage.getItem('dipdesk_unread_count')
       setShowInstallBanner(false)
       localStorage.setItem('dipdesk_install_dismissed', '1')
     }
+  }
+
+  if (showSplash) {
+    return (
+      <div className="flex min-h-dvh flex-col items-center justify-center bg-white">
+        <div className="flex flex-col items-center gap-4 animate-pulse">
+          <img
+            src="/icon-512.png"
+            alt="WrapApp"
+            className="h-24 w-24 rounded-3xl shadow-lg"
+          />
+          <p className="text-2xl font-extrabold tracking-tight text-gray-900">
+            Wrap<span className="text-pink-600">App</span>
+          </p>
+          <p className="text-sm text-gray-400">For the Love of Wraps</p>
+        </div>
+      </div>
+    )
   }
 
   return (
