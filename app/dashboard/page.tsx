@@ -564,6 +564,13 @@ if (!notificationError && notificationData) {
     const cachedWraps = localStorage.getItem(DASHBOARD_WRAPS_KEY)
     const cachedNotifications = localStorage.getItem(DASHBOARD_NOTIFICATIONS_KEY)
 
+    // If no cache exists at all, keep loading=true until Supabase responds
+    const hasCache = cachedEmail || cachedWraps
+    if (!hasCache) {
+      loadData()
+      return
+    }
+
     if (cachedEmail) setEmail(cachedEmail)
 
     if (cachedDips) {
