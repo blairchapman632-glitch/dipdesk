@@ -1472,6 +1472,17 @@ function exportReportCsv() {
     router.push(`/create-dip?${params.toString()}`)
   }
 
+  if (loading && !profile && wraps.length === 0) {
+    return (
+      <div className="flex min-h-dvh items-center justify-center bg-gray-50">
+        <div className="flex flex-col items-center gap-4">
+          <div className="h-12 w-12 animate-spin rounded-full border-4 border-pink-200 border-t-pink-600" />
+          <p className="text-sm font-semibold text-gray-500">Loading WrapApp...</p>
+        </div>
+      </div>
+    )
+  }
+
   return (
         <AppLayout>
       <div className="space-y-6">
