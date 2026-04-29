@@ -380,15 +380,13 @@ const unreadNotificationCount = useMemo(() => {
   return notifications.filter((notification) => !notification.read_at).length
 }, [notifications])
   const loadData = useCallback(async () => {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
+    const { data: { session } } = await supabase.auth.getSession()
+    const user = session?.user
 
     if (!user) {
-  setLoading(false)
-  
-  return
-}
+      router.replace('/')
+      return
+    }
 
     setCurrentUserId(user.id)
     
