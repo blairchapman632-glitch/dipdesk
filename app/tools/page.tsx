@@ -222,11 +222,13 @@ export default function Page() {
               <h2 className="text-xl font-bold text-gray-900 mb-1">Send Feedback</h2>
               <p className="text-sm text-gray-500 mb-5">We'd love to hear your thoughts, ideas or suggestions for WrapApp.</p>
               
-                href="mailto:blairchapman632@gmail.com?subject=WrapApp%20Feedback&body=Hi%20Paige%20and%20Blair"
+                <button
+                type="button"
+                onClick={() => { window.location.href = 'mailto:blairchapman632@gmail.com?subject=WrapApp%20Feedback&body=Hi%20Paige%20and%20Blair' }}
                 className="block w-full rounded-xl bg-gradient-to-r from-pink-500 to-rose-500 px-4 py-3 text-center font-semibold text-white mb-3"
               >
                 Open Email App
-              </a>
+              </button>
               <div className="rounded-xl border bg-gray-50 px-4 py-3 text-center">
                 <p className="text-xs text-gray-500 mb-1">Or copy our email</p>
                 <p className="text-sm font-bold text-gray-900 select-all">blairchapman632@gmail.com</p>
