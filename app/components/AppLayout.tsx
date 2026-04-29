@@ -179,13 +179,21 @@ const cachedUnread = localStorage.getItem('dipdesk_unread_count')
     return !localStorage.getItem('dipdesk_splashed')
   })
 
+  const [splashFading, setSplashFading] = useState(false)
+
   useEffect(() => {
     if (!showSplash) return
-    const timer = setTimeout(() => {
+    const fadeTimer = setTimeout(() => {
+      setSplashFading(true)
+    }, 2000)
+    const hideTimer = setTimeout(() => {
       setShowSplash(false)
       localStorage.setItem('dipdesk_splashed', '1')
-    }, 1800)
-    return () => clearTimeout(timer)
+    }, 2500)
+    return () => {
+      clearTimeout(fadeTimer)
+      clearTimeout(hideTimer)
+    }
   }, [showSplash])
 
   const [showInstallBanner, setShowInstallBanner] = useState(false)
@@ -244,17 +252,23 @@ const cachedUnread = localStorage.getItem('dipdesk_unread_count')
 
   if (showSplash) {
     return (
-      <div className="flex min-h-dvh flex-col items-center justify-center bg-white">
-        <div className="flex flex-col items-center gap-4 animate-pulse">
+      <div
+        className="flex min-h-dvh flex-col items-center justify-center transition-opacity duration-500"
+        style={{
+          background: 'linear-gradient(135deg, #db2777, #f43f5e, #fb923c)',
+          opacity: splashFading ? 0 : 1,
+        }}
+      >
+        <div className="flex flex-col items-center gap-6">
           <img
             src="/icon-512.png"
             alt="WrapApp"
-            className="h-24 w-24 rounded-3xl shadow-lg"
+            className="h-36 w-36 rounded-3xl shadow-2xl"
           />
-          <p className="text-2xl font-extrabold tracking-tight text-gray-900">
-            Wrap<span className="text-pink-600">App</span>
+          <p className="text-3xl font-extrabold tracking-tight text-white">
+            WrapApp
           </p>
-          <p className="text-sm text-gray-400">For the Love of Wraps</p>
+          <p className="text-sm text-white/70">For the Love of Wraps</p>
         </div>
       </div>
     )
