@@ -78,6 +78,13 @@ export default function Home() {
       return
     }
 
+    // Clear any cached data from previous user
+    Object.keys(localStorage).forEach((key) => {
+      if (key.startsWith('dipdesk_')) {
+        localStorage.removeItem(key)
+      }
+    })
+
     router.replace('/dashboard')
   }
 
