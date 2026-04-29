@@ -31,28 +31,26 @@ export default function Page() {
         setAvatar(p.avatar_url || null)
         setFullName(p.full_name || p.username || '')
         setBio(p.bio || '')
+        setCurrentUserId(p.id || null)
       } catch {}
     }
 
-    async function load() {
-      const { data: { user } } = await supabase.auth.getUser()
+    supabase.auth.getUser().then(async ({ data: { user } }) => {
       if (!user) return
       setCurrentUserId(user.id)
-
       const { data } = await supabase
         .from('profiles')
         .select('full_name, username, avatar_url, bio')
         .eq('id', user.id)
         .single()
-
       if (data) {
+        const newBio = (data as any).bio || ''
+        setBio(newBio)
         setAvatar(data.avatar_url || null)
         setFullName(data.full_name || data.username || '')
-        setBio((data as any).bio || '')
         localStorage.setItem(DASHBOARD_PROFILE_KEY, JSON.stringify({ ...data, id: user.id }))
       }
-    }
-    load()
+    })
   }, [])
 
   async function handleAvatarUpload(file: File) {
@@ -137,7 +135,21 @@ export default function Page() {
             <p className="text-sm text-gray-500">Tap photo to update</p>
           </div>
         </div>
-
+<button
+          type="button"
+          onClick={() => {
+            const cached = localStorage.getItem('dipdesk_dashboard_profile')
+            if (cached) {
+              try {
+                const p = JSON.parse(cached)
+                if (p.id) router.push(`/user/${p.id}`)
+              } catch {}
+            }
+          }}
+          className="w-full rounded-xl border px-4 py-3 text-left font-semibold text-gray-700 hover:bg-gray-50"
+        >
+          👤 My Profile
+        </button>
         {/* Bio */}
         <div className="rounded-2xl border bg-white p-5 shadow-sm">
           <label className="mb-2 block text-sm font-semibold text-gray-700">

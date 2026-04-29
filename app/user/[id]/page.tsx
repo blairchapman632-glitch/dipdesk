@@ -462,7 +462,24 @@ export default function UserCollectionPage() {
             <div className="w-full max-w-lg rounded-t-3xl sm:rounded-3xl bg-white shadow-2xl max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
               <div className="flex items-center justify-between px-5 py-4 border-b shrink-0">
                 <h3 className="font-bold text-gray-900">Post</h3>
-                <button type="button" onClick={() => setSelectedPost(null)} className="text-sm text-gray-500">Close</button>
+                <div className="flex items-center gap-3">
+                  {selectedPost && currentUserId === userId && (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const id = selectedPost.id
+                        setSelectedPost(null)
+                        await supabase.from('wdywt_posts').delete().eq('id', id)
+                        setWdywtPosts(prev => prev.filter(p => p.id !== id))
+                        localStorage.setItem(`dipdesk_user_wdywt_${userId}`, JSON.stringify(wdywtPosts.filter(p => p.id !== id)))
+                      }}
+                      className="text-sm font-semibold text-red-500"
+                    >
+                      Delete
+                    </button>
+                  )}
+                  <button type="button" onClick={() => setSelectedPost(null)} className="text-sm text-gray-500">Close</button>
+                </div>
               </div>
               <div className="overflow-y-auto flex-1">
                 <img src={selectedPost.photo_url} alt={selectedPost.caption || 'WDYWT'} className="w-full aspect-square object-cover object-top" />
