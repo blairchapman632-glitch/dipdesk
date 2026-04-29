@@ -213,14 +213,14 @@ export default function Page() {
           onClick={() => setShowFeedback(true)}
           className="w-full rounded-xl border border-pink-200 bg-pink-50 px-4 py-3 text-left font-semibold text-pink-600 hover:bg-pink-100"
         >
-          💬 Send Feedback
+          💬 Feedback / Contact
         </button>
 
         {showFeedback && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setShowFeedback(false)}>
             <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
               <h2 className="text-xl font-bold text-gray-900 mb-1">Send Feedback</h2>
-              <p className="text-sm text-gray-500 mb-5">We'd love to hear your thoughts, ideas or suggestions for WrapApp.</p>
+              <p className="text-sm text-gray-500 mb-5">We'd love to hear your thoughts, ideas or suggestions for WrapApp — or just say hello! 👋</p>
               
                 <button
                 type="button"
