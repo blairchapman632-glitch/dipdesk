@@ -174,6 +174,60 @@ const cachedUnread = localStorage.getItem('dipdesk_unread_count')
     { label: 'Messages', href: '/messages' },
   ]
 
+  const [showInstallBanner, setShowInstallBanner] = useState(false)
+  const [installPrompt, setInstallPrompt] = useState<any>(null)
+  const [isIOS, setIsIOS] = useState(false)
+  const [isIOSChrome, setIsIOSChrome] = useState(false)
+
+  useEffect(() => {
+    // Don't show if already installed
+    if (window.matchMedia('(display-mode: standalone)').matches) return
+    // Don't show if already dismissed
+    if (localStorage.getItem('dipdesk_install_dismissed')) return
+
+    const iOS = /iphone|ipad|ipod/i.test(navigator.userAgent)
+    const iOSChrome = iOS && /CriOS/i.test(navigator.userAgent)
+    const iOSSafari = iOS && !iOSChrome
+
+    setIsIOS(iOS)
+    setIsIOSChrome(iOSChrome)
+
+    if (iOSChrome) {
+      setShowInstallBanner(true)
+      return
+    }
+
+    if (iOSSafari) {
+      setShowInstallBanner(true)
+      return
+    }
+
+    // Android Chrome
+    const handler = (e: any) => {
+      e.preventDefault()
+      setInstallPrompt(e)
+      setShowInstallBanner(true)
+    }
+
+    window.addEventListener('beforeinstallprompt', handler)
+    return () => window.removeEventListener('beforeinstallprompt', handler)
+  }, [])
+
+  function dismissInstallBanner() {
+    setShowInstallBanner(false)
+    localStorage.setItem('dipdesk_install_dismissed', '1')
+  }
+
+  async function handleInstallClick() {
+    if (!installPrompt) return
+    installPrompt.prompt()
+    const { outcome } = await installPrompt.userChoice
+    if (outcome === 'accepted') {
+      setShowInstallBanner(false)
+      localStorage.setItem('dipdesk_install_dismissed', '1')
+    }
+  }
+
   return (
     <div className="flex min-h-dvh flex-col bg-gray-50">
       {!hideHeader && (
@@ -235,6 +289,41 @@ const cachedUnread = localStorage.getItem('dipdesk_unread_count')
               </Link>
             </div>
           </header>
+
+          {/* Install banner */}
+          {showInstallBanner && (
+            <div className="fixed inset-x-0 z-40 md:hidden"
+              style={{ bottom: 'calc(4rem + env(safe-area-inset-bottom))' }}>
+              <div className="mx-3 mb-2 rounded-2xl border border-pink-100 bg-white p-3 shadow-lg">
+                <div className="flex items-center gap-3">
+                  <img src="/icon-192.png" alt="WrapApp" className="h-10 w-10 rounded-xl" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold text-gray-900">Add WrapApp to Home Screen</p>
+                    {isIOSChrome ? (
+                      <p className="text-xs text-gray-500">Open in Safari to install</p>
+                    ) : isIOS ? (
+                      <p className="text-xs text-gray-500">Tap Share → Add to Home Screen</p>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={handleInstallClick}
+                        className="text-xs font-semibold text-pink-600"
+                      >
+                        Tap to install →
+                      </button>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={dismissInstallBanner}
+                    className="shrink-0 rounded-full p-1 text-gray-400 hover:text-gray-600"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Phone bottom nav */}
 <nav className="fixed inset-x-0 bottom-0 z-50 border-t bg-white md:hidden">
