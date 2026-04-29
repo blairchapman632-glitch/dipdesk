@@ -16,6 +16,7 @@ export default function Page() {
   const [uploading, setUploading] = useState(false)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [bio, setBio] = useState('')
+  const [showFeedback, setShowFeedback] = useState(false)
   const [savingBio, setSavingBio] = useState(false)
   const [bioSaved, setBioSaved] = useState(false)
 
@@ -209,11 +210,37 @@ export default function Page() {
         
           <button
           type="button"
-          onClick={() => window.location.href = 'mailto:blairchapman632@gmail.com?subject=WrapApp%20Feedback&body=Hi%20Paige%20and%20Blair'}
+          onClick={() => setShowFeedback(true)}
           className="w-full rounded-xl border border-pink-200 bg-pink-50 px-4 py-3 text-left font-semibold text-pink-600 hover:bg-pink-100"
         >
           💬 Send Feedback
         </button>
+
+        {showFeedback && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setShowFeedback(false)}>
+            <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+              <h2 className="text-xl font-bold text-gray-900 mb-1">Send Feedback</h2>
+              <p className="text-sm text-gray-500 mb-5">We'd love to hear your thoughts, ideas or suggestions for WrapApp.</p>
+              
+                href="mailto:blairchapman632@gmail.com?subject=WrapApp%20Feedback&body=Hi%20Paige%20and%20Blair"
+                className="block w-full rounded-xl bg-gradient-to-r from-pink-500 to-rose-500 px-4 py-3 text-center font-semibold text-white mb-3"
+              >
+                Open Email App
+              </a>
+              <div className="rounded-xl border bg-gray-50 px-4 py-3 text-center">
+                <p className="text-xs text-gray-500 mb-1">Or copy our email</p>
+                <p className="text-sm font-bold text-gray-900 select-all">blairchapman632@gmail.com</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowFeedback(false)}
+                className="mt-4 w-full rounded-xl border px-4 py-2 text-sm font-semibold text-gray-600"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        )}
 
         {isAdmin && (
           <button
