@@ -1631,20 +1631,20 @@ function exportReportCsv() {
               {departedWraps.length === 0 ? (
                 <p className="text-sm text-gray-500">No departed wraps yet</p>
               ) : (
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
+                <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 xl:grid-cols-5">
                   {departedWraps.map((wrap) => (
                     <button
                       key={wrap.id}
                       type="button"
                       onClick={() => openViewWrapModal(wrap)}
-                      className="group flex cursor-pointer flex-col overflow-hidden rounded-2xl border bg-gray-50 p-0 text-left shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-md"
+                      className="group flex cursor-pointer flex-col overflow-hidden rounded-xl border bg-gray-50 p-0 text-left shadow-none transition duration-200 hover:shadow-sm"
                     >
                       <div className="relative aspect-[4/5] w-full bg-gray-100 pointer-events-none">
                         <img
   src={getPrimaryImage(wrap)}
   loading="lazy"
   alt={wrap.name}
-  className="h-full w-full object-cover object-[center_20%] opacity-90 transition duration-300 group-hover:scale-[1.03]"
+  className="h-full w-full object-cover object-[center_20%] opacity-60 grayscale-[30%] transition duration-300 group-hover:opacity-80"
 />
                         {wrap.for_sale && (
   <div className="absolute left-3 top-3 rounded-xl bg-white/90 px-2 py-1 text-xs font-semibold text-amber-700 shadow">

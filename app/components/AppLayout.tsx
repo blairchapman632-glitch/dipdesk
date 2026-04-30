@@ -275,7 +275,7 @@ const cachedUnread = localStorage.getItem('dipdesk_unread_count')
   }
 
   return (
-    <div className="flex min-h-dvh flex-col bg-gray-50">
+    <div className="flex min-h-dvh flex-col bg-white">
       {!hideHeader && (
         <>
           {/* Desktop top nav */}
@@ -454,7 +454,7 @@ const cachedUnread = localStorage.getItem('dipdesk_unread_count')
       )}
 
       <main
-  className={`flex-1 p-6 md:p-10 ${
+  className={`flex-1 px-3 pt-4 md:px-10 md:pt-10 ${
     !hideHeader ? 'pb-28 md:pb-10' : ''
   }`}
 >
