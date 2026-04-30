@@ -1018,26 +1018,22 @@ setTimeout(() => setToastMessage(''), 2000)
                     
                   </div>
 
-                  <div className="space-y-1 px-2.5 py-2">
+                  <div className="px-2 py-1.5">
                     <h3 className="line-clamp-1 text-sm font-bold text-gray-900 pointer-events-none">
                       {wrap.name}
                     </h3>
-
                     <p className="line-clamp-1 text-xs text-gray-500 pointer-events-none">
-                      {wrap.brand || 'No brand added'}
+                      {wrap.brand || ''}
                     </p>
-
-                    <div>
-                      <span
-                        onClick={(event) => {
-                          event.stopPropagation()
-                          router.push(`/user/${wrap.user_id}`)
-                        }}
-                        className="inline-flex cursor-pointer items-center gap-1 rounded-full bg-pink-50 px-2 py-1 text-xs font-semibold text-pink-600 hover:bg-pink-100"
-                      >
-                        {getDisplayName(profilesMap[wrap.user_id])}
-                      </span>
-                    </div>
+                    <span
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        router.push(`/user/${wrap.user_id}`)
+                      }}
+                      className="mt-1 inline-flex cursor-pointer items-center rounded-full bg-pink-50 px-2 py-0.5 text-xs font-semibold text-pink-600 hover:bg-pink-100"
+                    >
+                      {getDisplayName(profilesMap[wrap.user_id])}
+                    </span>
                   </div>
                 </button>
               ))}
