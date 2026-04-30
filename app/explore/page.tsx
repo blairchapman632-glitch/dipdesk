@@ -704,8 +704,8 @@ const filteredWraps = (
     filteredWraps.length === 0
   return (
     <AppLayout>
-      <div className="space-y-3">
-        <section className="rounded-xl border bg-white px-3 py-3 shadow-sm">
+      <div className="space-y-2">
+        <section className="rounded-xl bg-white px-3 py-3">
                     <div className="relative">
             <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 leading-none">
               <svg
@@ -853,9 +853,9 @@ const filteredWraps = (
         )}
         
 
-        <section className="rounded-xl border bg-white px-3 py-3 shadow-sm">
-          <div className="mb-2">
-            <h2 className="text-sm font-bold text-gray-900">Collections</h2>
+        <section className="px-0 py-1">
+          <div className="mb-2 px-0">
+            <h2 className="text-sm font-bold text-gray-500 uppercase tracking-wide">Collections</h2>
           </div>
 
           {loading && latestWraps.length === 0 ? (
@@ -874,17 +874,17 @@ const filteredWraps = (
     <button
                     type="button"
                     onClick={() => router.push(`/user/${user.id}`)}
-                    className="flex w-[160px] shrink-0 cursor-pointer flex-col items-center rounded-lg border bg-white px-2 py-2 text-center shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-md sm:w-[170px]"
+                    className="flex w-[120px] shrink-0 cursor-pointer flex-col items-center rounded-xl border bg-white px-2 py-2 text-center shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-md"
                   >
                     {avatarMap[user.id] ? (
                       <img
                         src={avatarMap[user.id]!}
                         loading="lazy"
                         alt={user.name}
-                        className="mb-1.5 h-16 w-16 rounded-full object-cover pointer-events-none"
+                        className="mb-1.5 h-12 w-12 rounded-full object-cover pointer-events-none"
                       />
                     ) : (
-                      <div className="mb-1.5 flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-pink-500 to-rose-500 text-xl font-bold text-white pointer-events-none">
+                      <div className="mb-1.5 flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-pink-500 to-rose-500 text-lg font-bold text-white pointer-events-none">
                         {user.name?.[0]?.toUpperCase() || '?'}
                       </div>
                     )}
@@ -977,9 +977,9 @@ setTimeout(() => setToastMessage(''), 2000)
           )}
         </section>
 
-        <section className="rounded-xl border bg-white px-3 py-3 shadow-sm">
+        <section className="px-0 py-1">
           <div className="mb-2">
-            <h2 className="text-sm font-bold text-gray-900">Latest Wraps</h2>
+            <h2 className="text-sm font-bold text-gray-500 uppercase tracking-wide">Latest Wraps</h2>
           </div>
 
           {loading && latestWraps.length === 0 ? (
