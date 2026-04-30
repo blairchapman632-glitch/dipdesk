@@ -1483,7 +1483,7 @@ function exportReportCsv() {
 
   return (
         <AppLayout>
-      <div className="space-y-6">
+      <div className="space-y-6 bg-white min-h-screen">
         
         <div className="xl:hidden">
           <div className="grid grid-cols-2 rounded-xl border bg-white p-1 shadow-sm">
@@ -1619,10 +1619,14 @@ function exportReportCsv() {
               </div>
             )}
 
-            <div className="mt-8 px-1">
-              <h3 className="mb-3 text-base font-bold text-gray-500 uppercase tracking-wide text-sm">
-                Departed Wraps
-              </h3>
+            <div className="mt-10 px-1">
+  <div className="mb-3 flex items-center gap-3">
+    <div className="h-px flex-1 bg-gray-200" />
+    <h3 className="text-xs font-semibold uppercase tracking-widest text-gray-400">
+      Departed Wraps
+    </h3>
+    <div className="h-px flex-1 bg-gray-200" />
+  </div>
 
               {departedWraps.length === 0 ? (
                 <p className="text-sm text-gray-500">No departed wraps yet</p>
@@ -1660,18 +1664,19 @@ function exportReportCsv() {
 )}
                       </div>
 
-                      <div className="space-y-1 p-3">
-                        <h4 className="line-clamp-1 text-sm font-bold text-gray-900">
+                      <div className="space-y-0.5 p-2">
+                        <h4 className="line-clamp-1 text-xs font-semibold text-gray-500">
                           {wrap.name}
                         </h4>
-                        <p className="line-clamp-1 text-xs text-gray-600">
-                          {wrap.brand || 'No brand added'}
+                        <p className="line-clamp-1 text-[10px] text-gray-400">
+                          {wrap.brand || ''}
                         </p>
                       </div>
                     </button>
                   ))}
                 </div>
               )}
+            </div>
             </div>
           </section>
 
