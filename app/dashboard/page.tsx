@@ -1677,7 +1677,6 @@ function exportReportCsv() {
                 </div>
               )}
             </div>
-            </div>
           </section>
 
                              <section
