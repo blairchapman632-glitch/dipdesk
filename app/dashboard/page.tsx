@@ -559,8 +559,9 @@ if (!notificationError && notificationData) {
 
     setLoading(false)
 
-    const hasOnboarded = localStorage.getItem('wrapapp_onboarded')
-    if (!hasOnboarded) {
+    const hasNoAvatar = !profileData?.avatar_url
+    const hasNoWraps = !wrapData || (wrapData as any[]).length === 0
+    if (hasNoAvatar && hasNoWraps) {
       setShowOnboarding(true)
     }
   }, [])
