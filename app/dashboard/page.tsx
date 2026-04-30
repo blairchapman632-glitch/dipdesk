@@ -284,6 +284,10 @@ const [selectedWrapCounts, setSelectedWrapCounts] = useState({
   wishlists: 0,
 })
 const [isClearingNotifications, setIsClearingNotifications] = useState(false)
+const [showOnboarding, setShowOnboarding] = useState(false)
+const [onboardingStep, setOnboardingStep] = useState(1)
+const [onboardingAvatar, setOnboardingAvatar] = useState<string | null>(null)
+const [isUploadingOnboardingAvatar, setIsUploadingOnboardingAvatar] = useState(false)
     const router = useRouter()
 
   const handleLogout = async () => {
@@ -554,6 +558,11 @@ if (!notificationError && notificationData) {
 }
 
     setLoading(false)
+
+    const hasOnboarded = localStorage.getItem('wrapapp_onboarded')
+    if (!hasOnboarded) {
+      setShowOnboarding(true)
+    }
   }, [])
 
   useEffect(() => {
@@ -747,6 +756,32 @@ function getInitials(name: string | null | undefined) {
     .map((word) => word[0].toUpperCase())
     .join('')
 }
+async function uploadOnboardingAvatar(file: File) {
+  if (!currentUserId) return
+  setIsUploadingOnboardingAvatar(true)
+  try {
+    file = await imageCompression(file, { maxSizeMB: 0.3, maxWidthOrHeight: 400, useWebWorker: true })
+  } catch {}
+  const fileExt = file.name.split('.').pop() || 'jpg'
+  const fileName = `${currentUserId}/avatar.${fileExt}`
+  const { error } = await supabase.storage.from('avatars').upload(fileName, file, { upsert: true })
+  if (!error) {
+    const { data } = supabase.storage.from('avatars').getPublicUrl(fileName)
+    const avatarUrl = `${data.publicUrl}?t=${Date.now()}`
+    await supabase.from('profiles').update({ avatar_url: avatarUrl }).eq('id', currentUserId)
+    setOnboardingAvatar(avatarUrl)
+    setProfile((prev) => prev ? { ...prev, avatar_url: avatarUrl } : prev)
+    const cached = localStorage.getItem('dipdesk_dashboard_profile')
+    if (cached) {
+      try {
+        const p = JSON.parse(cached)
+        localStorage.setItem('dipdesk_dashboard_profile', JSON.stringify({ ...p, avatar_url: avatarUrl }))
+      } catch {}
+    }
+  }
+  setIsUploadingOnboardingAvatar(false)
+}
+
 async function markAllNotificationsRead() {
   if (!currentUserId) return
 
@@ -2925,6 +2960,119 @@ Record own currency for accurate reporting
           </div>
         )}
       </div>
+    {showOnboarding && (
+        <div className="fixed inset-0 z-[100] flex flex-col bg-white">
+
+          {onboardingStep === 1 && (
+            <div className="flex flex-1 flex-col items-center justify-center px-8 text-center">
+              <div className="mb-6 flex h-24 w-24 items-center justify-center rounded-3xl bg-gradient-to-br from-pink-500 to-rose-500 shadow-lg">
+                <img src="/icon-512.png" alt="WrapApp" className="h-20 w-20 rounded-2xl" />
+              </div>
+              <h1 className="text-3xl font-extrabold text-gray-900 mb-2">
+                Welcome to WrapApp{profile?.full_name ? `, ${profile.full_name.split(' ')[0]}` : ''}! 🎉
+              </h1>
+              <p className="text-gray-500 text-base mb-6 leading-relaxed">
+                Your home for wrap collecting, sharing, and discovering.
+              </p>
+              <div className="space-y-3 w-full text-left">
+                <div className="flex items-center gap-3 rounded-2xl bg-pink-50 px-4 py-3">
+                  <span className="text-2xl">👜</span>
+                  <div>
+                    <p className="font-semibold text-gray-900 text-sm">Manage your collection</p>
+                    <p className="text-xs text-gray-500">Track, organise and showcase your wraps</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 rounded-2xl bg-pink-50 px-4 py-3">
+                  <span className="text-2xl">🔍</span>
+                  <div>
+                    <p className="font-semibold text-gray-900 text-sm">Discover the community</p>
+                    <p className="text-xs text-gray-500">Explore other collections and connect</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 rounded-2xl bg-pink-50 px-4 py-3">
+                  <span className="text-2xl">🛍️</span>
+                  <div>
+                    <p className="font-semibold text-gray-900 text-sm">Buy and sell wraps</p>
+                    <p className="text-xs text-gray-500">List your wraps for sale within the community</p>
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setOnboardingStep(2)}
+                className="mt-8 w-full rounded-2xl bg-gradient-to-r from-pink-500 to-rose-500 py-4 text-base font-bold text-white shadow-lg"
+              >
+                Let's get started →
+              </button>
+            </div>
+          )}
+
+          {onboardingStep === 2 && (
+            <div className="flex flex-1 flex-col items-center justify-center px-8 text-center">
+              <h2 className="text-2xl font-extrabold text-gray-900 mb-2">Add a profile photo</h2>
+              <p className="text-gray-500 text-sm mb-8">Help the community put a face to your collection</p>
+              <label className="relative cursor-pointer group mb-8">
+                {onboardingAvatar ? (
+                  <img src={onboardingAvatar} alt="Your avatar" className="h-32 w-32 rounded-full object-cover ring-4 ring-pink-200 shadow-lg" />
+                ) : (
+                  <div className="h-32 w-32 rounded-full bg-gradient-to-br from-pink-100 to-rose-100 ring-4 ring-pink-200 shadow-lg flex flex-col items-center justify-center">
+                    <span className="text-4xl">📷</span>
+                    <p className="text-xs text-pink-400 font-semibold mt-1">Tap to upload</p>
+                  </div>
+                )}
+                <input type="file" accept="image/*" className="hidden" onChange={(e) => { const file = e.target.files?.[0]; if (file) uploadOnboardingAvatar(file) }} />
+              </label>
+              {isUploadingOnboardingAvatar && <p className="text-sm text-pink-500 mb-4">Uploading...</p>}
+              <button
+                type="button"
+                onClick={() => setOnboardingStep(3)}
+                disabled={isUploadingOnboardingAvatar}
+                className="w-full rounded-2xl bg-gradient-to-r from-pink-500 to-rose-500 py-4 text-base font-bold text-white shadow-lg disabled:opacity-50 mb-3"
+              >
+                {onboardingAvatar ? 'Looking great! Continue →' : 'Continue →'}
+              </button>
+              <button type="button" onClick={() => setOnboardingStep(3)} className="text-sm text-gray-400">
+                Skip for now
+              </button>
+            </div>
+          )}
+
+          {onboardingStep === 3 && (
+            <div className="flex flex-1 flex-col items-center justify-center px-8 text-center">
+              <span className="text-6xl mb-6">👜</span>
+              <h2 className="text-2xl font-extrabold text-gray-900 mb-2">Add your first wrap</h2>
+              <p className="text-gray-500 text-sm mb-8 leading-relaxed">
+                Start building your collection. Add photos, details, and track every wrap you own.
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  localStorage.setItem('wrapapp_onboarded', '1')
+                  setShowOnboarding(false)
+                  openNewWrapModal()
+                }}
+                className="w-full rounded-2xl bg-gradient-to-r from-pink-500 to-rose-500 py-4 text-base font-bold text-white shadow-lg mb-3"
+              >
+                Add my first wrap 🎉
+              </button>
+              <button
+                type="button"
+                onClick={() => { localStorage.setItem('wrapapp_onboarded', '1'); setShowOnboarding(false) }}
+                className="text-sm text-gray-400"
+              >
+                I'll do this later
+              </button>
+            </div>
+          )}
+
+          <div className="flex justify-center gap-2 pb-12">
+            {[1, 2, 3].map((step) => (
+              <div key={step} className={`h-2 rounded-full transition-all duration-300 ${step === onboardingStep ? 'w-6 bg-pink-500' : 'w-2 bg-gray-200'}`} />
+            ))}
+          </div>
+        </div>
+      )}
+
     </AppLayout>
   )
 }

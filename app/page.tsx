@@ -86,6 +86,7 @@ export default function Home() {
     })
 
     router.replace('/dashboard')
+    
   }
 
   return (
