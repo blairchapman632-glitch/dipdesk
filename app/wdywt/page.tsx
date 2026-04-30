@@ -316,8 +316,8 @@ async function handleComment() {
 
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">WDYWT</h1>
-            <p className="text-sm text-gray-500">What did you wear today?</p>
+            <h1 className="text-lg font-bold text-gray-900">WDYWT</h1>
+            <p className="text-xs text-gray-400">What did you wear today?</p>
           </div>
           <button
             type="button"
@@ -360,7 +360,7 @@ async function handleComment() {
             {posts.map((post) => (
               <article
                 key={post.id}
-                className="overflow-hidden rounded-3xl border bg-white shadow-sm"
+                className="overflow-hidden rounded-2xl bg-white shadow-sm"
               >
                 <div className="flex items-center gap-3 p-4 pb-3">
                   <button
@@ -402,7 +402,7 @@ async function handleComment() {
                   )}
                 </div>
 
-                <div className="relative aspect-square w-full bg-gray-100">
+                <div className="relative aspect-[4/5] w-full bg-gray-100">
                   <img
                     src={post.photo_url}
                     alt={post.caption || 'WDYWT post'}
