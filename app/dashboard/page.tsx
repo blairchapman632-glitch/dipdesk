@@ -1528,21 +1528,21 @@ function exportReportCsv() {
 
         <div className="grid gap-4 xl:grid-cols-[3fr_1fr]">
                     <section
-            className={`order-2 rounded-3xl border bg-white p-2 shadow-sm xl:order-1 xl:p-5 ${
+            className={`order-2 rounded-3xl border-0 bg-transparent p-0 shadow-none xl:order-1 xl:rounded-3xl xl:border xl:bg-white xl:p-5 xl:shadow-sm ${
               mobileTab === 'activity' ? 'hidden xl:block' : 'block'
             }`}
           >
-<div className="mb-5 flex items-center justify-between gap-3">
-  <h2 className="text-2xl font-bold text-gray-900">
+<div className="mb-4 flex items-center justify-between gap-3 px-1">
+  <h2 className="text-xl font-bold text-gray-900">
     Your Collection
   </h2>
 
   <button
     type="button"
     onClick={openNewWrapModal}
-    className="shrink-0 cursor-pointer rounded-xl bg-gradient-to-r from-pink-500 to-rose-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:opacity-90"
+    className="shrink-0 cursor-pointer rounded-full bg-gradient-to-r from-pink-500 to-rose-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:opacity-90"
   >
-    Add Wrap
+    + Add Wrap
   </button>
 </div>
 
@@ -1559,7 +1559,7 @@ function exportReportCsv() {
                   Add your first wrap
                 </button>
               </div>
-            ) : (<div className="grid grid-cols-2 gap-1.5 sm:grid-cols-2 xl:grid-cols-3 xl:gap-4">
+            ) : (<div className="grid grid-cols-2 gap-3 sm:grid-cols-2 xl:grid-cols-3 xl:gap-4">
               
                 {collectionWraps.map((wrap) => {
                   const imageUrl = getPrimaryImage(wrap)
@@ -1569,9 +1569,9 @@ function exportReportCsv() {
                       key={wrap.id}
                       type="button"
                       onClick={() => openViewWrapModal(wrap)}
-                      className="group flex h-auto cursor-pointer flex-col overflow-hidden rounded-xl border bg-white p-0 text-left shadow-none transition duration-200 hover:-translate-y-1 hover:shadow-md xl:rounded-2xl xl:shadow-sm"
+                      className="group flex h-auto cursor-pointer flex-col overflow-hidden rounded-2xl border-0 bg-white p-0 text-left shadow-sm transition duration-200 hover:-translate-y-1 hover:shadow-lg"
                     >
-                      <div className="relative aspect-[3/4] w-full bg-gray-100 pointer-events-none">
+                      <div className="relative aspect-[4/5] w-full bg-gray-100 pointer-events-none">
                         <img
   src={imageUrl}
   loading="lazy"
@@ -1601,10 +1601,10 @@ function exportReportCsv() {
                         
                       </div>
 
-                      <div className="space-y-0.5 p-2 pointer-events-none xl:space-y-1 xl:p-5">
+                      <div className="space-y-0.5 p-3 pointer-events-none xl:space-y-1 xl:p-5">
   <h3 className="text-sm font-bold leading-tight text-gray-900 xl:text-base xl:leading-normal">{wrap.name}</h3>
-  <p className="text-xs leading-tight text-gray-600 xl:text-sm xl:leading-normal">
-    {wrap.brand || 'No brand added'}
+  <p className="text-xs leading-tight text-gray-500 xl:text-sm xl:leading-normal">
+    {wrap.brand || ''}
   </p>
 
                         {wrap.status === 'holiday' && wrap.on_loan_to && (
@@ -1619,8 +1619,8 @@ function exportReportCsv() {
               </div>
             )}
 
-            <div className="mt-8">
-              <h3 className="mb-3 text-lg font-bold text-gray-900">
+            <div className="mt-8 px-1">
+              <h3 className="mb-3 text-base font-bold text-gray-500 uppercase tracking-wide text-sm">
                 Departed Wraps
               </h3>
 
