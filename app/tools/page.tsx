@@ -275,6 +275,14 @@ export default function Page() {
             <span className="text-lg">🚪</span> Logout
           </button>
         </div>
+
+        <div className="flex justify-center gap-4 pt-2 pb-4">
+          <a href="/terms" className="text-xs text-gray-400 hover:text-pink-500">Terms</a>
+          <span className="text-xs text-gray-300">·</span>
+          <a href="/privacy" className="text-xs text-gray-400 hover:text-pink-500">Privacy</a>
+          <span className="text-xs text-gray-300">·</span>
+          <a href="/community" className="text-xs text-gray-400 hover:text-pink-500">Guidelines</a>
+        </div>
       </div>
 
       {/* Bio edit modal */}

@@ -1682,7 +1682,7 @@ function exportReportCsv() {
   alt={wrap.name}
   className="h-full w-full object-cover object-[center_20%] opacity-60 grayscale-[30%] transition duration-300 group-hover:opacity-80"
 />
-                        {wrap.for_sale && (
+                        {wrap.for_sale && wrap.status !== 'departed' && (
   <div className="absolute left-3 top-3 rounded-xl bg-white/90 px-2 py-1 text-xs font-semibold text-amber-700 shadow">
     🪓 For Sale
     {wrap.for_sale_price !== null && (
@@ -2929,13 +2929,15 @@ Record own currency for accurate reporting
   : 'Save Wrap'}
                 </button>
 
-                                <button
-                  type="button"
-                  disabled
-                  className="cursor-not-allowed rounded-xl border px-4 py-2 text-sm font-semibold text-gray-400 bg-gray-100"
-                >
-                  Create Dip
-                </button>
+                                {isAdmin && (
+                  <button
+                    type="button"
+                    onClick={createDipFromWrap}
+                    className="cursor-pointer rounded-xl border px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+                  >
+                    Create Dip
+                  </button>
+                )}
 
                 {wrapForm.id && wrapForm.status !== 'departed' && (
                   <button

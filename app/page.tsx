@@ -180,7 +180,13 @@ export default function Home() {
 
                             <div className="mt-6 pt-4 border-t border-gray-200 text-center text-[11px] leading-5 text-gray-600">
                 <p>© 2026 Paige Chapman. All rights reserved.</p>
-                <p>Internal use only. Unauthorised access prohibited.</p>
+                <div className="mt-2 flex justify-center gap-3">
+                  <a href="/terms" className="text-pink-500 hover:underline">Terms</a>
+                  <span>·</span>
+                  <a href="/privacy" className="text-pink-500 hover:underline">Privacy</a>
+                  <span>·</span>
+                  <a href="/community" className="text-pink-500 hover:underline">Guidelines</a>
+                </div>
               </div>
               </div>
             </div>
