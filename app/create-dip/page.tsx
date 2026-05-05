@@ -335,6 +335,14 @@ Thank you all so much! Drawing soon! 🎲`
           <div className="space-y-4">
 
             {/* Inputs */}
+            <div className="rounded-2xl bg-gradient-to-r from-pink-50 to-rose-50 border border-pink-100 p-4 flex gap-3 items-start">
+                <span className="text-2xl">🎲</span>
+                <div>
+                  <p className="text-sm font-bold text-pink-700 mb-0.5">What is a Dip?</p>
+                  <p className="text-xs text-pink-600 leading-relaxed">A dip is a random number draw used in wrap Facebook groups to sell wraps fairly. WrapApp helps you manage your dip — track spots, run the draw, and share results. Payments and posts still happen through your Facebook group.</p>
+                </div>
+              </div>
+
             <div className="rounded-2xl border bg-white p-5 shadow-sm space-y-4">
               <h2 className="font-bold text-gray-900">Dip Calculator</h2>
               <p className="text-xs text-gray-500">Enter your wrap value and ticket price to get suggested pricing.</p>
