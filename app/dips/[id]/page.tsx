@@ -803,12 +803,12 @@ Thank you all so much! Drawing soon! 🎲`
     queue: {
       title: '⏳ In Queue',
       instruction: 'Tag Chasing Unicorn Admins on your interest post requesting to go live. Once approved, create a NEW post (not an edit) with the queue post below to let players know the dip is coming.',
-      tip: 'It normally takes 4-7 days to go live. Don\'t message admins unless it\'s been 2+ weeks.',
+      tip: 'It normally takes a few days to go live. Check your group rules for queue timeframes.',
       postKey: 'queue',
       postLabel: 'Copy Queue Post',
       postText: buildQueuePost,
       checklist: [
-        'Tag CU Admins page on your interest post',
+        'Tag the group admins on your interest post',
         'Post in-queue post with #newinqueue',
         'Wait for admin approval',
         'Add Google Sheet link in Settings before going live',
@@ -846,14 +846,14 @@ Thank you all so much! Drawing soon! 🎲`
     closed: {
       title: '🔒 Closed',
       instruction: 'All spots are filled! Post the closed post and tag CU Admins to request your draw. Verify all payments before requesting.',
-      tip: 'Tag the CU Admins page to request draw — don\'t PM individual admins. Don\'t ask if it\'s been less than 24hrs.',
+      tip: 'Tag the group admins to request your draw — check your group rules for how to do this.',
       postKey: 'closed',
       postLabel: 'Copy Closed Post',
       postText: buildClosedPost,
       checklist: [
         'Post closed post',
         'Verify ALL payments received',
-        'Tag CU Admins page to request draw',
+        'Tag the group admins to request draw',
         'Record winning number below once drawn',
       ],
     },
@@ -1306,7 +1306,7 @@ Thank you all so much! Drawing soon! 🎲`
                     ) : (
                     <>
                     <div className="rounded-xl bg-amber-50 border border-amber-100 px-4 py-3 text-xs text-amber-800">
-                      ⚠️ Per CU rules — send game results to CU Admins before posting publicly. No cash/PayPal prizes allowed.
+                      ⚠️ Per group rules — send game results to admins before posting publicly. No cash/PayPal prizes allowed.
                     </div>
 
                     {/* Slot count */}
@@ -1500,14 +1500,24 @@ Thank you all so much! Drawing soon! 🎲`
             {/* Google sheet — show on queue/live */}
             {(dip.stage === 'queue' || dip.stage === 'live') && (
               <div className="rounded-2xl border bg-white p-5 shadow-sm space-y-3">
-                <h3 className="font-bold text-gray-900">Google Sheet Link</h3>
+                <div className="flex items-center justify-between">
+                  <h3 className="font-bold text-gray-900">Google Sheet Link</h3>
+                  {googleSheetLink && (
+                    <a href={googleSheetLink} target="_blank" rel="noopener noreferrer" className="text-xs text-pink-500 underline">Open ↗</a>
+                  )}
+                </div>
+                {googleSheetLink && (
+                  <div className="rounded-xl bg-green-50 border border-green-200 px-3 py-2">
+                    <p className="text-xs font-semibold text-green-700 truncate">{googleSheetLink}</p>
+                  </div>
+                )}
                 <div className="flex gap-2">
                   <input
                     type="url"
                     value={googleSheetLink}
                     onChange={(e) => setGoogleSheetLink(e.target.value)}
                     placeholder="https://docs.google.com/..."
-                    className="flex-1 rounded-xl border px-3 py-2.5 text-sm outline-none focus:border-pink-500"
+                    className="flex-1 rounded-xl border px-3 py-2.5 text-sm outline-none focus:border-pink-500 text-gray-900"
                   />
                   <button
                     type="button"

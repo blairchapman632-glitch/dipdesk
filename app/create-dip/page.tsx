@@ -635,7 +635,7 @@ Thank you all so much! Drawing soon! 🎲`
                 <div className="col-span-2">
                   <label className="mb-1 block text-sm font-medium text-gray-700">Babywearing Feedback Hub Link</label>
                   <input value={feedbackHubLink} onChange={(e) => setFeedbackHubLink(e.target.value)} placeholder="https://..." className="w-full rounded-xl border px-3 py-2.5 text-base outline-none focus:border-pink-500" />
-                  <p className="mt-1 text-xs text-gray-400">Required by CU rules. Saved to your profile for future dips.</p>
+                  <p className="mt-1 text-xs text-gray-400">Required by most group rules. Saved to your profile for future dips.</p>
                 </div>
               </div>
 
