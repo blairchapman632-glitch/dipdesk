@@ -731,7 +731,7 @@ Feedback Hub: ${dip.feedback_hub_link || '[add Feedback Hub link]'}${likerTags ?
   function buildPaymentPost() {
     if (!dip) return ''
     const unpaidNames = [...new Set(unpaidSpots.map(s => s.player_name).filter(Boolean))]
-    const tagList = unpaidNames.map(n => `@${n.split(' ')[0]}`).join('\n')
+    const tagList = unpaidNames.map(n => `@${n!.split(' ')[0]}`).join('\n')
     return `#fullandcollectingpayments
 
 💸 Payments are now open! 💸
