@@ -62,6 +62,7 @@ type Dip = {
   stage: string | null
   status: string | null
   wrap_id: string | null
+  archived: boolean | null
 }
 
 type WrapFormImage = {
@@ -424,7 +425,7 @@ if (profileData) {
   supabase
     .from('dips')
     .select(
-      'id, title, brand, wrap_name, total_spots, price_per_spot, current_likes, likes_required, stage, status, wrap_id'
+      'id, title, brand, wrap_name, total_spots, price_per_spot, current_likes, likes_required, stage, status, wrap_id, archived'
     )
     .eq('user_id', user.id)
     .order('created_at', { ascending: false }),
@@ -455,6 +456,7 @@ if (profileData) {
 ])
 
     if (!dipError && dipData) {
+      localStorage.removeItem(DASHBOARD_DIPS_KEY)
       setDips(dipData)
       localStorage.setItem(DASHBOARD_DIPS_KEY, JSON.stringify(dipData))
     }
@@ -583,7 +585,8 @@ if (!notificationError && notificationData) {
 
     if (cachedDips) {
       try {
-        setDips(JSON.parse(cachedDips))
+        const parsed = JSON.parse(cachedDips)
+        setDips(parsed.filter((d: Dip) => !d.archived))
       } catch {
         localStorage.removeItem(DASHBOARD_DIPS_KEY)
       }
@@ -1750,6 +1753,44 @@ function exportReportCsv() {
             </div>
 
                        <div className="space-y-2 xl:space-y-3">
+              {dips.filter(d => !d.archived).map((dip) => {
+                const linkedWrap = dip.wrap_id ? wrapsById[dip.wrap_id] : undefined
+                const imageUrl = getPrimaryImage(linkedWrap)
+                const progress = getDipProgress(dip)
+
+                return (
+                  <button
+                    key={dip.id}
+                    type="button"
+                    onClick={() => router.push(`/dips/${dip.id}`)}
+                    className="w-full cursor-pointer rounded-2xl border-2 border-purple-200 bg-purple-50 p-3 text-left shadow-sm transition hover:shadow-md"
+                  >
+                    <div className="flex items-center justify-between gap-3 pointer-events-none">
+                      <img
+                        src={imageUrl}
+                        alt={dip.title}
+                        className="h-12 w-12 shrink-0 rounded-xl object-cover object-[center_30%]"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className="mb-1 text-xs font-bold text-purple-500 uppercase tracking-wide">🎲 My Dip</p>
+                        <div className="flex items-start justify-between gap-2">
+                          <h3 className="truncate text-sm font-bold text-gray-900">{dip.title}</h3>
+                          <span className="rounded-full bg-pink-50 px-2 py-0.5 text-[10px] font-semibold text-pink-600">
+                            {getStageLabel(dip.stage, dip.status)}
+                          </span>
+                        </div>
+                        <p className="mt-0.5 truncate text-[11px] text-gray-500">
+                          {dip.total_spots} spots • ${dip.price_per_spot} per spot
+                        </p>
+                        <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-gray-200">
+                          <div className="h-full bg-gradient-to-r from-pink-500 to-rose-500" style={{ width: `${progress}%` }} />
+                        </div>
+                      </div>
+                    </div>
+                  </button>
+                )
+              })}
+
               {notifications.map((notification) => {
                 const wrap = notification.wrap
                 const wrapName = wrap?.name || 'Wrap'
@@ -1812,56 +1853,6 @@ function exportReportCsv() {
                           <span className="truncate">{meta}</span>
                           <span>•</span>
                           <span>{formatTimeAgo(notification.created_at)}</span>
-                        </div>
-                      </div>
-                    </div>
-                  </button>
-                )
-              })}
-
-              {dips.map((dip) => {
-                const linkedWrap = dip.wrap_id ? wrapsById[dip.wrap_id] : undefined
-                const imageUrl = getPrimaryImage(linkedWrap)
-                const progress = getDipProgress(dip)
-
-                return (
-                  <button
-                    key={dip.id}
-                    type="button"
-                    onClick={() => router.push(`/dips/${dip.id}`)}
-                    className="w-full cursor-pointer rounded-2xl border bg-white p-3 text-left shadow-sm transition hover:shadow-md"
-                  >
-                    <div className="flex items-center justify-between gap-3 pointer-events-none">
-                      <img
-                        src={imageUrl}
-                        alt={dip.title}
-                        className="h-12 w-12 shrink-0 rounded-xl object-cover object-[center_30%]"
-                      />
-
-                      <div className="min-w-0 flex-1">
-                        <p className="mb-0.5 text-[10px] font-semibold text-gray-400">
-                          MY DIP
-                        </p>
-
-                        <div className="flex items-start justify-between gap-2">
-                          <h3 className="truncate text-sm font-bold text-gray-900">
-                            {dip.title}
-                          </h3>
-
-                          <span className="rounded-full bg-pink-50 px-2 py-0.5 text-[10px] font-semibold text-pink-600">
-                            {getStageLabel(dip.stage, dip.status)}
-                          </span>
-                        </div>
-
-                        <p className="mt-0.5 truncate text-[11px] text-gray-500">
-                          {dip.total_spots} spots • {formatCurrency(dip.price_per_spot, 'AUD')} per spot
-                        </p>
-
-                        <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-gray-200">
-                          <div
-                            className="h-full bg-gradient-to-r from-pink-500 to-rose-500"
-                            style={{ width: `${progress}%` }}
-                          />
                         </div>
                       </div>
                     </div>
@@ -1940,16 +1931,31 @@ function exportReportCsv() {
 
         <div className="flex items-center gap-2">
           {!isReadOnlyWrapView && (
-            <button
-              type="button"
-              onClick={() => {
-                closeViewWrapModal()
-                openEditWrapModal(selectedWrap)
-              }}
-              className="cursor-pointer rounded-xl border px-3 py-1 text-sm font-semibold text-gray-700"
-            >
-              Edit
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  closeViewWrapModal()
+                  openEditWrapModal(selectedWrap)
+                }}
+                className="cursor-pointer rounded-xl border px-3 py-1 text-sm font-semibold text-gray-700"
+              >
+                Edit
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const params = new URLSearchParams()
+                  params.set('wrapId', selectedWrap.id)
+                  params.set('wrapName', selectedWrap.name)
+                  if (selectedWrap.brand) params.set('brand', selectedWrap.brand)
+                  router.push(`/create-dip?${params.toString()}`)
+                }}
+                className="cursor-pointer rounded-xl bg-gradient-to-r from-pink-500 to-rose-500 px-3 py-1 text-sm font-semibold text-white"
+              >
+                + Dip
+              </button>
+            </div>
           )}
 
           <button
@@ -2929,15 +2935,13 @@ Record own currency for accurate reporting
   : 'Save Wrap'}
                 </button>
 
-                                {isAdmin && (
-                  <button
-                    type="button"
-                    onClick={createDipFromWrap}
-                    className="cursor-pointer rounded-xl border px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
-                  >
-                    Create Dip
-                  </button>
-                )}
+                                <button
+                  type="button"
+                  onClick={createDipFromWrap}
+                  className="cursor-pointer rounded-xl border px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+                >
+                  Create Dip
+                </button>
 
                 {wrapForm.id && wrapForm.status !== 'departed' && (
                   <button

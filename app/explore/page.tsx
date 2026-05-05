@@ -2,7 +2,7 @@
 
 import AppLayout from '@/app/components/AppLayout'
 import { supabase } from '@/lib/supabase'
-import { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 
 type WrapImage = {
@@ -154,6 +154,16 @@ export default function Page() {
     setSelectedWrap(wrap)
     setSelectedViewImage(primaryImage)
     setIsViewWrapModalOpen(true)
+
+    const { data: dipData, error: dipError } = await supabase
+      .from('dips')
+      .select('id, wrap_id, total_spots, price_per_spot, stage')
+      .eq('user_id', wrap.user_id)
+      .eq('wrap_id', wrap.id)
+      .not('stage', 'in', '("drawn")')
+      .eq('archived', false)
+    
+    setActiveDips((dipData as any[]) || [])
 
     // Show cached social counts instantly
     const cachedSocial = localStorage.getItem(`dipdesk_social_${wrap.id}`)
@@ -349,6 +359,9 @@ const [hasWishlistedSelectedWrap, setHasWishlistedSelectedWrap] = useState(false
 const [socialLoading, setSocialLoading] = useState(false)
 const [currentUserId, setCurrentUserId] = useState<string | null>(null)
 const [toastMessage, setToastMessage] = useState('')
+const [activeDips, setActiveDips] = useState<{id: string, wrap_id: string | null, total_spots: number, price_per_spot: number, stage: string | null}[]>([])
+const [allActiveDips, setAllActiveDips] = useState<{id: string, wrap_id: string | null, total_spots: number, price_per_spot: number, stage: string | null}[]>([])
+const allActiveDipsRef = React.useRef<string[]>([])
 
   useEffect(() => {
   const cachedWraps = localStorage.getItem(EXPLORE_WRAPS_KEY)
@@ -387,7 +400,17 @@ const [toastMessage, setToastMessage] = useState('')
       setAvatarMap(JSON.parse(cachedAvatars))
     } catch {}
   }
-
+async function loadActiveDips() {
+      const { data } = await supabase
+        .from('dips')
+        .select('id, wrap_id, total_spots, price_per_spot, stage')
+        .not('stage', 'in', '("drawn")')
+        .eq('archived', false)
+      const dips = (data as any[]) || []
+      setAllActiveDips(dips)
+      allActiveDipsRef.current = dips.map((d: any) => d.wrap_id).filter(Boolean)
+    }
+    loadActiveDips()
     async function loadExploreData() {
   const {
     data: { user },
@@ -682,11 +705,14 @@ const filteredUsers =
     ? []
     : baseUsers
 
+const activeDipWrapIds = new Set(allActiveDips.map(d => d.wrap_id).filter(Boolean))
 const filteredWraps = (
   resultType === 'users'
     ? []
     : resultType === 'for-sale'
-    ? baseWraps.filter((wrap) => wrap.for_sale)
+    ? baseWraps.filter((wrap) => wrap.for_sale || activeDipWrapIds.has(wrap.id))
+    : (resultType as any) === 'dipping'
+    ? baseWraps.filter((wrap) => activeDipWrapIds.has(wrap.id))
     : baseWraps
 ).filter((wrap) => {
   if (filterBrand && (wrap.brand || '').toLowerCase() !== filterBrand.toLowerCase()) return false
@@ -732,11 +758,11 @@ const filteredWraps = (
             />
           </div>
 
-          <div className="mt-3 flex gap-2 overflow-x-auto">
+          <div className="mt-3 flex gap-1.5 overflow-x-auto pb-1 scrollbar-none">
             <button
               type="button"
               onClick={() => setResultType('all')}
-              className={`whitespace-nowrap rounded-full border px-3 py-1 text-sm font-semibold ${
+              className={`whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-semibold ${
                 resultType === 'all'
                   ? 'border-pink-500 bg-pink-500 text-white'
                   : 'border-gray-200 bg-white text-gray-600'
@@ -748,7 +774,7 @@ const filteredWraps = (
             <button
               type="button"
               onClick={() => setResultType('wraps')}
-              className={`whitespace-nowrap rounded-full border px-3 py-1 text-sm font-semibold ${
+              className={`whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-semibold ${
                 resultType === 'wraps'
                   ? 'border-pink-500 bg-pink-500 text-white'
                   : 'border-gray-200 bg-white text-gray-600'
@@ -760,7 +786,7 @@ const filteredWraps = (
             <button
               type="button"
               onClick={() => setResultType('users')}
-              className={`whitespace-nowrap rounded-full border px-3 py-1 text-sm font-semibold ${
+              className={`whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-semibold ${
                 resultType === 'users'
                   ? 'border-pink-500 bg-pink-500 text-white'
                   : 'border-gray-200 bg-white text-gray-600'
@@ -772,13 +798,24 @@ const filteredWraps = (
             <button
               type="button"
               onClick={() => setResultType('for-sale')}
-              className={`whitespace-nowrap rounded-full border px-3 py-1 text-sm font-semibold ${
+              className={`whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-semibold ${
                 resultType === 'for-sale'
                   ? 'border-pink-500 bg-pink-500 text-white'
                   : 'border-gray-200 bg-white text-gray-600'
               }`}
             >
               For Sale
+            </button>
+            <button
+              type="button"
+              onClick={() => setResultType('dipping' as any)}
+              className={`whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-semibold ${
+                resultType === ('dipping' as any)
+                  ? 'border-purple-500 bg-purple-500 text-white'
+                  : 'border-gray-200 bg-white text-gray-600'
+              }`}
+            >
+              🎲 Dipping
             </button>
           </div>
 
@@ -1014,6 +1051,11 @@ setTimeout(() => setToastMessage(''), 2000)
                         🪓 For Sale
                       </div>
                     )}
+                    {!wrap.for_sale && activeDipWrapIds.has(wrap.id) && (
+                      <div className="absolute left-2 top-2 rounded-lg bg-purple-500/90 px-2 py-1 text-[10px] font-semibold text-white shadow pointer-events-none">
+                        🎲 Dipping
+                      </div>
+                    )}
 
                     
                   </div>
@@ -1171,6 +1213,19 @@ setTimeout(() => setToastMessage(''), 2000)
                   </div>
                 )}
 
+                {(() => {
+                  const dip = activeDips.find(d => d.wrap_id === selectedWrap.id)
+                  if (!dip) return null
+                  const stageLabel: Record<string, string> = { interest: 'Interest', queue: 'In Queue', live: 'Live 🔥', payments: 'Collecting Payments', closed: 'Closed' }
+                  return (
+                    <div className="mb-5 rounded-2xl bg-purple-50 border border-purple-200 p-4 space-y-2">
+                      <p className="text-sm font-bold text-purple-700">🎲 Currently being dipped on Chasing Unicorns!</p>
+                      <p className="text-xs text-purple-600">{dip.total_spots} spots @ ${dip.price_per_spot} USD each</p>
+                      <p className="text-xs text-purple-600">Stage: {stageLabel[dip.stage || ''] || dip.stage}</p>
+                      <p className="text-xs text-gray-600 mt-1">Head to the <span className="font-semibold">Chasing Unicorns Facebook page</span> to claim your spot!</p>
+                    </div>
+                  )
+                })()}
                 <div className="grid gap-5 md:grid-cols-2">
                   <div className="rounded-2xl border bg-white p-5 shadow-sm">
                     <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-400">

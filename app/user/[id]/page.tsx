@@ -116,6 +116,7 @@ export default function UserCollectionPage() {
   const [hasLikedSelectedWrap, setHasLikedSelectedWrap] = useState(false)
   const [hasWishlistedSelectedWrap, setHasWishlistedSelectedWrap] = useState(false)
   const [socialLoading, setSocialLoading] = useState(false)
+  const [activeDips, setActiveDips] = useState<{id: string, title: string, wrap_id: string | null, total_spots: number, price_per_spot: number, stage: string | null, wrap_name: string | null, brand: string | null}[]>([])
 
   // WDYWT post modal
   const [selectedPost, setSelectedPost] = useState<WDYWTPost | null>(null)
@@ -184,7 +185,13 @@ export default function UserCollectionPage() {
         setWdywtLoaded(true)
         localStorage.setItem(`dipdesk_user_wdywt_${userId}`, JSON.stringify(wdywtData))
       }
-
+const { data: dipData } = await supabase
+        .from('dips')
+        .select('id, title, wrap_id, total_spots, price_per_spot, stage, wrap_name, brand')
+        .eq('user_id', userId)
+        .not('stage', 'in', '("drawn")')
+        .eq('archived', false)
+      setActiveDips((dipData as any[]) || [])
       setProfile(profileData || null)
       const avatarUrl = (profileData as any)?.avatar_url || null
       setProfileAvatar(avatarUrl)
@@ -608,7 +615,19 @@ export default function UserCollectionPage() {
                     ))}
                   </div>
                 )}
-
+{(() => {
+                  const dip = activeDips.find(d => d.wrap_id === selectedWrap.id)
+                  if (!dip) return null
+                  const stageLabel: Record<string, string> = { interest: 'Interest', queue: 'In Queue', live: 'Live 🔥', payments: 'Collecting Payments', closed: 'Closed' }
+                  return (
+                    <div className="mb-5 rounded-2xl bg-purple-50 border border-purple-200 p-4 space-y-2">
+                      <p className="text-sm font-bold text-purple-700">🎲 Currently being dipped on Chasing Unicorns!</p>
+                      <p className="text-xs text-purple-600">{dip.total_spots} spots @ ${dip.price_per_spot} USD each</p>
+                      <p className="text-xs text-purple-600">Stage: {stageLabel[dip.stage || ''] || dip.stage}</p>
+                      <p className="text-xs text-gray-600 mt-1">Head to the <span className="font-semibold">Chasing Unicorns Facebook page</span> to claim your spot!</p>
+                    </div>
+                  )
+                })()}
                 <div className="grid gap-5 md:grid-cols-2">
                   <div className="rounded-2xl border bg-white p-5 shadow-sm">
                     <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-400">Wrap Details</h3>

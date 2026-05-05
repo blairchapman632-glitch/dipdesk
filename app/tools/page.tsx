@@ -23,6 +23,10 @@ export default function Page() {
   const [wrapCount, setWrapCount] = useState<number | null>(null)
   const [followerCount, setFollowerCount] = useState<number | null>(null)
   const [followingCount, setFollowingCount] = useState<number | null>(null)
+  const [feedbackHubLink, setFeedbackHubLink] = useState('')
+  const [showFeedbackHubEdit, setShowFeedbackHubEdit] = useState(false)
+  const [savingFeedbackHub, setSavingFeedbackHub] = useState(false)
+  const [archivedDips, setArchivedDips] = useState<any[]>([])
 
   const isAdmin =
     typeof window !== 'undefined' &&
@@ -52,7 +56,7 @@ export default function Page() {
       ] = await Promise.all([
         supabase
           .from('profiles')
-          .select('full_name, username, avatar_url, bio')
+          .select('full_name, username, avatar_url, bio, feedback_hub_link')
           .eq('id', user.id)
           .single(),
         supabase
@@ -71,7 +75,13 @@ export default function Page() {
           .eq('follower_id', user.id)
           .eq('status', 'accepted'),
       ])
-
+const { data: dipHistory } = await supabase
+        .from('dips')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('archived', true)
+        .order('drawn_at', { ascending: false })
+      setArchivedDips(dipHistory || [])
       if (profileData) {
         const data = profileData as any
         setBio(data.bio || '')
@@ -235,6 +245,15 @@ export default function Page() {
         <div className="rounded-2xl border bg-white shadow-sm overflow-hidden">
           <button
             type="button"
+            onClick={() => setShowFeedbackHubEdit(true)}
+            className="w-full flex items-center gap-3 px-4 py-3.5 text-left text-sm font-semibold text-gray-700 hover:bg-gray-50 border-b"
+          >
+            <span className="text-lg">🔗</span> Babywearing Feedback Hub
+            {feedbackHubLink && <span className="ml-auto text-xs text-gray-400 truncate max-w-[120px]">{feedbackHubLink}</span>}
+          </button>
+
+          <button
+            type="button"
             onClick={() => router.push('/wishlist')}
             className="w-full flex items-center gap-3 px-4 py-3.5 text-left text-sm font-semibold text-gray-700 hover:bg-gray-50 border-b"
           >
@@ -275,7 +294,79 @@ export default function Page() {
             <span className="text-lg">🚪</span> Logout
           </button>
         </div>
-
+{/* Dip History */}
+        <div className="rounded-2xl border bg-white shadow-sm overflow-hidden">
+          <div className="px-4 py-3 border-b">
+            <h2 className="font-bold text-gray-900">🎲 Dip History</h2>
+            <p className="text-xs text-gray-500 mt-0.5">Your completed and archived dips</p>
+          </div>
+          {archivedDips.length === 0 ? (
+            <div className="p-6 text-center text-sm text-gray-500">
+              No archived dips yet — complete a drawn dip to see it here.
+            </div>
+          ) : (
+            <div className="divide-y">
+              {archivedDips.map((dip) => {
+                const totalRaised = dip.total_raised || dip.total_spots * dip.price_per_spot
+                const drawnDate = dip.drawn_at ? new Date(dip.drawn_at).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'
+                return (
+                  <div key={dip.id} className="p-4 space-y-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <p className="font-bold text-gray-900 text-sm">{dip.title}</p>
+                        <p className="text-xs text-gray-500">{drawnDate}</p>
+                      </div>
+                      <div className="flex flex-col items-end gap-1">
+                        <span className="rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-semibold text-green-700">Archived</span>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            if (!confirm('Unarchive this dip? It will return to your active dips.')) return
+                            await supabase.from('dips').update({ archived: false }).eq('id', dip.id)
+                            setArchivedDips(prev => prev.filter(d => d.id !== dip.id))
+                          }}
+                          className="text-[10px] text-gray-400 underline"
+                        >
+                          Unarchive
+                        </button>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div className="rounded-xl bg-gray-50 px-3 py-2">
+                        <p className="text-gray-400">Winner</p>
+                        <p className="font-semibold text-gray-900">{dip.winner_name || '—'} {dip.winning_number ? `(#${dip.winning_number})` : ''}</p>
+                      </div>
+                      <div className="rounded-xl bg-gray-50 px-3 py-2">
+                        <p className="text-gray-400">Total raised</p>
+                        <p className="font-semibold text-gray-900">${totalRaised} USD</p>
+                      </div>
+                      <div className="rounded-xl bg-gray-50 px-3 py-2">
+                        <p className="text-gray-400">Spots</p>
+                        <p className="font-semibold text-gray-900">{dip.total_spots} @ ${dip.price_per_spot}</p>
+                      </div>
+                      <div className="rounded-xl bg-gray-50 px-3 py-2">
+                        <p className="text-gray-400">Condition</p>
+                        <p className="font-semibold text-gray-900">{dip.wrap_condition || '—'}</p>
+                      </div>
+                      {dip.wrap_size && (
+                        <div className="rounded-xl bg-gray-50 px-3 py-2">
+                          <p className="text-gray-400">Size</p>
+                          <p className="font-semibold text-gray-900">{dip.wrap_size}</p>
+                        </div>
+                      )}
+                      {dip.wrap_blend && (
+                        <div className="rounded-xl bg-gray-50 px-3 py-2 col-span-2">
+                          <p className="text-gray-400">Blend</p>
+                          <p className="font-semibold text-gray-900">{dip.wrap_blend}</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
         <div className="flex justify-center gap-4 pt-2 pb-4">
           <a href="/terms" className="text-xs text-gray-400 hover:text-pink-500">Terms</a>
           <span className="text-xs text-gray-300">·</span>
@@ -284,7 +375,50 @@ export default function Page() {
           <a href="/community" className="text-xs text-gray-400 hover:text-pink-500">Guidelines</a>
         </div>
       </div>
-
+{/* Feedback Hub modal */}
+      {showFeedbackHubEdit && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setShowFeedbackHubEdit(false)}>
+          <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-lg font-bold text-gray-900 mb-1">Babywearing Feedback Hub</h2>
+            <p className="text-sm text-gray-500 mb-4">Required by CU rules. Saved to your profile and used in all your dip posts.</p>
+            <input
+              type="url"
+              value={feedbackHubLink}
+              onChange={(e) => setFeedbackHubLink(e.target.value)}
+              placeholder="https://..."
+              className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-gray-700 outline-none focus:border-pink-300"
+            />
+            <button
+              type="button"
+              disabled={savingFeedbackHub}
+              onClick={async () => {
+                if (!currentUserId) return
+                setSavingFeedbackHub(true)
+                await supabase.from('profiles').update({ feedback_hub_link: feedbackHubLink.trim() || null } as any).eq('id', currentUserId)
+                const cached = localStorage.getItem(DASHBOARD_PROFILE_KEY)
+                if (cached) {
+                  try {
+                    const p = JSON.parse(cached)
+                    localStorage.setItem(DASHBOARD_PROFILE_KEY, JSON.stringify({ ...p, feedback_hub_link: feedbackHubLink.trim() || null }))
+                  } catch {}
+                }
+                setSavingFeedbackHub(false)
+                setShowFeedbackHubEdit(false)
+              }}
+              className="mt-4 w-full rounded-xl bg-gradient-to-r from-pink-500 to-rose-500 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
+            >
+              {savingFeedbackHub ? 'Saving...' : 'Save Link'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowFeedbackHubEdit(false)}
+              className="mt-2 w-full rounded-xl border px-4 py-2 text-sm font-semibold text-gray-600"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
       {/* Bio edit modal */}
       {showBioEdit && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setShowBioEdit(false)}>
