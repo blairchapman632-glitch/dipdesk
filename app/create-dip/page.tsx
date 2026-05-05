@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Suspense } from 'react'
 
-type Step = 'calculator' | 'setup' | 'confirm'
+type Step = 'calculator' | 'setup' | 'confirm' | 'posts'
 
 const WRAP_EMOJIS = [
   '💕','🌸','🍀','🩵','🌈','🎀','🍎','🌻','🩷','🦋',
