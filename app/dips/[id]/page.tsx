@@ -570,7 +570,7 @@ Each claim must be a NEW comment (not a reply!)`
   }
   function buildGamePost() {
     if (!dip || selectedEmojis.length === 0) return ''
-    const suggested = getSuggestedGamePrices(dip.price_per_spot)
+    const suggested = getSuggestedGamePrices(dip.price_per_spot, selectedEmojis.length)
     const resolvedSlots = Number(customGameSlots) > 0 ? Number(customGameSlots) : gameSlots
     const avgPrice = Math.round(
       selectedEmojis.map((_, i) => {
