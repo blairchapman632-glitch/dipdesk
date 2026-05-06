@@ -1395,6 +1395,18 @@ const uploadedImages = savedImages.map((image, index) => ({
             type: 'for_sale' as const,
           }))
         )
+
+        // Push notification to wishlist users
+        fetch('/api/push', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            user_ids: recipientIds,
+            title: '🛍️ Wrap for sale!',
+            body: `${wrapForm.name} is now for sale`,
+            url: '/explore',
+          }),
+        }).catch(() => {})
       }
     }
 

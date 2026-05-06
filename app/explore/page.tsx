@@ -246,6 +246,17 @@ export default function Page() {
           type: 'like',
           read_at: null,
         })
+
+        fetch('/api/push', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            user_ids: [selectedWrap.user_id],
+            title: '❤️ Someone liked your wrap',
+            body: selectedWrap.name,
+            url: '/dashboard',
+          }),
+        }).catch(() => {})
       }
     }
 
@@ -307,6 +318,17 @@ export default function Page() {
           type: 'wishlist',
           read_at: null,
         })
+
+        fetch('/api/push', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            user_ids: [selectedWrap.user_id],
+            title: '⭐ Someone wishlisted your wrap',
+            body: selectedWrap.name,
+            url: '/dashboard',
+          }),
+        }).catch(() => {})
       }
     }
 
