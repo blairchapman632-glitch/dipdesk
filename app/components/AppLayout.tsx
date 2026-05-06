@@ -197,6 +197,36 @@ const cachedUnread = localStorage.getItem('dipdesk_unread_count')
   }, [showSplash])
 
   const [showInstallBanner, setShowInstallBanner] = useState(false)
+
+  useEffect(() => {
+    async function subscribeToPush() {
+      if (!('serviceWorker' in navigator) || !('PushManager' in window)) return
+      if (Notification.permission === 'denied') return
+
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+
+      const registration = await navigator.serviceWorker.ready
+
+      let subscription = await registration.pushManager.getSubscription()
+
+      if (!subscription) {
+        subscription = await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY,
+        })
+      }
+
+      await supabase
+        .from('push_subscriptions')
+        .upsert(
+          { user_id: user.id, subscription: subscription.toJSON() },
+          { onConflict: 'user_id' }
+        )
+    }
+
+    subscribeToPush()
+  }, [])
   const [installPrompt, setInstallPrompt] = useState<any>(null)
   const [isIOS, setIsIOS] = useState(false)
   const [isIOSChrome, setIsIOSChrome] = useState(false)

@@ -98,3 +98,36 @@ define(['./workbox-e43f5367'], (function (workbox) { 'use strict';
   }), 'GET');
 
 }));
+self.addEventListener('push', function(event) {
+  if (!event.data) return
+
+  const data = event.data.json()
+
+  event.waitUntil(
+    self.registration.showNotification(data.title, {
+      body: data.body,
+      icon: '/icon-512.png',
+      badge: '/icon-192.png',
+      data: { url: data.url || '/dashboard' },
+    })
+  )
+})
+
+self.addEventListener('notificationclick', function(event) {
+  event.notification.close()
+
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function(clientList) {
+      for (const client of clientList) {
+        if (client.url.includes(self.location.origin) && 'focus' in client) {
+          client.focus()
+          client.navigate(event.notification.data.url)
+          return
+        }
+      }
+      if (clients.openWindow) {
+        return clients.openWindow(event.notification.data.url)
+      }
+    })
+  )
+})
