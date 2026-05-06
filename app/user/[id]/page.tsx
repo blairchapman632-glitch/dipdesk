@@ -296,7 +296,21 @@ const { data: dipData } = await supabase
       if (!error) { setHasLikedSelectedWrap(false); setSelectedWrapCounts(prev => ({ ...prev, likes: Math.max(0, prev.likes - 1) })) }
     } else {
       const { error } = await supabase.from('wrap_likes').insert({ wrap_id: selectedWrap.id, user_id: currentUserId })
-      if (!error) { setHasLikedSelectedWrap(true); setSelectedWrapCounts(prev => ({ ...prev, likes: prev.likes + 1 })); await supabase.from('notifications').insert({ recipient_user_id: userId, actor_user_id: currentUserId, wrap_id: selectedWrap.id, type: 'like' }) }
+      if (!error) {
+        setHasLikedSelectedWrap(true)
+        setSelectedWrapCounts(prev => ({ ...prev, likes: prev.likes + 1 }))
+        await supabase.from('notifications').insert({ recipient_user_id: userId, actor_user_id: currentUserId, wrap_id: selectedWrap.id, type: 'like' })
+        fetch('/api/push', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            user_ids: [userId],
+            title: '❤️ Someone liked your wrap',
+            body: selectedWrap.name,
+            url: '/dashboard',
+          }),
+        }).catch(() => {})
+      }
     }
     setSocialLoading(false)
   }
@@ -309,7 +323,21 @@ const { data: dipData } = await supabase
       if (!error) { setHasWishlistedSelectedWrap(false); setSelectedWrapCounts(prev => ({ ...prev, wishlists: Math.max(0, prev.wishlists - 1) })) }
     } else {
       const { error } = await supabase.from('wishlists').insert({ wrap_id: selectedWrap.id, user_id: currentUserId })
-      if (!error) { setHasWishlistedSelectedWrap(true); setSelectedWrapCounts(prev => ({ ...prev, wishlists: prev.wishlists + 1 })); await supabase.from('notifications').insert({ recipient_user_id: userId, actor_user_id: currentUserId, wrap_id: selectedWrap.id, type: 'wishlist' }) }
+      if (!error) {
+        setHasWishlistedSelectedWrap(true)
+        setSelectedWrapCounts(prev => ({ ...prev, wishlists: prev.wishlists + 1 }))
+        await supabase.from('notifications').insert({ recipient_user_id: userId, actor_user_id: currentUserId, wrap_id: selectedWrap.id, type: 'wishlist' })
+        fetch('/api/push', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            user_ids: [userId],
+            title: '⭐ Someone wishlisted your wrap',
+            body: selectedWrap.name,
+            url: '/dashboard',
+          }),
+        }).catch(() => {})
+      }
     }
     setSocialLoading(false)
   }
