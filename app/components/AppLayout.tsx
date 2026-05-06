@@ -445,11 +445,6 @@ const cachedUnread = localStorage.getItem('dipdesk_unread_count')
                 {unreadCount > 9 ? '9+' : unreadCount}
               </span>
             )}
-            {item.label === 'Messages' && unreadMessages > 0 && (
-              <span className="absolute -right-2 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-pink-600 text-[9px] font-bold text-white">
-                {unreadMessages > 9 ? '9+' : unreadMessages}
-              </span>
-            )}
           </span>
 
           <span className="pointer-events-none leading-none">
