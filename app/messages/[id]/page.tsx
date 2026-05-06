@@ -285,6 +285,20 @@ const sendImage = async (file: File) => {
           last_message_at: new Date().toISOString()
         })
         .eq('id', id)
+
+      // Send push notification to recipient
+      if (otherUser?.id) {
+        fetch('/api/push', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            user_ids: [otherUser.id],
+            title: 'New message',
+            body: content,
+            url: `/messages/${id}`,
+          }),
+        }).catch(() => {})
+      }
     }
 
     setSending(false)
