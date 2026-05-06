@@ -1196,14 +1196,12 @@ setTimeout(() => setToastMessage(''), 2000)
                           const enquiryMessage = `Hi! I'm interested in your ${selectedWrap.name}${selectedWrap.brand ? ` by ${selectedWrap.brand}` : ''} — is it still available?`
                           const { data: existing } = await supabase.from('conversations').select('id').or(`and(participant_1_id.eq.${currentUserId},participant_2_id.eq.${selectedWrap.user_id}),and(participant_1_id.eq.${selectedWrap.user_id},participant_2_id.eq.${currentUserId})`).maybeSingle()
                           if (existing) {
-                            await supabase.from('messages').insert({ conversation_id: existing.id, sender_id: currentUserId, content: enquiryMessage })
-                            await supabase.from('conversations').update({ last_message: enquiryMessage, last_message_at: new Date().toISOString() }).eq('id', existing.id)
                             closeViewWrapModal()
-                            router.push(`/messages/${existing.id}`)
+                            router.push(`/messages/${existing.id}?prefill=${encodeURIComponent(enquiryMessage)}`)
                             return
                           }
-                          const { data: newConv } = await supabase.from('conversations').insert({ participant_1_id: currentUserId, participant_2_id: selectedWrap.user_id, last_message: enquiryMessage, last_message_at: new Date().toISOString() }).select('id').single()
-                          if (newConv) { await supabase.from('messages').insert({ conversation_id: newConv.id, sender_id: currentUserId, content: enquiryMessage }); closeViewWrapModal(); router.push(`/messages/${newConv.id}`) }
+                          const { data: newConv } = await supabase.from('conversations').insert({ participant_1_id: currentUserId, participant_2_id: selectedWrap.user_id, last_message: null, last_message_at: new Date().toISOString() }).select('id').single()
+                          if (newConv) { closeViewWrapModal(); router.push(`/messages/${newConv.id}?prefill=${encodeURIComponent(enquiryMessage)}`) }
                         }}
                         className="cursor-pointer rounded-xl bg-amber-500 hover:bg-amber-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm transition"
                       >

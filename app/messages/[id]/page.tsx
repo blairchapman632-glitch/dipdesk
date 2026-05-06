@@ -41,6 +41,16 @@ export default function ConversationPage() {
   const USER_CACHE_KEY = `wrapapp_thread_user_${id}`
 
   useEffect(() => {
+    // Pre-fill message from URL if coming from Contact Seller
+    const params = new URLSearchParams(window.location.search)
+    const prefill = params.get('prefill')
+    if (prefill) {
+      setNewMessage(decodeURIComponent(prefill))
+      window.history.replaceState({}, '', window.location.pathname)
+    }
+  }, [])
+
+  useEffect(() => {
     // Load from cache instantly
     const cachedMessages = localStorage.getItem(MESSAGES_CACHE_KEY)
     const cachedUser = localStorage.getItem(USER_CACHE_KEY)
