@@ -300,12 +300,14 @@ const { data: dipData } = await supabase
         setHasLikedSelectedWrap(true)
         setSelectedWrapCounts(prev => ({ ...prev, likes: prev.likes + 1 }))
         await supabase.from('notifications').insert({ recipient_user_id: userId, actor_user_id: currentUserId, wrap_id: selectedWrap.id, type: 'like' })
+        const myProfile = localStorage.getItem('dipdesk_dashboard_profile')
+        const myName = myProfile ? JSON.parse(myProfile)?.full_name?.split(' ')[0] || 'Someone' : 'Someone'
         fetch('/api/push', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             user_ids: [userId],
-            title: '❤️ Someone liked your wrap',
+            title: `❤️ ${myName} liked your wrap`,
             body: selectedWrap.name,
             url: '/dashboard',
           }),
@@ -327,12 +329,14 @@ const { data: dipData } = await supabase
         setHasWishlistedSelectedWrap(true)
         setSelectedWrapCounts(prev => ({ ...prev, wishlists: prev.wishlists + 1 }))
         await supabase.from('notifications').insert({ recipient_user_id: userId, actor_user_id: currentUserId, wrap_id: selectedWrap.id, type: 'wishlist' })
+        const myProfile = localStorage.getItem('dipdesk_dashboard_profile')
+        const myName = myProfile ? JSON.parse(myProfile)?.full_name?.split(' ')[0] || 'Someone' : 'Someone'
         fetch('/api/push', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             user_ids: [userId],
-            title: '⭐ Someone wishlisted your wrap',
+            title: `⭐ ${myName} wishlisted your wrap`,
             body: selectedWrap.name,
             url: '/dashboard',
           }),
@@ -619,8 +623,9 @@ const { data: dipData } = await supabase
                       <button type="button" onClick={async () => {
                         const { data: existing } = await supabase.from('conversations').select('id').or(`and(participant_1_id.eq.${currentUserId},participant_2_id.eq.${userId}),and(participant_1_id.eq.${userId},participant_2_id.eq.${currentUserId})`).maybeSingle()
                         if (existing) { closeViewWrapModal(); router.push(`/messages/${existing.id}`); return }
-                        const { data: newConv } = await supabase.from('conversations').insert({ participant_1_id: currentUserId, participant_2_id: userId, last_message: `Hi, is your ${selectedWrap.name} still available?`, last_message_at: new Date().toISOString() }).select('id').single()
-                        if (newConv) { await supabase.from('messages').insert({ conversation_id: newConv.id, sender_id: currentUserId, content: `Hi, is your ${selectedWrap.name} still available?` }); closeViewWrapModal(); router.push(`/messages/${newConv.id}`) }
+                        const enquiryMessage = `Hi! I'm interested in your ${selectedWrap.name}${selectedWrap.brand ? ` by ${selectedWrap.brand}` : ''} — is it still available?`
+                        const { data: newConv } = await supabase.from('conversations').insert({ participant_1_id: currentUserId, participant_2_id: userId, last_message: enquiryMessage, last_message_at: new Date().toISOString() }).select('id').single()
+                        if (newConv) { await supabase.from('messages').insert({ conversation_id: newConv.id, sender_id: currentUserId, content: enquiryMessage }); closeViewWrapModal(); router.push(`/messages/${newConv.id}`) }
                       }} className="cursor-pointer rounded-xl bg-amber-500 hover:bg-amber-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm transition">🪓 Contact Seller</button>
                     )}
                     <button type="button" onClick={closeViewWrapModal} className="cursor-pointer rounded-full border px-3 py-1 text-sm text-gray-600">Close</button>

@@ -247,12 +247,14 @@ export default function Page() {
           read_at: null,
         })
 
+        const myProfileLike = localStorage.getItem('dipdesk_dashboard_profile')
+        const myNameLike = myProfileLike ? JSON.parse(myProfileLike)?.full_name?.split(' ')[0] || 'Someone' : 'Someone'
         fetch('/api/push', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             user_ids: [selectedWrap.user_id],
-            title: '❤️ Someone liked your wrap',
+            title: `❤️ ${myNameLike} liked your wrap`,
             body: selectedWrap.name,
             url: '/dashboard',
           }),
@@ -319,12 +321,14 @@ export default function Page() {
           read_at: null,
         })
 
+        const myProfileWishlist = localStorage.getItem('dipdesk_dashboard_profile')
+        const myNameWishlist = myProfileWishlist ? JSON.parse(myProfileWishlist)?.full_name?.split(' ')[0] || 'Someone' : 'Someone'
         fetch('/api/push', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             user_ids: [selectedWrap.user_id],
-            title: '⭐ Someone wishlisted your wrap',
+            title: `⭐ ${myNameWishlist} wishlisted your wrap`,
             body: selectedWrap.name,
             url: '/dashboard',
           }),

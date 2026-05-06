@@ -288,12 +288,14 @@ const sendImage = async (file: File) => {
 
       // Send push notification to recipient
       if (otherUser?.id) {
+        const myProfile = localStorage.getItem('dipdesk_dashboard_profile')
+        const myName = myProfile ? JSON.parse(myProfile)?.full_name?.split(' ')[0] || 'Someone' : 'Someone'
         fetch('/api/push', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             user_ids: [otherUser.id],
-            title: 'New message',
+            title: `💬 ${myName} sent you a message`,
             body: content,
             url: `/messages/${id}`,
           }),
