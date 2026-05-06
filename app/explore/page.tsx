@@ -1195,7 +1195,13 @@ setTimeout(() => setToastMessage(''), 2000)
                         onClick={async () => {
                           const enquiryMessage = `Hi! I'm interested in your ${selectedWrap.name}${selectedWrap.brand ? ` by ${selectedWrap.brand}` : ''} — is it still available?`
                           const { data: existing } = await supabase.from('conversations').select('id').or(`and(participant_1_id.eq.${currentUserId},participant_2_id.eq.${selectedWrap.user_id}),and(participant_1_id.eq.${selectedWrap.user_id},participant_2_id.eq.${currentUserId})`).maybeSingle()
-                          if (existing) { closeViewWrapModal(); router.push(`/messages/${existing.id}`); return }
+                          if (existing) {
+                            await supabase.from('messages').insert({ conversation_id: existing.id, sender_id: currentUserId, content: enquiryMessage })
+                            await supabase.from('conversations').update({ last_message: enquiryMessage, last_message_at: new Date().toISOString() }).eq('id', existing.id)
+                            closeViewWrapModal()
+                            router.push(`/messages/${existing.id}`)
+                            return
+                          }
                           const { data: newConv } = await supabase.from('conversations').insert({ participant_1_id: currentUserId, participant_2_id: selectedWrap.user_id, last_message: enquiryMessage, last_message_at: new Date().toISOString() }).select('id').single()
                           if (newConv) { await supabase.from('messages').insert({ conversation_id: newConv.id, sender_id: currentUserId, content: enquiryMessage }); closeViewWrapModal(); router.push(`/messages/${newConv.id}`) }
                         }}
