@@ -678,7 +678,7 @@ const { data: dipData } = await supabase
                       <p><span className="font-semibold text-gray-900">Size / STIH:</span> {selectedWrap.size || '—'}</p>
                       <p><span className="font-semibold text-gray-900">Blend:</span> {selectedWrap.material || '—'}</p>
                       <p><span className="font-semibold text-gray-900">Colour:</span> {selectedWrap.colour || '—'}</p>
-                      <p><span className="font-semibold text-gray-900">Purchased From:</span> {selectedWrap.purchased_from || '—'}</p>
+                      
                     </div>
                   </div>
                   <div className="rounded-2xl border bg-white p-5 shadow-sm">
