@@ -32,7 +32,15 @@ const [country, setCountry] = useState('')
 const [showLocationEdit, setShowLocationEdit] = useState(false)
 const [savingLocation, setSavingLocation] = useState(false)
 
-  const [isAdmin, setIsAdmin] = useState(false)
+  const [isAdmin, setIsAdmin] = useState(() => {
+    if (typeof window === 'undefined') return false
+    try {
+      const p = JSON.parse(localStorage.getItem('dipdesk_dashboard_profile') || '{}')
+      return p.role === 'super_admin'
+    } catch {
+      return false
+    }
+  })
 
   useEffect(() => {
     const cached = localStorage.getItem(DASHBOARD_PROFILE_KEY)
@@ -61,7 +69,7 @@ const [savingLocation, setSavingLocation] = useState(false)
       ] = await Promise.all([
         supabase
           .from('profiles')
-          .select('id, full_name, username, avatar_url, bio, feedback_hub_link, city, country')
+          .select('id, full_name, username, avatar_url, bio, feedback_hub_link, city, country, role')
           .eq('id', user.id)
           .single(),
         supabase
@@ -94,6 +102,7 @@ const { data: dipHistory } = await supabase
         setFullName(data.full_name || data.username || '')
         setCity(data.city || '')
         setCountry(data.country || '')
+        setIsAdmin(data.role === 'super_admin')
         localStorage.setItem(DASHBOARD_PROFILE_KEY, JSON.stringify({ ...data, id: user.id }))
       }
 

@@ -53,11 +53,11 @@ export default function AdminPage() {
 
     const { data: profileData, error: profileError } = await supabase
       .from('profiles')
-      .select('is_admin')
+      .select('role')
       .eq('id', user.id)
       .single()
 
-    if (profileError || profileData?.is_admin !== true) {
+    if (profileError || (profileData as any)?.role !== 'super_admin') {
       router.push('/dashboard')
       return
     }
@@ -137,10 +137,10 @@ export default function AdminPage() {
 
           <button
             type="button"
-            onClick={() => router.push('/dashboard')}
+            onClick={() => router.push('/tools')}
             className="cursor-pointer rounded-xl border px-4 py-2 text-sm font-semibold text-gray-700 shadow-sm hover:bg-gray-50"
           >
-            Back to Dashboard
+            Back to Tools
           </button>
         </div>
 
@@ -228,7 +228,7 @@ export default function AdminPage() {
                         </span>
                       </td>
                       <td className="px-4 py-3">
-                        {user.is_admin ? (
+                        {user.is_admin || user.email === 'blairchapman632@gmail.com' ? (
                           <span className="text-xs font-semibold text-purple-700">
                             Admin
                           </span>

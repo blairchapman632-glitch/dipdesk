@@ -412,7 +412,7 @@ const { data: profileData } = await supabase
 if (profileData) {
   setProfile(profileData)
   setIsAdmin((profileData as any).role === 'super_admin')
-  localStorage.setItem(DASHBOARD_PROFILE_KEY, JSON.stringify(profileData))
+  localStorage.setItem(DASHBOARD_PROFILE_KEY, JSON.stringify({ ...profileData, id: user.id }))
 }
 
 
@@ -611,7 +611,9 @@ if (!notificationError && notificationData) {
     const cachedProfile = localStorage.getItem(DASHBOARD_PROFILE_KEY)
     if (cachedProfile) {
       try {
-        setProfile(JSON.parse(cachedProfile))
+        const p = JSON.parse(cachedProfile)
+        setProfile(p)
+        setIsAdmin(p.role === 'super_admin')
       } catch {}
     }
 
@@ -2164,7 +2166,7 @@ function exportReportCsv() {
 
                 <button
                   type="button"
-                  onClick={closeReportModal}
+                  onClick={() => { closeReportModal(); router.push('/tools') }}
                   className="cursor-pointer rounded-full border px-3 py-1 text-sm text-gray-600"
                 >
                   Close
