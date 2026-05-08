@@ -401,17 +401,17 @@ const unreadNotificationCount = useMemo(() => {
   .eq('id', user.id)
 
 const userEmail = user.email || ''
-setIsAdmin(userEmail === 'paige.wilson26@outlook.com')
 setEmail(userEmail)
 localStorage.setItem(DASHBOARD_EMAIL_KEY, userEmail)
 const { data: profileData } = await supabase
   .from('profiles')
-  .select('full_name, username, avatar_url')
+  .select('full_name, username, avatar_url, role')
   .eq('id', user.id)
   .single()
 
 if (profileData) {
   setProfile(profileData)
+  setIsAdmin((profileData as any).role === 'super_admin')
   localStorage.setItem(DASHBOARD_PROFILE_KEY, JSON.stringify(profileData))
 }
 

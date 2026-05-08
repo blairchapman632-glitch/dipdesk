@@ -32,9 +32,7 @@ const [country, setCountry] = useState('')
 const [showLocationEdit, setShowLocationEdit] = useState(false)
 const [savingLocation, setSavingLocation] = useState(false)
 
-  const isAdmin =
-    typeof window !== 'undefined' &&
-    localStorage.getItem(DASHBOARD_EMAIL_KEY) === 'paige.wilson26@outlook.com'
+  const [isAdmin, setIsAdmin] = useState(false)
 
   useEffect(() => {
     const cached = localStorage.getItem(DASHBOARD_PROFILE_KEY)
@@ -47,6 +45,7 @@ const [savingLocation, setSavingLocation] = useState(false)
         setCity(p.city || '')
         setCountry(p.country || '')
         setCurrentUserId(p.id || null)
+        setIsAdmin(p.role === 'super_admin')
       } catch {}
     }
 
