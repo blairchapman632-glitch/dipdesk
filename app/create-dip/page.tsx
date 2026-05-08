@@ -38,6 +38,7 @@ function CreateDipInner() {
   const [smokeFree, setSmokeFree] = useState(true)
   const [petFree, setPetFree] = useState(true)
   const [feedbackHubLink, setFeedbackHubLink] = useState('')
+  const [facebookGroup, setFacebookGroup] = useState('')
 
   // Calculator
   const [ticketPrice, setTicketPrice] = useState('30')
@@ -265,6 +266,7 @@ Thank you all so much! Drawing soon! 🎲`
         smoke_free: smokeFree,
         pet_free: petFree,
         feedback_hub_link: feedbackHubLink || null,
+        facebook_group: facebookGroup || null,
         wrap_value: numericValue || null,
       }])
       .select()
@@ -631,6 +633,11 @@ Thank you all so much! Drawing soon! 🎲`
                 <div className="col-span-2">
                   <label className="mb-1 block text-sm font-medium text-gray-700">Shipping From</label>
                   <input value={shippingFrom} onChange={(e) => setShippingFrom(e.target.value)} placeholder="e.g. Australia" className="w-full rounded-xl border px-3 py-2.5 text-base outline-none focus:border-pink-500" />
+                </div>
+                <div className="col-span-2">
+                  <label className="mb-1 block text-sm font-medium text-gray-700">Facebook Group Name</label>
+                  <input value={facebookGroup} onChange={(e) => setFacebookGroup(e.target.value)} placeholder="e.g. Chasing Unicorns" className="w-full rounded-xl border px-3 py-2.5 text-base outline-none focus:border-pink-500" />
+                  <p className="mt-1 text-xs text-gray-400">The Facebook group where you're running this dip.</p>
                 </div>
                 <div className="col-span-2">
                   <label className="mb-1 block text-sm font-medium text-gray-700">Babywearing Feedback Hub Link</label>

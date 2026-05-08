@@ -736,7 +736,7 @@ Feedback Hub: ${dip.feedback_hub_link || '[add Feedback Hub link]'}${likerTags ?
 
 💸 Payments are now open! 💸
 
-${dip.brand || ''} ${dip.wrap_name || ''} is 80%+ full — time to pay for your spots!
+${dip.brand || ''} ${dip.wrap_name || ''} is FULL — time to pay for your spots!
 
 Payment via: ${dip.payment_methods || 'PayPal Friends & Family (no comments, gifted only)'}
 Post a screenshot of your payment in the comments 📸
@@ -825,12 +825,12 @@ Thank you all so much! Drawing soon! 🎲`
         'Post live post on Facebook with #newlivepost',
         'Add Google Sheet link to Settings',
         'Add players to spot list below as they claim',
-        'Move to Payments when 80% full',
+        'Move to Payments when 100% full',
       ],
     },
     payments: {
       title: '💸 Collecting Payments',
-      instruction: 'Your dip is 80%+ full. Post the payment post and tag all players who need to pay. They have 24 hours to pay or their spot gets reallocated.',
+      instruction: 'Your dip is 100% full! Post the payment post and tag all players who need to pay. They have 24 hours to pay or their spot gets reallocated.',
       tip: 'Tag all unpaid players when you post. They have 24 hours to pay or their spot gets reallocated.',
       postKey: 'payment',
       postLabel: 'Copy Payment Post',
@@ -952,11 +952,11 @@ Thank you all so much! Drawing soon! 🎲`
 
         {/* Stats row */}
         <div className="grid grid-cols-3 gap-2">
-          <div className={`rounded-2xl border p-3 shadow-sm text-center ${filledPercent >= 80 ? 'bg-green-50 border-green-200' : 'bg-white'}`}>
+          <div className={`rounded-2xl border p-3 shadow-sm text-center ${filledPercent >= 100 ? 'bg-green-50 border-green-200' : 'bg-white'}`}>
             <p className="text-lg font-bold text-gray-900">{filledSpots}/{dip.total_spots}</p>
             <p className="text-xs text-gray-500">spots filled</p>
-            <p className={`text-xs font-bold mt-0.5 ${filledPercent >= 80 ? 'text-green-600' : 'text-gray-400'}`}>
-              {filledPercent}%{filledPercent >= 80 ? ' 🎉 Ready for payments!' : ''}
+            <p className={`text-xs font-bold mt-0.5 ${filledPercent >= 100 ? 'text-green-600' : 'text-gray-400'}`}>
+              {filledPercent}%{filledPercent >= 100 ? ' 🎉 Ready for payments!' : ''}
             </p>
             <div className="mt-1.5 h-1.5 w-full rounded-full bg-gray-100 overflow-hidden">
               <div className={`h-full ${filledPercent >= 80 ? 'bg-green-500' : 'bg-gradient-to-r from-pink-500 to-rose-500'}`} style={{ width: `${filledPercent}%` }} />

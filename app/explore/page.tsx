@@ -157,7 +157,7 @@ export default function Page() {
 
     const { data: dipData, error: dipError } = await supabase
       .from('dips')
-      .select('id, wrap_id, total_spots, price_per_spot, stage')
+      .select('id, wrap_id, total_spots, price_per_spot, stage, facebook_group')
       .eq('user_id', wrap.user_id)
       .eq('wrap_id', wrap.id)
       .not('stage', 'in', '("drawn")')
@@ -385,8 +385,8 @@ const [hasWishlistedSelectedWrap, setHasWishlistedSelectedWrap] = useState(false
 const [socialLoading, setSocialLoading] = useState(false)
 const [currentUserId, setCurrentUserId] = useState<string | null>(null)
 const [toastMessage, setToastMessage] = useState('')
-const [activeDips, setActiveDips] = useState<{id: string, wrap_id: string | null, total_spots: number, price_per_spot: number, stage: string | null}[]>([])
-const [allActiveDips, setAllActiveDips] = useState<{id: string, wrap_id: string | null, total_spots: number, price_per_spot: number, stage: string | null}[]>([])
+const [activeDips, setActiveDips] = useState<{id: string, wrap_id: string | null, total_spots: number, price_per_spot: number, stage: string | null, facebook_group: string | null}[]>([])
+const [allActiveDips, setAllActiveDips] = useState<{id: string, wrap_id: string | null, total_spots: number, price_per_spot: number, stage: string | null, facebook_group: string | null}[]>([])
 const allActiveDipsRef = React.useRef<string[]>([])
 
   useEffect(() => {
@@ -429,7 +429,7 @@ const allActiveDipsRef = React.useRef<string[]>([])
 async function loadActiveDips() {
       const { data } = await supabase
         .from('dips')
-        .select('id, wrap_id, total_spots, price_per_spot, stage')
+        .select('id, wrap_id, total_spots, price_per_spot, stage, facebook_group')
         .not('stage', 'in', '("drawn")')
         .eq('archived', false)
       const dips = (data as any[]) || []
@@ -1266,10 +1266,10 @@ setTimeout(() => setToastMessage(''), 2000)
                   const stageLabel: Record<string, string> = { interest: 'Interest', queue: 'In Queue', live: 'Live 🔥', payments: 'Collecting Payments', closed: 'Closed' }
                   return (
                     <div className="mb-5 rounded-2xl bg-purple-50 border border-purple-200 p-4 space-y-2">
-                      <p className="text-sm font-bold text-purple-700">🎲 Currently being dipped on Chasing Unicorns!</p>
+                      <p className="text-sm font-bold text-purple-700">🎲 Currently being dipped{dip.facebook_group ? ` on ${dip.facebook_group}` : ''}!</p>
                       <p className="text-xs text-purple-600">{dip.total_spots} spots @ ${dip.price_per_spot} USD each</p>
                       <p className="text-xs text-purple-600">Stage: {stageLabel[dip.stage || ''] || dip.stage}</p>
-                      <p className="text-xs text-gray-600 mt-1">Head to the <span className="font-semibold">Chasing Unicorns Facebook page</span> to claim your spot!</p>
+                      {dip.facebook_group && <p className="text-xs text-gray-600 mt-1">Head to the <span className="font-semibold">{dip.facebook_group} Facebook page</span> to claim your spot!</p>}
                     </div>
                   )
                 })()}

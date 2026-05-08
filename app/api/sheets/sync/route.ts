@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
   if (!dip) return NextResponse.json({ error: 'Dip not found' }, { status: 404 })
 
   const spots = (spotsRaw || []) as any[]
-  const showPaymentCols = ['payments', 'closed', 'drawn'].includes(dip.stage)
+  const showPaymentCols = true
   const totalSpots = dip.total_spots
   const filledCount = spots.filter((s: any) => s.player_name).length
   const dipsRemaining = totalSpots - filledCount

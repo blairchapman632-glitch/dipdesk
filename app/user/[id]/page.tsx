@@ -112,11 +112,11 @@ export default function UserCollectionPage() {
   const [activeTab, setActiveTab] = useState<'collection' | 'wdywt'>('collection')
   const [wdywtPosts, setWdywtPosts] = useState<WDYWTPost[]>([])
   const [wdywtLoaded, setWdywtLoaded] = useState(false)
-  const [stats, setStats] = useState<{ followers: number, following: number, wraps: number, bio: string | null }>({ followers: 0, following: 0, wraps: 0, bio: null })
+  const [stats, setStats] = useState<{ followers: number, following: number, wraps: number, bio: string | null, city: string | null, country: string | null }>({ followers: 0, following: 0, wraps: 0, bio: null, city: null, country: null })
   const [hasLikedSelectedWrap, setHasLikedSelectedWrap] = useState(false)
   const [hasWishlistedSelectedWrap, setHasWishlistedSelectedWrap] = useState(false)
   const [socialLoading, setSocialLoading] = useState(false)
-  const [activeDips, setActiveDips] = useState<{id: string, title: string, wrap_id: string | null, total_spots: number, price_per_spot: number, stage: string | null, wrap_name: string | null, brand: string | null}[]>([])
+  const [activeDips, setActiveDips] = useState<{id: string, title: string, wrap_id: string | null, total_spots: number, price_per_spot: number, stage: string | null, wrap_name: string | null, brand: string | null, facebook_group: string | null}[]>([])
 
   // WDYWT post modal
   const [selectedPost, setSelectedPost] = useState<WDYWTPost | null>(null)
@@ -173,9 +173,9 @@ export default function UserCollectionPage() {
         supabase.from('follows').select('*', { count: 'exact', head: true }).eq('following_id', userId).eq('status', 'accepted'),
         supabase.from('follows').select('*', { count: 'exact', head: true }).eq('follower_id', userId).eq('status', 'accepted'),
         supabase.from('wraps').select('*', { count: 'exact', head: true }).eq('user_id', userId).eq('status', 'active'),
-        supabase.from('profiles').select('bio').eq('id', userId).single(),
+        supabase.from('profiles').select('bio, city, country').eq('id', userId).single(),
       ])
-      const nextStats = { followers: followerCount || 0, following: followingCount || 0, wraps: wrapCount || 0, bio: (bioData as any)?.bio || null }
+      const nextStats = { followers: followerCount || 0, following: followingCount || 0, wraps: wrapCount || 0, bio: (bioData as any)?.bio || null, city: (bioData as any)?.city || null, country: (bioData as any)?.country || null }
       setStats(nextStats)
       localStorage.setItem(getUserCollectionStatsKey(userId), JSON.stringify(nextStats))
 
@@ -187,7 +187,7 @@ export default function UserCollectionPage() {
       }
 const { data: dipData } = await supabase
         .from('dips')
-        .select('id, title, wrap_id, total_spots, price_per_spot, stage, wrap_name, brand')
+        .select('id, title, wrap_id, total_spots, price_per_spot, stage, wrap_name, brand, facebook_group')
         .eq('user_id', userId)
         .not('stage', 'in', '("drawn")')
         .eq('archived', false)
@@ -369,6 +369,11 @@ const { data: dipData } = await supabase
                 <div>
                   <h1 className="text-xl font-bold text-gray-900">{collectionTitle}</h1>
                   {stats.bio && <p className="text-sm text-gray-600 mt-0.5">{stats.bio}</p>}
+                  {(stats.city || stats.country) && (
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      📍 {[stats.city, stats.country].filter(Boolean).join(', ')}
+                    </p>
+                  )}
                   <div className="flex items-center gap-3 mt-1">
                     <span className="text-xs text-gray-500"><span className="font-bold text-gray-900">{stats.wraps}</span> wraps</span>
                     <span className="text-xs text-gray-500"><span className="font-bold text-gray-900">{stats.followers}</span> followers</span>
@@ -658,10 +663,10 @@ const { data: dipData } = await supabase
                   const stageLabel: Record<string, string> = { interest: 'Interest', queue: 'In Queue', live: 'Live 🔥', payments: 'Collecting Payments', closed: 'Closed' }
                   return (
                     <div className="mb-5 rounded-2xl bg-purple-50 border border-purple-200 p-4 space-y-2">
-                      <p className="text-sm font-bold text-purple-700">🎲 Currently being dipped on Chasing Unicorns!</p>
+                      <p className="text-sm font-bold text-purple-700">🎲 Currently being dipped{dip.facebook_group ? ` on ${dip.facebook_group}` : ''}!</p>
                       <p className="text-xs text-purple-600">{dip.total_spots} spots @ ${dip.price_per_spot} USD each</p>
                       <p className="text-xs text-purple-600">Stage: {stageLabel[dip.stage || ''] || dip.stage}</p>
-                      <p className="text-xs text-gray-600 mt-1">Head to the <span className="font-semibold">Chasing Unicorns Facebook page</span> to claim your spot!</p>
+                      {dip.facebook_group && <p className="text-xs text-gray-600 mt-1">Head to the <span className="font-semibold">{dip.facebook_group} Facebook page</span> to claim your spot!</p>}
                     </div>
                   )
                 })()}

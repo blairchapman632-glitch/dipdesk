@@ -27,6 +27,10 @@ export default function Page() {
   const [showFeedbackHubEdit, setShowFeedbackHubEdit] = useState(false)
   const [savingFeedbackHub, setSavingFeedbackHub] = useState(false)
   const [archivedDips, setArchivedDips] = useState<any[]>([])
+const [city, setCity] = useState('')
+const [country, setCountry] = useState('')
+const [showLocationEdit, setShowLocationEdit] = useState(false)
+const [savingLocation, setSavingLocation] = useState(false)
 
   const isAdmin =
     typeof window !== 'undefined' &&
@@ -40,6 +44,8 @@ export default function Page() {
         setAvatar(p.avatar_url || null)
         setFullName(p.full_name || p.username || '')
         setBio(p.bio || '')
+        setCity(p.city || '')
+        setCountry(p.country || '')
         setCurrentUserId(p.id || null)
       } catch {}
     }
@@ -56,7 +62,7 @@ export default function Page() {
       ] = await Promise.all([
         supabase
           .from('profiles')
-          .select('full_name, username, avatar_url, bio, feedback_hub_link')
+          .select('id, full_name, username, avatar_url, bio, feedback_hub_link, city, country')
           .eq('id', user.id)
           .single(),
         supabase
@@ -87,6 +93,8 @@ const { data: dipHistory } = await supabase
         setBio(data.bio || '')
         setAvatar(data.avatar_url || null)
         setFullName(data.full_name || data.username || '')
+        setCity(data.city || '')
+        setCountry(data.country || '')
         localStorage.setItem(DASHBOARD_PROFILE_KEY, JSON.stringify({ ...data, id: user.id }))
       }
 
@@ -238,6 +246,13 @@ const { data: dipHistory } = await supabase
             >
               Edit Bio
             </button>
+          <button
+              type="button"
+              onClick={() => setShowLocationEdit(true)}
+              className="rounded-xl border border-gray-300 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 col-span-2"
+            >
+              📍 {city && country ? `${city}, ${country}` : 'Add Location'}
+            </button>
           </div>
         </div>
 
@@ -375,6 +390,57 @@ const { data: dipHistory } = await supabase
           <a href="/community" className="text-xs text-gray-400 hover:text-pink-500">Guidelines</a>
         </div>
       </div>
+      {/* Location edit modal */}
+      {showLocationEdit && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setShowLocationEdit(false)}>
+          <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-lg font-bold text-gray-900 mb-3">Your Location</h2>
+            <p className="text-sm text-gray-500 mb-4">Helps you find wrap collectors near you.</p>
+            <input
+              type="text"
+              value={city}
+              onChange={(e) => setCity(e.target.value)}
+              placeholder="City (e.g. Perth, London)"
+              className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-gray-700 outline-none focus:border-pink-300 mb-3"
+            />
+            <input
+              type="text"
+              value={country}
+              onChange={(e) => setCountry(e.target.value)}
+              placeholder="Country (e.g. Australia, UK)"
+              className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-gray-700 outline-none focus:border-pink-300"
+            />
+            <button
+              type="button"
+              disabled={savingLocation}
+              onClick={async () => {
+                if (!currentUserId) return
+                setSavingLocation(true)
+                await supabase.from('profiles').update({ city: city.trim() || null, country: country.trim() || null }).eq('id', currentUserId)
+                const cached = localStorage.getItem(DASHBOARD_PROFILE_KEY)
+                if (cached) {
+                  try {
+                    const p = JSON.parse(cached)
+                    localStorage.setItem(DASHBOARD_PROFILE_KEY, JSON.stringify({ ...p, city: city.trim() || null, country: country.trim() || null }))
+                  } catch {}
+                }
+                setSavingLocation(false)
+                setShowLocationEdit(false)
+              }}
+              className="mt-4 w-full rounded-xl bg-gradient-to-r from-pink-500 to-rose-500 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
+            >
+              {savingLocation ? 'Saving...' : 'Save Location'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowLocationEdit(false)}
+              className="mt-2 w-full rounded-xl border px-4 py-2 text-sm font-semibold text-gray-600"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
 {/* Feedback Hub modal */}
       {showFeedbackHubEdit && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setShowFeedbackHubEdit(false)}>
