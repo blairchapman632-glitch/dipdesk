@@ -25,6 +25,7 @@ type Wrap = {
   material: string | null
   colour: string | null
   dibs_user_id: string | null
+  dibs_users?: DibsUser[]
   purchase_date: string | null
   purchase_price: number | null
   purchase_currency: CurrencyCode | null
@@ -89,7 +90,7 @@ type WrapFormState = {
   size: string
   material: string
   colour: string
-  dibs_user_id: string | null
+  dibs_users: DibsUser[]
   dibs_search: string
 purchase_date: string
   purchase_price: string
@@ -109,12 +110,22 @@ purchase_date: string
   for_sale_price_is_pm: boolean
   status: 'active' | 'holiday' | 'departed'
 }
+type DibsUser = {
+  id: string
+  user_id: string
+  wrap_id: string
+  profile: {
+    full_name: string | null
+    username: string | null
+    avatar_url: string | null
+  }
+}
 type NotificationRow = {
   id: string
   recipient_user_id: string
   actor_user_id: string | null
   wrap_id: string | null
-  type: 'like' | 'wishlist' | 'for_sale' | 'comment'
+  type: 'like' | 'wishlist' | 'for_sale' | 'comment' | 'dibs'
   created_at: string
   read_at: string | null
 }
@@ -124,7 +135,7 @@ type NotificationItem = {
   actor_user_id: string | null
   created_at: string
   read_at: string | null
-  type: 'like' | 'wishlist' | 'for_sale' | 'comment'
+  type: 'like' | 'wishlist' | 'for_sale' | 'comment' | 'dibs'
   actor_name: string
   actor_avatar: string | null
   wrap: Wrap | null
@@ -143,7 +154,7 @@ const EMPTY_WRAP_FORM: WrapFormState = {
   size: '',
   material: '',
   colour: '',
-  dibs_user_id: null,
+  dibs_users: [],
   dibs_search: '',
 purchase_date: new Date().toISOString().slice(0, 10),
   purchase_price: '',
@@ -278,6 +289,10 @@ const [brandSuggestions, setBrandSuggestions] = useState<string[]>([])
 const [materialSuggestions, setMaterialSuggestions] = useState<string[]>([])
 const [sizeSuggestions, setSizeSuggestions] = useState<string[]>([])
 const [colourSuggestions, setColourSuggestions] = useState<string[]>([])
+const [brandFocused, setBrandFocused] = useState(false)
+const [materialFocused, setMaterialFocused] = useState(false)
+const [sizeFocused, setSizeFocused] = useState(false)
+const [colourFocused, setColourFocused] = useState(false)
 const [wrapForm, setWrapForm] = useState<WrapFormState>(EMPTY_WRAP_FORM)
 const [notifications, setNotifications] = useState<NotificationItem[]>([])
 const [selectedWrapCounts, setSelectedWrapCounts] = useState({
@@ -433,7 +448,7 @@ if (profileData) {
   supabase
     .from('wraps')
     .select(
-'id, name, brand, description, colour, purchase_date, purchase_price, purchase_currency, purchased_from, purchase_country, status, on_loan_to, sold_to, sold_price, sold_currency, sold_date, is_favourite, for_sale, for_sale_price, for_sale_currency, for_sale_price_is_pm, created_at, wrap_images(id, image_url, is_primary, sort_order)'
+'id, name, brand, description, size, material, colour, purchase_date, purchase_price, purchase_currency, purchased_from, purchase_country, status, on_loan_to, sold_to, sold_price, sold_currency, sold_date, is_favourite, for_sale, for_sale_price, for_sale_currency, for_sale_price_is_pm, created_at, wrap_images(id, image_url, is_primary, sort_order)'
 )
     .eq('user_id', user.id)
     .order('is_favourite', { ascending: false })
@@ -838,7 +853,7 @@ function closeReportModal() {
 }
 useEffect(() => {
     const term = wrapForm.brand.trim()
-    if (!term || term.length < 1) { setBrandSuggestions([]); return }
+    if (!term || term.length < 2 || !brandFocused) { setBrandSuggestions([]); return }
     const timeout = setTimeout(async () => {
       const { data } = await supabase.from('wraps').select('brand').ilike('brand', `%${term}%`).limit(10)
       const unique = [...new Set(((data as any[]) || []).map((w) => w.brand).filter(Boolean))] as string[]
@@ -849,7 +864,7 @@ useEffect(() => {
 
   useEffect(() => {
     const term = wrapForm.material.trim()
-    if (!term || term.length < 1) { setMaterialSuggestions([]); return }
+    if (!term || term.length < 2 || !materialFocused) { setMaterialSuggestions([]); return }
     const timeout = setTimeout(async () => {
       const { data } = await supabase.from('wraps').select('material').ilike('material', `%${term}%`).limit(10)
       const unique = [...new Set(((data as any[]) || []).map((w) => w.material).filter(Boolean))] as string[]
@@ -860,7 +875,7 @@ useEffect(() => {
 
   useEffect(() => {
     const term = wrapForm.size.trim()
-    if (!term || term.length < 1) { setSizeSuggestions([]); return }
+    if (!term || term.length < 2 || !sizeFocused) { setSizeSuggestions([]); return }
     const timeout = setTimeout(async () => {
       const { data } = await supabase.from('wraps').select('size').ilike('size', `%${term}%`).limit(10)
       const unique = [...new Set(((data as any[]) || []).map((w) => w.size).filter(Boolean))] as string[]
@@ -871,7 +886,7 @@ useEffect(() => {
 
   useEffect(() => {
     const term = wrapForm.colour.trim()
-    if (!term || term.length < 1) { setColourSuggestions([]); return }
+    if (!term || term.length < 2 || !colourFocused) { setColourSuggestions([]); return }
     const timeout = setTimeout(async () => {
       const { data } = await supabase.from('wraps').select('colour').ilike('colour', `%${term}%`).limit(10)
       const unique = [...new Set(((data as any[]) || []).map((w) => w.colour).filter(Boolean))] as string[]
@@ -947,6 +962,10 @@ useEffect(() => {
   }
 
   function openEditWrapModal(wrap: Wrap) {
+    setBrandSuggestions([])
+setMaterialSuggestions([])
+setSizeSuggestions([])
+setColourSuggestions([])
    const sortedImages = [...(wrap.wrap_images || [])].sort(
   (a, b) => a.sort_order - b.sort_order
 )
@@ -957,7 +976,7 @@ useEffect(() => {
   size: (wrap as any).size || '',
   material: (wrap as any).material || '',
   colour: (wrap as any).colour || '',
-  dibs_user_id: (wrap as any).dibs_user_id || null,
+  dibs_users: [],
   dibs_search: '',
 purchase_date: wrap.purchase_date || '',
   purchase_price:
@@ -997,6 +1016,32 @@ purchase_date: wrap.purchase_date || '',
 
   status: wrap.status,
 })
+
+    supabase
+      .from('dibs')
+      .select('id, user_id, wrap_id')
+      .eq('wrap_id', wrap.id)
+      .then(async ({ data }) => {
+        if (data && data.length > 0) {
+          const userIds = data.map((d) => d.user_id)
+          const { data: profileData } = await supabase
+            .from('profiles')
+            .select('id, full_name, username, avatar_url')
+            .in('id', userIds)
+          const profileMap: Record<string, any> = {}
+          ;(profileData || []).forEach((p) => { profileMap[p.id] = p })
+          setWrapForm((prev) => ({
+            ...prev,
+            dibs_users: data.map((d) => ({
+              id: d.id,
+              user_id: d.user_id,
+              wrap_id: d.wrap_id,
+              profile: profileMap[d.user_id] || { full_name: null, username: null, avatar_url: null },
+            })),
+          }))
+        }
+      })
+
     setIsWrapModalOpen(true)
   }
 
@@ -1276,7 +1321,7 @@ const wrapPayload = {
   size: wrapForm.size.trim() || null,
   material: wrapForm.material.trim() || null,
   colour: wrapForm.colour.trim() || null,
-  dibs_user_id: wrapForm.dibs_user_id || null,
+  dibs_user_id: null,
   purchase_date: wrapForm.purchase_date || null,
   purchase_price: wrapForm.purchase_price
     ? Number(wrapForm.purchase_price)
@@ -1409,6 +1454,46 @@ const uploadedImages = savedImages.map((image, index) => ({
             url: '/explore',
           }),
         }).catch(() => {})
+      }
+    }
+
+    if (wrapId) {
+      const { data: existingDibs } = await supabase
+        .from('dibs')
+        .select('user_id')
+        .eq('wrap_id', wrapId)
+
+      const existingIds = (existingDibs || []).map((d) => d.user_id)
+      const newIds = wrapForm.dibs_users.map((d) => d.user_id)
+
+      const toAdd = wrapForm.dibs_users.filter((d) => !existingIds.includes(d.user_id))
+      const toRemove = existingIds.filter((id) => !newIds.includes(id))
+
+      if (toRemove.length > 0) {
+        await supabase
+          .from('dibs')
+          .delete()
+          .eq('wrap_id', wrapId)
+          .in('user_id', toRemove)
+      }
+
+      if (toAdd.length > 0) {
+        await supabase
+          .from('dibs')
+          .insert(toAdd.map((d) => ({
+            wrap_id: wrapId,
+            user_id: d.user_id,
+            created_by: currentUserId,
+          })))
+
+        await supabase
+          .from('notifications')
+          .insert(toAdd.map((d) => ({
+            recipient_user_id: d.user_id,
+            actor_user_id: currentUserId,
+            wrap_id: wrapId,
+            type: 'dibs',
+          })))
       }
     }
 
@@ -1819,6 +1904,8 @@ function exportReportCsv() {
                     ? `${notification.actor_name} added your wrap to their wishlist`
                     : notification.type === 'comment'
                     ? `${notification.actor_name} commented on your WDYWT post`
+                    : notification.type === 'dibs'
+                    ? `🎯 You have dibs on ${wrapName}`
                     : `${wrapName} from your wishlist is now for sale`
 
                 const meta =
@@ -2363,6 +2450,8 @@ function exportReportCsv() {
     <input
       value={wrapForm.brand}
       onChange={(event) => updateWrapForm('brand', event.target.value)}
+      onFocus={() => setBrandFocused(true)}
+      onBlur={() => setTimeout(() => { setBrandFocused(false); setBrandSuggestions([]) }, 200)}
       placeholder="e.g. Didymos, Oscha"
       className="w-full rounded-xl border px-3 py-2 text-base text-gray-900 placeholder:text-gray-400 outline-none focus:border-pink-500 xl:text-sm"
     />
@@ -2389,6 +2478,8 @@ function exportReportCsv() {
     <input
       value={wrapForm.size}
       onChange={(event) => updateWrapForm('size', event.target.value)}
+      onFocus={() => setSizeFocused(true)}
+      onBlur={() => setTimeout(() => { setSizeFocused(false); setSizeSuggestions([]) }, 200)}
       placeholder="e.g. Size 6, 4.2m"
       className="w-full rounded-xl border px-3 py-2 text-base text-gray-900 placeholder:text-gray-400 outline-none focus:border-pink-500 xl:text-sm"
     />
@@ -2415,6 +2506,8 @@ function exportReportCsv() {
     <input
       value={wrapForm.material}
       onChange={(event) => updateWrapForm('material', event.target.value)}
+      onFocus={() => setMaterialFocused(true)}
+      onBlur={() => setTimeout(() => { setMaterialFocused(false); setMaterialSuggestions([]) }, 200)}
       placeholder="e.g. 100% cotton, linen/cotton"
       className="w-full rounded-xl border px-3 py-2 text-base text-gray-900 placeholder:text-gray-400 outline-none focus:border-pink-500 xl:text-sm"
     />
@@ -2441,6 +2534,8 @@ function exportReportCsv() {
     <input
       value={wrapForm.colour}
       onChange={(event) => updateWrapForm('colour', event.target.value)}
+      onFocus={() => setColourFocused(true)}
+      onBlur={() => setTimeout(() => { setColourFocused(false); setColourSuggestions([]) }, 200)}
       placeholder="e.g. Blue, Rainbow, Earth tones"
       className="w-full rounded-xl border px-3 py-2 text-base text-gray-900 placeholder:text-gray-400 outline-none focus:border-pink-500 xl:text-sm"
     />
@@ -2464,12 +2559,31 @@ function exportReportCsv() {
     <label className="mb-1 block text-sm font-medium text-gray-700">
       Dibs
     </label>
+
+    {wrapForm.dibs_users.length > 0 && (
+      <div className="mb-2 flex flex-wrap gap-2">
+        {wrapForm.dibs_users.map((d) => (
+          <div key={d.user_id} className="flex items-center gap-1.5 rounded-full bg-pink-50 border border-pink-200 px-3 py-1">
+            <span className="text-xs font-semibold text-pink-700">
+              {d.profile.full_name?.split(' ')[0] || d.profile.username || 'User'}
+            </span>
+            <button
+              type="button"
+              onClick={() =>
+                updateWrapForm('dibs_users', wrapForm.dibs_users.filter((x) => x.user_id !== d.user_id))
+              }
+              className="text-pink-400 hover:text-red-500 text-xs leading-none"
+            >
+              ×
+            </button>
+          </div>
+        ))}
+      </div>
+    )}
+
     <input
       value={wrapForm.dibs_search}
-      onChange={(event) => {
-        updateWrapForm('dibs_search', event.target.value)
-        updateWrapForm('dibs_user_id', null)
-      }}
+      onChange={(event) => updateWrapForm('dibs_search', event.target.value)}
       placeholder="Search for a user..."
       className="w-full rounded-xl border px-3 py-2 text-base text-gray-900 placeholder:text-gray-400 outline-none focus:border-pink-500 xl:text-sm"
     />
@@ -2478,48 +2592,40 @@ function exportReportCsv() {
       <p className="mt-1 text-xs text-gray-400">Searching...</p>
     )}
 
-    {dibsSearchResults.length > 0 && !wrapForm.dibs_user_id && (
+    {dibsSearchResults.length > 0 && (
       <div className="absolute z-10 mt-1 w-full rounded-xl border bg-white shadow-lg">
-        {dibsSearchResults.map((user) => (
-          <button
-            key={user.id}
-            type="button"
-            onClick={() => {
-              updateWrapForm('dibs_user_id', user.id)
-              updateWrapForm('dibs_search', user.name)
-              setDibsSearchResults([])
-            }}
-            className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-pink-50 first:rounded-t-xl last:rounded-b-xl"
-          >
-            <span className="font-semibold text-gray-900">{user.name}</span>
-            {user.username && (
-              <span className="text-gray-400">@{user.username}</span>
-            )}
-          </button>
-        ))}
-      </div>
-    )}
-
-    {wrapForm.dibs_user_id && (
-      <div className="mt-1 flex items-center gap-2">
-        <p className="text-xs text-pink-600 font-medium">
-          ✓ Dibs linked to {wrapForm.dibs_search}
-        </p>
-        <button
-          type="button"
-          onClick={() => {
-            updateWrapForm('dibs_user_id', null)
-            updateWrapForm('dibs_search', '')
-          }}
-          className="text-xs text-gray-400 hover:text-red-500"
-        >
-          Remove
-        </button>
+        {dibsSearchResults
+          .filter((u) => !wrapForm.dibs_users.some((d) => d.user_id === u.id))
+          .map((user) => (
+            <button
+              key={user.id}
+              type="button"
+              onClick={() => {
+                updateWrapForm('dibs_users', [
+                  ...wrapForm.dibs_users,
+                  {
+                    id: '',
+                    user_id: user.id,
+                    wrap_id: wrapForm.id || '',
+                    profile: { full_name: user.name, username: user.username, avatar_url: null },
+                  },
+                ])
+                updateWrapForm('dibs_search', '')
+                setDibsSearchResults([])
+              }}
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-pink-50 first:rounded-t-xl last:rounded-b-xl"
+            >
+              <span className="font-semibold text-gray-900">{user.name}</span>
+              {user.username && (
+                <span className="text-gray-400">@{user.username}</span>
+              )}
+            </button>
+          ))}
       </div>
     )}
 
     <p className="mt-1 text-xs text-gray-500">
-      First right to buy if listed for sale
+      First right to buy if listed for sale. They'll get a notification.
     </p>
   </div>
 
