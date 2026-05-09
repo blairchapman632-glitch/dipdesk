@@ -36,8 +36,12 @@ export default function Home() {
     if (user) {
       await supabase.from('profiles').insert({ id: user.id, email, full_name: fullName })
     }
-    setMessage('Account created! Please verify your email, then log in.')
-    setIsSignUp(false)
+    if (data.session) {
+      router.replace('/dashboard')
+    } else {
+      setMessage('Account created! Please check your email to verify.')
+      setIsSignUp(false)
+    }
     setFullName('')
     setEmail('')
     setPassword('')
