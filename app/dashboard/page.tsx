@@ -1733,7 +1733,7 @@ function exportReportCsv() {
           </section>
 
                              <section
-            className={`order-1 bg-white p-3 xl:order-2 xl:rounded-3xl xl:border xl:p-5 xl:shadow-sm ${
+            className={`order-1 bg-white p-3 xl:order-2 xl:rounded-3xl xl:border xl:p-5 xl:shadow-sm overflow-hidden ${
               mobileTab === 'collection' ? 'hidden xl:block' : 'block'
             }`}
           >
@@ -1835,13 +1835,13 @@ function exportReportCsv() {
                     key={notification.id}
                     type="button"
                     onClick={() => handleNotificationClick(notification)}
-                    className={`w-full cursor-pointer rounded-2xl border p-3 text-left shadow-sm transition hover:shadow-md ${
+                    className={`w-full cursor-pointer rounded-2xl border p-3 text-left shadow-sm transition hover:shadow-md overflow-hidden ${
                       !notification.read_at
                         ? 'border-l-4 border-l-pink-500 bg-pink-50'
                         : 'bg-white'
                     }`}
                   >
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-3 min-w-0 w-full">
                       {notification.actor_avatar ? (
                         <img
                           src={notification.actor_avatar}
