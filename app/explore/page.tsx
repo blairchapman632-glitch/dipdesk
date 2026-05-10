@@ -850,7 +850,7 @@ const filteredWraps = (
               value={searchTerm}
               onChange={(event) => setSearchTerm(event.target.value)}
               placeholder="Discover collections and wraps"
-              className="w-full rounded-lg border pl-11 pr-3 py-2 text-sm text-gray-900 outline-none focus:border-pink-500"
+              className="w-full rounded-lg border pl-11 pr-3 py-2 text-[16px] text-gray-900 outline-none focus:border-pink-500"
             />
           </div>
 
@@ -1014,7 +1014,7 @@ const filteredWraps = (
                     setBrandSearchResults([...seen.values()].sort().filter(b => !selectedBrands.includes(b)))
                   }}
                   placeholder="Search brands..."
-                  className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-pink-300"
+                  className="w-full rounded-xl border border-gray-200 px-3 py-2 text-[16px] outline-none focus:border-pink-300"
                 />
                 {brandSearchResults.length > 0 && (
                   <div className="flex flex-wrap gap-1.5">
@@ -1050,7 +1050,7 @@ const filteredWraps = (
                     value={sizeMin}
                     onChange={(e) => setSizeMin(e.target.value)}
                     placeholder="Min m"
-                    className="w-24 rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-pink-300"
+                    className="w-24 rounded-xl border border-gray-200 px-3 py-2 text-[16px] outline-none focus:border-pink-300"
                   />
                   <span className="text-xs text-gray-400">to</span>
                   <input
@@ -1061,7 +1061,7 @@ const filteredWraps = (
                     value={sizeMax}
                     onChange={(e) => setSizeMax(e.target.value)}
                     placeholder="Max m"
-                    className="w-24 rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-pink-300"
+                    className="w-24 rounded-xl border border-gray-200 px-3 py-2 text-[16px] outline-none focus:border-pink-300"
                   />
                   <span className="text-xs text-gray-400">meters</span>
                 </div>
