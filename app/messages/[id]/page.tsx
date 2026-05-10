@@ -30,6 +30,11 @@ export default function ConversationPage() {
   const [newMessage, setNewMessage] = useState('')
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [otherUser, setOtherUser] = useState<OtherUser | null>(null)
+
+  function getFirstName(fullName?: string) {
+    if (!fullName?.trim()) return 'User'
+    return fullName.split(' ')[0]
+  }
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
   const [sendingImage, setSendingImage] = useState(false)
@@ -368,7 +373,7 @@ const sendImage = async (file: File) => {
           </div>
 
           <span className="font-semibold text-gray-900 flex-1">
-            {otherUser?.full_name || 'Loading...'}
+            {otherUser ? getFirstName(otherUser.full_name) : 'Loading...'}
           </span>
 
           <button

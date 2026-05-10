@@ -280,7 +280,7 @@ export default function MessagesPage() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between">
                     <span className={`text-sm ${conv.has_unread ? 'font-bold text-gray-900' : 'font-semibold text-gray-900'}`}>
-                      {conv.other_user?.full_name || 'Unknown user'}
+                      {conv.other_user?.full_name?.split(' ')[0] || 'Unknown user'}
                     </span>
                     <span className="text-xs text-gray-400 flex-shrink-0 ml-2">
                       {formatTime(conv.last_message_at)}

@@ -1329,10 +1329,7 @@ setTimeout(() => setToastMessage(''), 2000)
                         <span className="font-semibold text-gray-900">Colour:</span>{' '}
                         {(selectedWrap as any).colour || '—'}
                       </p>
-                      <p>
-                        <span className="font-semibold text-gray-900">Purchased From:</span>{' '}
-                        {selectedWrap.purchased_from || '—'}
-                      </p>
+                      
                     </div>
                   </div>
 
