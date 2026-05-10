@@ -31,6 +31,9 @@ const [city, setCity] = useState('')
 const [country, setCountry] = useState('')
 const [showLocationEdit, setShowLocationEdit] = useState(false)
 const [savingLocation, setSavingLocation] = useState(false)
+const [showNameEdit, setShowNameEdit] = useState(false)
+const [savingName, setSavingName] = useState(false)
+const [editName, setEditName] = useState('')
 
   const [isAdmin, setIsAdmin] = useState(() => {
     if (typeof window === 'undefined') return false
@@ -246,6 +249,13 @@ const { data: dipHistory } = await supabase
               className="rounded-xl border border-gray-300 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
             >
               View Profile
+            </button>
+            <button
+              type="button"
+              onClick={() => { setEditName(fullName); setShowNameEdit(true) }}
+              className="rounded-xl border border-gray-300 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+            >
+              Edit Name
             </button>
             <button
               type="button"
@@ -486,6 +496,50 @@ const { data: dipHistory } = await supabase
             <button
               type="button"
               onClick={() => setShowFeedbackHubEdit(false)}
+              className="mt-2 w-full rounded-xl border px-4 py-2 text-sm font-semibold text-gray-600"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+      {/* Name edit modal */}
+      {showNameEdit && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setShowNameEdit(false)}>
+          <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-lg font-bold text-gray-900 mb-3">Edit Name</h2>
+            <input
+              type="text"
+              value={editName}
+              onChange={(e) => setEditName(e.target.value)}
+              placeholder="Your full name"
+              className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-gray-700 outline-none focus:border-pink-300"
+            />
+            <button
+              type="button"
+              disabled={savingName}
+              onClick={async () => {
+                if (!currentUserId || !editName.trim()) return
+                setSavingName(true)
+                await supabase.from('profiles').update({ full_name: editName.trim() }).eq('id', currentUserId)
+                setFullName(editName.trim())
+                const cached = localStorage.getItem(DASHBOARD_PROFILE_KEY)
+                if (cached) {
+                  try {
+                    const p = JSON.parse(cached)
+                    localStorage.setItem(DASHBOARD_PROFILE_KEY, JSON.stringify({ ...p, full_name: editName.trim() }))
+                  } catch {}
+                }
+                setSavingName(false)
+                setShowNameEdit(false)
+              }}
+              className="mt-4 w-full rounded-xl bg-gradient-to-r from-pink-500 to-rose-500 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
+            >
+              {savingName ? 'Saving...' : 'Save Name'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowNameEdit(false)}
               className="mt-2 w-full rounded-xl border px-4 py-2 text-sm font-semibold text-gray-600"
             >
               Cancel

@@ -439,7 +439,10 @@ export default function Home() {
                   <span style={{ fontSize: '12px', color: '#bbb' }}>or</span>
                   <div style={{ flex: 1, height: 1, background: '#f0f0f0' }} />
                 </div>
-                <input className="auth-input" type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} />
+                {isSignUp && (
+  <input className="auth-input" type="text" placeholder="Your name" value={fullName} onChange={(e) => setFullName(e.target.value)} />
+)}
+<input className="auth-input" type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} />
                 <input className="auth-input" type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} />
 
                 <button

@@ -451,7 +451,7 @@ async function loadActiveDips() {
           'id, user_id, name, brand, description, purchase_date, purchased_from, purchase_country, status, on_loan_to, sold_to, sold_price, sold_currency, sold_date, is_favourite, for_sale, for_sale_price, for_sale_currency, for_sale_price_is_pm, created_at, wrap_images(id, image_url, is_primary, sort_order)'
         )
         .order('created_at', { ascending: false })
-        .limit(16)
+        .limit(50)
 
       if (wrapError) {
         console.error(wrapError)
@@ -504,17 +504,39 @@ const nextAvatarMap: Record<string, string | null> = {}
       })
       setAvatarMap(nextAvatarMap)
       localStorage.setItem(EXPLORE_AVATARS_KEY, JSON.stringify(nextAvatarMap))
-      const usersFromWraps: ExploreUser[] = uniqueUserIds.slice(0, 12).map((userId) => {
-        const userWraps = wraps.filter((wrap) => wrap.user_id === userId)
-        const latestUserWrap = userWraps[0]
+      const [{ data: wrapCountData }, { data: followsDataEarly }] = await Promise.all([
+  supabase.from('wraps').select('user_id').in('user_id', uniqueUserIds),
+  currentUserId
+    ? supabase.from('follows').select('following_id').eq('follower_id', currentUserId).eq('status', 'accepted')
+    : Promise.resolve({ data: [] }),
+])
 
-        return {
-          id: userId,
-          name: getDisplayName(profileMap[userId]),
-          image_url: getPrimaryImage(latestUserWrap),
-          wrap_count: userWraps.length,
-        }
-      })
+const realWrapCounts: Record<string, number> = {}
+;(wrapCountData || []).forEach((w: any) => {
+  realWrapCounts[w.user_id] = (realWrapCounts[w.user_id] || 0) + 1
+})
+
+const earlyFollowingIds = new Set((followsDataEarly || []).map((f: any) => f.following_id))
+
+const followingIdsSet = earlyFollowingIds
+
+const usersFromWraps: ExploreUser[] = uniqueUserIds.slice(0, 12)
+  .map((userId) => {
+    const userWraps = wraps.filter((wrap) => wrap.user_id === userId)
+    const latestUserWrap = userWraps[0]
+
+    return {
+      id: userId,
+      name: getDisplayName(profileMap[userId]),
+      image_url: getPrimaryImage(latestUserWrap),
+      wrap_count: realWrapCounts[userId] || userWraps.length,
+    }
+  })
+  .sort((a, b) => {
+    const aFollowing = followingIdsSet.has(a.id) ? 1 : 0
+    const bFollowing = followingIdsSet.has(b.id) ? 1 : 0
+    return bFollowing - aFollowing
+  })
 
       setUsers(usersFromWraps)
 localStorage.setItem(EXPLORE_USERS_KEY, JSON.stringify(usersFromWraps))
@@ -640,17 +662,28 @@ return () => {
 
           const searchUserWraps = (searchUserWrapData as Wrap[]) || []
 
-          matchedUsers = matchedProfiles.map((profile) => {
-            const userWraps = searchUserWraps.filter((wrap) => wrap.user_id === profile.id)
-            const latestUserWrap = userWraps[0]
+          const searchUserIds = matchedProfiles.map((p) => p.id)
+const { data: searchCountData } = await supabase
+  .from('wraps')
+  .select('user_id')
+  .in('user_id', searchUserIds)
 
-            return {
-              id: profile.id,
-              name: getDisplayName(profile),
-              image_url: getPrimaryImage(latestUserWrap),
-              wrap_count: userWraps.length,
-            }
-          })
+const searchRealCounts: Record<string, number> = {}
+;(searchCountData || []).forEach((w: any) => {
+  searchRealCounts[w.user_id] = (searchRealCounts[w.user_id] || 0) + 1
+})
+
+matchedUsers = matchedProfiles.map((profile) => {
+  const userWraps = searchUserWraps.filter((wrap) => wrap.user_id === profile.id)
+  const latestUserWrap = userWraps[0]
+
+  return {
+    id: profile.id,
+    name: getDisplayName(profile),
+    image_url: getPrimaryImage(latestUserWrap),
+    wrap_count: searchRealCounts[profile.id] || userWraps.length,
+  }
+})
         }
 
         setSearchUsers(matchedUsers)
