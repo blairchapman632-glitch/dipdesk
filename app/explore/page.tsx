@@ -361,6 +361,10 @@ const [showColourFilter, setShowColourFilter] = useState(false)
 const [showBrandFilter, setShowBrandFilter] = useState(false)
 const [showSizeFilter, setShowSizeFilter] = useState(false)
 const [showBlendFilter, setShowBlendFilter] = useState(false)
+const [selectedBlends, setSelectedBlends] = useState<string[]>([])
+const BLEND_TAGS = [
+  'Cotton', 'Linen', 'Silk', 'Hemp', 'Wool/Merino', 'Seacell', 'Tencel', 'Chenille', 'Camel', 'Bamboo', 'Cashmere'
+]
 const [sizeMin, setSizeMin] = useState('')
 const [sizeMax, setSizeMax] = useState('')
 const [sizeRingSling, setSizeRingSling] = useState(false)
@@ -814,7 +818,11 @@ const filteredWraps = (
     })
     if (!matches) return false
   }
-  if (filterMaterial && ((wrap as any).material || '').toLowerCase() !== filterMaterial.toLowerCase()) return false
+  if (selectedBlends.length > 0) {
+    const wrapMaterial = ((wrap as any).material || '').toLowerCase()
+    const matches = selectedBlends.some(b => wrapMaterial.includes(b.toLowerCase().split('/')[0].trim()))
+    if (!matches) return false
+  }
   return true
 })
   const hasSearch = searchTerm.trim().length > 0
@@ -849,7 +857,7 @@ const filteredWraps = (
               type="text"
               value={searchTerm}
               onChange={(event) => setSearchTerm(event.target.value)}
-              placeholder="Discover collections and wraps"
+              placeholder="Search by wrap name or collector"
               className="w-full rounded-lg border pl-11 pr-3 py-2 text-[16px] text-gray-900 outline-none focus:border-pink-500"
             />
           </div>
@@ -947,11 +955,11 @@ const filteredWraps = (
               onClick={() => { setShowBlendFilter(!showBlendFilter); setShowBrandFilter(false); setShowColourFilter(false); setShowSizeFilter(false) }}
               className={`whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-semibold ${filterMaterial ? 'border-pink-500 bg-pink-50 text-pink-700' : 'border-gray-200 bg-white text-gray-600'}`}
             >
-              {filterMaterial ? 'Blend ✓' : 'Blends'} {showBlendFilter ? '▲' : '▼'}
+              {selectedBlends.length > 0 ? `Blends: ${selectedBlends.length}` : 'Blends'} {showBlendFilter ? '▲' : '▼'}
             </button>
 
             </div>
-            {(filterBrand || filterSize || sizeMin || sizeMax || sizeRingSling || filterColour || filterMaterial) && (
+            {(filterBrand || sizeMin || sizeMax || sizeRingSling || filterColour || selectedBlends.length > 0) && (
               <button
                 type="button"
                 onClick={() => {
@@ -965,6 +973,7 @@ const filteredWraps = (
                   setSizeRingSling(false)
                   setFilterColour('')
                   setFilterMaterial('')
+                  setSelectedBlends([])
                 }}
                 className="whitespace-nowrap rounded-full border border-red-200 px-3 py-1 text-xs font-semibold text-red-500"
               >
@@ -1082,20 +1091,29 @@ const filteredWraps = (
             {/* Expanded blend filter */}
             {showBlendFilter && (
               <div className="flex flex-wrap gap-1.5">
-                {filterOptions.materials.map((material) => (
-                  <button
-                    key={material}
-                    type="button"
-                    onClick={() => { setFilterMaterial(filterMaterial === material ? '' : material); setShowBlendFilter(false) }}
-                    className={`whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-semibold transition ${
-                      filterMaterial === material
-                        ? 'border-pink-500 bg-pink-500 text-white'
-                        : 'border-gray-200 bg-white text-gray-600'
-                    }`}
-                  >
-                    {material}
-                  </button>
-                ))}
+                {BLEND_TAGS.map((tag) => {
+                  const selected = selectedBlends.includes(tag)
+                  return (
+                    <button
+                      key={tag}
+                      type="button"
+                      onClick={() => {
+                        const updated = selected
+                          ? selectedBlends.filter(b => b !== tag)
+                          : [...selectedBlends, tag]
+                        setSelectedBlends(updated)
+                        setFilterMaterial(updated.join(','))
+                      }}
+                      className={`whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-semibold transition ${
+                        selected
+                          ? 'border-pink-500 bg-pink-500 text-white'
+                          : 'border-gray-200 bg-white text-gray-600'
+                      }`}
+                    >
+                      {tag}
+                    </button>
+                  )
+                })}
               </div>
             )}
             {/* Expanded colour filter */}

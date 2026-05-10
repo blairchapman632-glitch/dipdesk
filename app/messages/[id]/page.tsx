@@ -520,7 +520,7 @@ const sendImage = async (file: File) => {
             onChange={(e) => setNewMessage(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Message..."
-            className="flex-1 bg-gray-100 rounded-full px-4 py-2 text-sm outline-none text-gray-900 placeholder-gray-400"
+            className="flex-1 bg-gray-100 rounded-full px-4 py-2 text-[16px] outline-none text-gray-900 placeholder-gray-400"
           />
           <button
             onClick={sendMessage}
