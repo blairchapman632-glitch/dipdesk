@@ -289,6 +289,12 @@ const [brandSuggestions, setBrandSuggestions] = useState<string[]>([])
 const [materialSuggestions, setMaterialSuggestions] = useState<string[]>([])
 const [sizeSuggestions, setSizeSuggestions] = useState<string[]>([])
 const [colourSuggestions, setColourSuggestions] = useState<string[]>([])
+
+const COLOUR_TAGS = [
+  'White/Cream', 'Grey', 'Black', 'Brown/Tan', 'Pink/Blush',
+  'Red/Burgundy', 'Orange/Rust', 'Yellow/Mustard', 'Green', 'Teal/Petrol',
+  'Blue', 'Navy', 'Purple', 'Rainbow', 'Multi/Variegated', 'Natural/Undyed'
+]
 const [brandFocused, setBrandFocused] = useState(false)
 const [materialFocused, setMaterialFocused] = useState(false)
 const [sizeFocused, setSizeFocused] = useState(false)
@@ -2527,31 +2533,37 @@ function exportReportCsv() {
     )}
   </div>
 
-  <div className="relative">
+  <div className="md:col-span-2">
     <label className="mb-1 block text-sm font-medium text-gray-700">
       Colour
     </label>
-    <input
-      value={wrapForm.colour}
-      onChange={(event) => updateWrapForm('colour', event.target.value)}
-      onFocus={() => setColourFocused(true)}
-      onBlur={() => setTimeout(() => { setColourFocused(false); setColourSuggestions([]) }, 200)}
-      placeholder="e.g. Blue, Rainbow, Earth tones"
-      className="w-full rounded-xl border px-3 py-2 text-base text-gray-900 placeholder:text-gray-400 outline-none focus:border-pink-500 xl:text-sm"
-    />
-    {colourSuggestions.length > 0 && (
-      <div className="absolute z-10 mt-1 w-full rounded-xl border bg-white shadow-lg">
-        {colourSuggestions.map((s) => (
+    <div className="flex flex-wrap gap-2">
+      {COLOUR_TAGS.map((tag) => {
+        const selected = wrapForm.colour.split(',').map(c => c.trim()).filter(Boolean).includes(tag)
+        return (
           <button
-            key={s}
+            key={tag}
             type="button"
-            onClick={() => { updateWrapForm('colour', s); setColourSuggestions([]) }}
-            className="flex w-full px-3 py-2 text-left text-sm hover:bg-pink-50 first:rounded-t-xl last:rounded-b-xl"
+            onClick={() => {
+              const current = wrapForm.colour.split(',').map(c => c.trim()).filter(Boolean)
+              const updated = selected
+                ? current.filter(c => c !== tag)
+                : [...current, tag]
+              updateWrapForm('colour', updated.join(', '))
+            }}
+            className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
+              selected
+                ? 'border-pink-500 bg-pink-500 text-white'
+                : 'border-gray-200 bg-white text-gray-600 hover:border-pink-300'
+            }`}
           >
-            {s}
+            {tag}
           </button>
-        ))}
-      </div>
+        )
+      })}
+    </div>
+    {wrapForm.colour && (
+      <p className="mt-2 text-xs text-gray-400">Selected: {wrapForm.colour}</p>
     )}
   </div>
 

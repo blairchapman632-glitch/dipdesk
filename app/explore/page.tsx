@@ -357,6 +357,12 @@ export default function Page() {
   const [filterBrand, setFilterBrand] = useState('')
   const [filterSize, setFilterSize] = useState('')
   const [filterColour, setFilterColour] = useState('')
+const [showColourFilter, setShowColourFilter] = useState(false)
+const EXPLORE_COLOUR_TAGS = [
+  'White/Cream', 'Grey', 'Black', 'Brown/Tan', 'Pink/Blush',
+  'Red/Burgundy', 'Orange/Rust', 'Yellow/Mustard', 'Green', 'Teal/Petrol',
+  'Blue', 'Navy', 'Purple', 'Rainbow', 'Multi/Variegated', 'Natural/Undyed'
+]
   const [filterMaterial, setFilterMaterial] = useState('')
   const [filterOptions, setFilterOptions] = useState<{
     brands: string[]
@@ -448,7 +454,7 @@ async function loadActiveDips() {
       const { data: wrapData, error: wrapError } = await supabase
         .from('wraps')
                 .select(
-          'id, user_id, name, brand, description, purchase_date, purchased_from, purchase_country, status, on_loan_to, sold_to, sold_price, sold_currency, sold_date, is_favourite, for_sale, for_sale_price, for_sale_currency, for_sale_price_is_pm, created_at, wrap_images(id, image_url, is_primary, sort_order)'
+          'id, user_id, name, brand, colour, size, material, description, purchase_date, purchased_from, purchase_country, status, on_loan_to, sold_to, sold_price, sold_currency, sold_date, is_favourite, for_sale, for_sale_price, for_sale_currency, for_sale_price_is_pm, created_at, wrap_images(id, image_url, is_primary, sort_order)'
         )
         .order('created_at', { ascending: false })
         .limit(50)
@@ -459,7 +465,7 @@ async function loadActiveDips() {
         return
       }
 
-      const wraps = ((wrapData as Wrap[]) || []).filter(w => w.user_id !== currentUserId)
+      const wraps = ((wrapData as Wrap[]) || []).filter(w => w.user_id !== currentUserId && w.status !== 'departed')
       setLatestWraps(wraps)
       localStorage.setItem(EXPLORE_WRAPS_KEY, JSON.stringify(wraps))
       const uniqueUserIds = [...new Set(wraps.map((wrap) => wrap.user_id))]
@@ -696,7 +702,7 @@ matchedUsers = matchedProfiles.map((profile) => {
         )
         .or(`name.ilike.%${term}%,brand.ilike.%${term}%,colour.ilike.%${term}%,description.ilike.%${term}%`)
         .order('created_at', { ascending: false })
-        .limit(40)
+        .limit(100)
 
       if (wrapError) {
         console.error(wrapError)
@@ -776,7 +782,15 @@ const filteredWraps = (
 ).filter((wrap) => {
   if (filterBrand && (wrap.brand || '').toLowerCase() !== filterBrand.toLowerCase()) return false
   if (filterSize && ((wrap as any).size || '').toLowerCase() !== filterSize.toLowerCase()) return false
-  if (filterColour && ((wrap as any).colour || '').toLowerCase() !== filterColour.toLowerCase()) return false
+  if (filterColour) {
+    const selectedColours = filterColour.split(',').map(c => c.trim().toLowerCase()).filter(Boolean)
+    const wrapColour = ((wrap as any).colour || '').toLowerCase()
+    const matches = selectedColours.some(c => {
+      const baseColour = c.split('/')[0].trim()
+      return wrapColour.includes(baseColour)
+    })
+    if (!matches) return false
+  }
   if (filterMaterial && ((wrap as any).material || '').toLowerCase() !== filterMaterial.toLowerCase()) return false
   return true
 })
@@ -902,16 +916,42 @@ const filteredWraps = (
               ))}
             </select>
 
-            <select
-              value={filterColour}
-              onChange={(e) => setFilterColour(e.target.value)}
-              className={`whitespace-nowrap rounded-full border px-3 py-1 text-sm ${filterColour ? 'border-pink-500 bg-pink-50 text-pink-700 font-semibold' : 'border-gray-200 bg-white text-gray-600'}`}
-            >
-              <option value="">All Colours</option>
-              {filterOptions.colours.map((c) => (
-                <option key={c} value={c}>{c}</option>
-              ))}
-            </select>
+            <div className="col-span-2 md:col-span-1">
+              <button
+                type="button"
+                onClick={() => setShowColourFilter(!showColourFilter)}
+                className={`whitespace-nowrap rounded-full border px-3 py-1 text-sm font-semibold ${filterColour ? 'border-pink-500 bg-pink-50 text-pink-700' : 'border-gray-200 bg-white text-gray-600'}`}
+              >
+                {filterColour ? `Colours: ${filterColour.split(',').length}` : 'All Colours'} {showColourFilter ? '▲' : '▼'}
+              </button>
+              {showColourFilter && (
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {EXPLORE_COLOUR_TAGS.map((tag) => {
+                    const selected = filterColour.split(',').map(c => c.trim()).filter(Boolean).includes(tag)
+                    return (
+                      <button
+                        key={tag}
+                        type="button"
+                        onClick={() => {
+                          const current = filterColour.split(',').map(c => c.trim()).filter(Boolean)
+                          const updated = selected
+                            ? current.filter(c => c !== tag)
+                            : [...current, tag]
+                          setFilterColour(updated.join(', '))
+                        }}
+                        className={`whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-semibold transition ${
+                          selected
+                            ? 'border-pink-500 bg-pink-500 text-white'
+                            : 'border-gray-200 bg-white text-gray-600'
+                        }`}
+                      >
+                        {tag}
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
 
             <select
               value={filterMaterial}
