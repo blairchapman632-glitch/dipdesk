@@ -358,6 +358,15 @@ export default function Page() {
   const [filterSize, setFilterSize] = useState('')
   const [filterColour, setFilterColour] = useState('')
 const [showColourFilter, setShowColourFilter] = useState(false)
+const [showBrandFilter, setShowBrandFilter] = useState(false)
+const [showSizeFilter, setShowSizeFilter] = useState(false)
+const [showBlendFilter, setShowBlendFilter] = useState(false)
+const [sizeMin, setSizeMin] = useState('')
+const [sizeMax, setSizeMax] = useState('')
+const [sizeRingSling, setSizeRingSling] = useState(false)
+const [brandSearch, setBrandSearch] = useState('')
+const [brandSearchResults, setBrandSearchResults] = useState<string[]>([])
+const [selectedBrands, setSelectedBrands] = useState<string[]>([])
 const EXPLORE_COLOUR_TAGS = [
   'White/Cream', 'Grey', 'Black', 'Brown/Tan', 'Pink/Blush',
   'Red/Burgundy', 'Orange/Rust', 'Yellow/Mustard', 'Green', 'Teal/Petrol',
@@ -586,7 +595,7 @@ setLoading(false)
 async function loadFilterOptions() {
   const { data } = await supabase
     .from('wraps')
-    .select('brand, size, colour, material')
+    .select('size, colour, material')
 
   const wraps = (data as any[]) || []
 
@@ -602,7 +611,7 @@ async function loadFilterOptions() {
   }
 
   setFilterOptions({
-    brands: unique('brand'),
+    brands: [],
     sizes: unique('size'),
     colours: unique('colour'),
     materials: unique('material'),
@@ -780,8 +789,22 @@ const filteredWraps = (
     ? baseWraps.filter((wrap) => activeDipWrapIds.has(wrap.id))
     : baseWraps
 ).filter((wrap) => {
-  if (filterBrand && (wrap.brand || '').toLowerCase() !== filterBrand.toLowerCase()) return false
-  if (filterSize && ((wrap as any).size || '').toLowerCase() !== filterSize.toLowerCase()) return false
+  if (filterBrand) {
+    const selectedBrandList = filterBrand.split(',').map(b => b.trim().toLowerCase()).filter(Boolean)
+    const wrapBrand = (wrap.brand || '').toLowerCase()
+    if (!selectedBrandList.some(b => wrapBrand.includes(b))) return false
+  }
+  if (sizeMin || sizeMax || sizeRingSling) {
+    const wrapSize = ((wrap as any).size || '').trim()
+    if (wrapSize === 'Ring Sling') {
+      if (!sizeRingSling) return false
+    } else {
+      const wrapSizeNum = parseFloat(wrapSize)
+      if (isNaN(wrapSizeNum)) return false
+      if (sizeMin && wrapSizeNum < parseFloat(sizeMin)) return false
+      if (sizeMax && wrapSizeNum > parseFloat(sizeMax)) return false
+    }
+  }
   if (filterColour) {
     const selectedColours = filterColour.split(',').map(c => c.trim().toLowerCase()).filter(Boolean)
     const wrapColour = ((wrap as any).colour || '').toLowerCase()
@@ -893,90 +916,215 @@ const filteredWraps = (
           </div>
 
           {/* Filter dropdowns */}
-          <div className="mt-2 grid grid-cols-2 gap-2 md:flex md:flex-row md:overflow-x-auto md:pb-1">
-            <select
-              value={filterBrand}
-              onChange={(e) => setFilterBrand(e.target.value)}
-              className={`whitespace-nowrap rounded-full border px-3 py-1 text-sm ${filterBrand ? 'border-pink-500 bg-pink-50 text-pink-700 font-semibold' : 'border-gray-200 bg-white text-gray-600'}`}
-            >
-              <option value="">All Brands</option>
-              {filterOptions.brands.map((b) => (
-                <option key={b} value={b}>{b}</option>
-              ))}
-            </select>
-
-            <select
-              value={filterSize}
-              onChange={(e) => setFilterSize(e.target.value)}
-              className={`whitespace-nowrap rounded-full border px-3 py-1 text-sm ${filterSize ? 'border-pink-500 bg-pink-50 text-pink-700 font-semibold' : 'border-gray-200 bg-white text-gray-600'}`}
-            >
-              <option value="">All Sizes</option>
-              {filterOptions.sizes.map((s) => (
-                <option key={s} value={s}>{s}</option>
-              ))}
-            </select>
-
-            <div className="col-span-2 md:col-span-1">
-              <button
+          <div className="mt-2 space-y-2">
+            <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+            <button
                 type="button"
-                onClick={() => setShowColourFilter(!showColourFilter)}
-                className={`whitespace-nowrap rounded-full border px-3 py-1 text-sm font-semibold ${filterColour ? 'border-pink-500 bg-pink-50 text-pink-700' : 'border-gray-200 bg-white text-gray-600'}`}
+                onClick={() => { setShowBrandFilter(!showBrandFilter); setShowColourFilter(false); setShowSizeFilter(false); setShowBlendFilter(false) }}
+                className={`whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-semibold ${selectedBrands.length > 0 ? 'border-pink-500 bg-pink-50 text-pink-700' : 'border-gray-200 bg-white text-gray-600'}`}
               >
-                {filterColour ? `Colours: ${filterColour.split(',').length}` : 'All Colours'} {showColourFilter ? '▲' : '▼'}
+                {selectedBrands.length > 0 ? `Brands: ${selectedBrands.length}` : 'Brands'} {showBrandFilter ? '▲' : '▼'}
               </button>
-              {showColourFilter && (
-                <div className="mt-2 flex flex-wrap gap-1.5">
-                  {EXPLORE_COLOUR_TAGS.map((tag) => {
-                    const selected = filterColour.split(',').map(c => c.trim()).filter(Boolean).includes(tag)
-                    return (
-                      <button
-                        key={tag}
-                        type="button"
-                        onClick={() => {
-                          const current = filterColour.split(',').map(c => c.trim()).filter(Boolean)
-                          const updated = selected
-                            ? current.filter(c => c !== tag)
-                            : [...current, tag]
-                          setFilterColour(updated.join(', '))
-                        }}
-                        className={`whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-semibold transition ${
-                          selected
-                            ? 'border-pink-500 bg-pink-500 text-white'
-                            : 'border-gray-200 bg-white text-gray-600'
-                        }`}
-                      >
-                        {tag}
-                      </button>
-                    )
-                  })}
-                </div>
-              )}
-            </div>
 
-            <select
-              value={filterMaterial}
-              onChange={(e) => setFilterMaterial(e.target.value)}
-              className={`whitespace-nowrap rounded-full border px-3 py-1 text-sm ${filterMaterial ? 'border-pink-500 bg-pink-50 text-pink-700 font-semibold' : 'border-gray-200 bg-white text-gray-600'}`}
+            <button
+              type="button"
+              onClick={() => { setShowSizeFilter(!showSizeFilter); setShowBrandFilter(false); setShowColourFilter(false); setShowBlendFilter(false) }}
+              className={`whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-semibold ${filterSize ? 'border-pink-500 bg-pink-50 text-pink-700' : 'border-gray-200 bg-white text-gray-600'}`}
             >
-              <option value="">All Blends</option>
-              {filterOptions.materials.map((m) => (
-                <option key={m} value={m}>{m}</option>
-              ))}
-            </select>
+              {sizeMin || sizeMax || sizeRingSling ? 'Sizes ✓' : 'Sizes'} {showSizeFilter ? '▲' : '▼'}
+            </button>
 
-            {(filterBrand || filterSize || filterColour || filterMaterial) && (
+            <button
+                type="button"
+                onClick={() => { setShowColourFilter(!showColourFilter); setShowBrandFilter(false); setShowSizeFilter(false); setShowBlendFilter(false) }}
+                className={`whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-semibold ${filterColour ? 'border-pink-500 bg-pink-50 text-pink-700' : 'border-gray-200 bg-white text-gray-600'}`}
+              >
+                {filterColour ? `Colours: ${filterColour.split(',').length}` : 'Colours'} {showColourFilter ? '▲' : '▼'}
+              </button>
+
+            <button
+              type="button"
+              onClick={() => { setShowBlendFilter(!showBlendFilter); setShowBrandFilter(false); setShowColourFilter(false); setShowSizeFilter(false) }}
+              className={`whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-semibold ${filterMaterial ? 'border-pink-500 bg-pink-50 text-pink-700' : 'border-gray-200 bg-white text-gray-600'}`}
+            >
+              {filterMaterial ? 'Blend ✓' : 'Blends'} {showBlendFilter ? '▲' : '▼'}
+            </button>
+
+            </div>
+            {(filterBrand || filterSize || sizeMin || sizeMax || sizeRingSling || filterColour || filterMaterial) && (
               <button
                 type="button"
                 onClick={() => {
                   setFilterBrand('')
+                  setSelectedBrands([])
+                  setBrandSearch('')
+                  setBrandSearchResults([])
                   setFilterSize('')
+                  setSizeMin('')
+                  setSizeMax('')
+                  setSizeRingSling(false)
                   setFilterColour('')
                   setFilterMaterial('')
                 }}
-                className="whitespace-nowrap rounded-full border border-red-200 px-3 py-1 text-sm font-semibold text-red-500"
+                className="whitespace-nowrap rounded-full border border-red-200 px-3 py-1 text-xs font-semibold text-red-500"
               >
-                Clear
+                Clear filters
               </button>
+            )}
+
+            {/* Expanded brand filter */}
+            {showBrandFilter && (
+              <div className="space-y-2">
+                {selectedBrands.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {selectedBrands.map((brand) => (
+                      <button
+                        key={brand}
+                        type="button"
+                        onClick={() => {
+                          const updated = selectedBrands.filter(b => b !== brand)
+                          setSelectedBrands(updated)
+                          setFilterBrand(updated.join(','))
+                        }}
+                        className="rounded-full border border-pink-500 bg-pink-500 px-2.5 py-1 text-xs font-semibold text-white"
+                      >
+                        {brand} ×
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <input
+                  type="text"
+                  value={brandSearch}
+                  onChange={async (e) => {
+                    setBrandSearch(e.target.value)
+                    const term = e.target.value.trim()
+                    if (!term) { setBrandSearchResults([]); return }
+                    const { data } = await supabase
+                      .from('wraps')
+                      .select('brand')
+                      .ilike('brand', `%${term}%`)
+                      .limit(20)
+                    const seen = new Map<string, string>()
+                    ;((data as any[]) || []).forEach((w) => {
+                      if (w.brand && !seen.has(w.brand.toLowerCase())) {
+                        seen.set(w.brand.toLowerCase(), w.brand)
+                      }
+                    })
+                    setBrandSearchResults([...seen.values()].sort().filter(b => !selectedBrands.includes(b)))
+                  }}
+                  placeholder="Search brands..."
+                  className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-pink-300"
+                />
+                {brandSearchResults.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {brandSearchResults.map((brand) => (
+                      <button
+                        key={brand}
+                        type="button"
+                        onClick={() => {
+                          const updated = [...selectedBrands, brand]
+                          setSelectedBrands(updated)
+                          setFilterBrand(updated.join(','))
+                          setBrandSearch('')
+                          setBrandSearchResults([])
+                        }}
+                        className="rounded-full border border-gray-200 bg-white px-2.5 py-1 text-xs font-semibold text-gray-600 hover:border-pink-300"
+                      >
+                        {brand}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+{/* Expanded size filter */}
+            {showSizeFilter && (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="2"
+                    max="6"
+                    value={sizeMin}
+                    onChange={(e) => setSizeMin(e.target.value)}
+                    placeholder="Min m"
+                    className="w-24 rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-pink-300"
+                  />
+                  <span className="text-xs text-gray-400">to</span>
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="2"
+                    max="6"
+                    value={sizeMax}
+                    onChange={(e) => setSizeMax(e.target.value)}
+                    placeholder="Max m"
+                    className="w-24 rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-pink-300"
+                  />
+                  <span className="text-xs text-gray-400">meters</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSizeRingSling(!sizeRingSling)}
+                  className={`whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-semibold transition ${
+                    sizeRingSling
+                      ? 'border-pink-500 bg-pink-500 text-white'
+                      : 'border-gray-200 bg-white text-gray-600'
+                  }`}
+                >
+                  Ring Sling
+                </button>
+              </div>
+            )}
+
+            {/* Expanded blend filter */}
+            {showBlendFilter && (
+              <div className="flex flex-wrap gap-1.5">
+                {filterOptions.materials.map((material) => (
+                  <button
+                    key={material}
+                    type="button"
+                    onClick={() => { setFilterMaterial(filterMaterial === material ? '' : material); setShowBlendFilter(false) }}
+                    className={`whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-semibold transition ${
+                      filterMaterial === material
+                        ? 'border-pink-500 bg-pink-500 text-white'
+                        : 'border-gray-200 bg-white text-gray-600'
+                    }`}
+                  >
+                    {material}
+                  </button>
+                ))}
+              </div>
+            )}
+            {/* Expanded colour filter */}
+            {showColourFilter && (
+              <div className="flex flex-wrap gap-1.5">
+                {EXPLORE_COLOUR_TAGS.map((tag) => {
+                  const selected = filterColour.split(',').map(c => c.trim()).filter(Boolean).includes(tag)
+                  return (
+                    <button
+                      key={tag}
+                      type="button"
+                      onClick={() => {
+                        const current = filterColour.split(',').map(c => c.trim()).filter(Boolean)
+                        const updated = selected
+                          ? current.filter(c => c !== tag)
+                          : [...current, tag]
+                        setFilterColour(updated.join(', '))
+                      }}
+                      className={`whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-semibold transition ${
+                        selected
+                          ? 'border-pink-500 bg-pink-500 text-white'
+                          : 'border-gray-200 bg-white text-gray-600'
+                      }`}
+                    >
+                      {tag}
+                    </button>
+                  )
+                })}
+              </div>
             )}
           </div>
         </section>

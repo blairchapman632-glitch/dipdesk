@@ -2486,7 +2486,7 @@ function exportReportCsv() {
       onChange={(event) => updateWrapForm('size', event.target.value)}
       onFocus={() => setSizeFocused(true)}
       onBlur={() => setTimeout(() => { setSizeFocused(false); setSizeSuggestions([]) }, 200)}
-      placeholder="e.g. Size 6, 4.2m"
+      placeholder="e.g. 4.2 (meters)"
       className="w-full rounded-xl border px-3 py-2 text-base text-gray-900 placeholder:text-gray-400 outline-none focus:border-pink-500 xl:text-sm"
     />
     {sizeSuggestions.length > 0 && (
