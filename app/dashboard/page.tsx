@@ -1992,7 +1992,7 @@ function exportReportCsv() {
             <div className="mb-6 flex items-start justify-between gap-4">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-2xl font-bold text-gray-900 xl:text-2xl">
+            <h2 className="text-lg font-bold text-gray-900 line-clamp-2">
               {selectedWrap.name}
             </h2>
 
@@ -2058,7 +2058,7 @@ function exportReportCsv() {
                   if (selectedWrap.brand) params.set('brand', selectedWrap.brand)
                   router.push(`/create-dip?${params.toString()}`)
                 }}
-                className="cursor-pointer rounded-xl bg-gradient-to-r from-pink-500 to-rose-500 px-3 py-1 text-sm font-semibold text-white"
+                className="cursor-pointer rounded-xl border border-pink-500 px-3 py-1 text-sm font-semibold text-pink-500 whitespace-nowrap"
               >
                 + Dip
               </button>

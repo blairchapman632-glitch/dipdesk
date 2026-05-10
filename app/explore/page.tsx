@@ -1442,9 +1442,9 @@ setTimeout(() => setToastMessage(''), 2000)
                           const { data: newConv } = await supabase.from('conversations').insert({ participant_1_id: currentUserId, participant_2_id: selectedWrap.user_id, last_message: null, last_message_at: new Date().toISOString() }).select('id').single()
                           if (newConv) { closeViewWrapModal(); router.push(`/messages/${newConv.id}?prefill=${encodeURIComponent(enquiryMessage)}`) }
                         }}
-                        className="cursor-pointer rounded-xl bg-amber-500 hover:bg-amber-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm transition"
+                        className="cursor-pointer rounded-xl bg-amber-500 hover:bg-amber-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm transition whitespace-nowrap"
                       >
-                        🪓 Contact Seller
+                        Contact Seller
                       </button>
                     )}
                     <button
