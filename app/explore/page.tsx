@@ -344,11 +344,12 @@ export default function Page() {
     currency: 'AUD' | 'USD' | 'EUR' = 'AUD'
   ) {
     if (value === null || value === undefined || Number.isNaN(value)) return ''
-    return new Intl.NumberFormat('en-AU', {
+    const formatted = new Intl.NumberFormat('en-AU', {
       style: 'currency',
       currency,
       maximumFractionDigits: 0,
     }).format(value)
+    return `${formatted} ${currency}`
   }
   const [avatarMap, setAvatarMap] = useState<Record<string, string | null>>({})
     const [searchTerm, setSearchTerm] = useState('')
