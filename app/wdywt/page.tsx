@@ -548,83 +548,92 @@ async function handleComment() {
           </div>
         )}
 {commentingPost && (
-          <div
-            className="fixed inset-0 z-50 flex items-end justify-center bg-black/40"
-            onClick={closeComments}
-          >
-            <div
-              className="w-full max-w-lg rounded-t-3xl bg-white shadow-2xl max-h-[80vh] flex flex-col"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="flex items-center justify-between px-5 py-4 border-b">
-                <h3 className="font-bold text-gray-900">Comments</h3>
-                <button
-  type="button"
-  onClick={closeComments}
-  className="text-sm text-gray-500"
->
-  Close
-</button>
-              </div>
+  <>
+    {/* Dim backdrop - closes on tap */}
+    <div
+      className="fixed inset-0 z-40 bg-black/40"
+      onClick={closeComments}
+    />
 
-              <div className="flex-1 overflow-y-auto px-5 py-3 space-y-4">
-                {loadingComments ? (
-                  <p className="text-sm text-gray-400 text-center py-4">Loading...</p>
-                ) : comments.length === 0 ? (
-                  <p className="text-sm text-gray-400 text-center py-4">No comments yet. Be the first!</p>
-                ) : (
-                  comments.map((comment) => {
-                    const name = comment.profiles?.full_name?.split(' ')[0] || comment.profiles?.username || 'Someone'
-                    return (
-                      <div key={comment.id} className="flex items-start gap-3">
-                        {comment.profiles?.avatar_url ? (
-                          <img src={comment.profiles.avatar_url} alt={name} className="h-8 w-8 rounded-full object-cover shrink-0" />
-                        ) : (
-                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-pink-500 to-rose-500 text-xs font-bold text-white">
-                            {name[0]?.toUpperCase() || '?'}
-                          </div>
-                        )}
-                        <div>
-                          <p className="text-sm text-gray-900">
-                            <span className="font-semibold mr-1">{name}</span>
-                            {comment.content}
-                          </p>
-                          <p className="text-xs text-gray-400 mt-0.5">{timeAgo(comment.created_at)}</p>
-                        </div>
-                      </div>
-                    )
-                  })
-                )}
-              </div>
+    {/* Comments list - sits above input, scrollable, not full screen */}
+    <div className="fixed inset-x-0 bottom-[64px] z-50 flex justify-center pointer-events-none">
+      <div
+        className="w-full max-w-lg pointer-events-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-3 bg-white border-b rounded-t-3xl shadow-lg">
+          <h3 className="font-bold text-gray-900 text-sm">Comments</h3>
+          <button type="button" onClick={closeComments} className="text-xs text-gray-400 font-medium">
+            Close
+          </button>
+        </div>
 
-              <div className="border-t px-4 py-3 flex items-center gap-3">
-                <input
-  type="text"
-  value={commentText}
-  onChange={(e) => setCommentText(e.target.value)}
-  placeholder="Add a comment..."
-  className="flex-1 rounded-full border border-gray-300 bg-white px-4 py-2 text-[16px] text-gray-900 placeholder:text-gray-500 outline-none focus:border-pink-400 focus:ring-2 focus:ring-pink-100"
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault()
-                      if (commentText.trim() && currentUserId && !postingComment) {
-                        handleComment()
-                      }
-                    }
-                  }}
-                />
-                <button
-                  type="button"
-                  disabled={!commentText.trim() || postingComment || !currentUserId}
-                  onClick={handleComment}
-                  className="rounded-full bg-pink-500 px-4 py-2 text-sm font-semibold text-white disabled:opacity-40"
-                >
-                  Post
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+        {/* Comment list */}
+        <div className="bg-white max-h-[40vh] overflow-y-auto px-5 py-3 space-y-4">
+          {loadingComments ? (
+            <p className="text-sm text-gray-400 text-center py-4">Loading...</p>
+          ) : comments.length === 0 ? (
+            <p className="text-sm text-gray-400 text-center py-4">No comments yet. Be the first!</p>
+          ) : (
+            comments.map((comment) => {
+              const name = comment.profiles?.full_name?.split(' ')[0] || comment.profiles?.username || 'Someone'
+              return (
+                <div key={comment.id} className="flex items-start gap-3">
+                  {comment.profiles?.avatar_url ? (
+                    <img src={comment.profiles.avatar_url} alt={name} className="h-8 w-8 rounded-full object-cover shrink-0" />
+                  ) : (
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-pink-500 to-rose-500 text-xs font-bold text-white">
+                      {name[0]?.toUpperCase() || '?'}
+                    </div>
+                  )}
+                  <div>
+                    <p className="text-sm text-gray-900">
+                      <span className="font-semibold mr-1">{name}</span>
+                      {comment.content}
+                    </p>
+                    <p className="text-xs text-gray-400 mt-0.5">{timeAgo(comment.created_at)}</p>
+                  </div>
+                </div>
+              )
+            })
+          )}
+        </div>
+      </div>
+    </div>
+
+    {/* Input - fixed to bottom, keyboard pushes it up naturally */}
+    <div
+      className="fixed inset-x-0 bottom-0 z-50 flex justify-center bg-white border-t shadow-2xl"
+      onClick={(e) => e.stopPropagation()}
+    >
+      <div className="w-full max-w-lg flex items-center gap-3 px-4 py-3">
+        <input
+          type="text"
+          value={commentText}
+          onChange={(e) => setCommentText(e.target.value)}
+          placeholder="Add a comment..."
+          autoFocus
+          className="flex-1 rounded-full border border-gray-300 bg-gray-50 px-4 py-2.5 text-[16px] text-gray-900 placeholder:text-gray-400 outline-none focus:border-pink-400 focus:ring-2 focus:ring-pink-100"
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault()
+              if (commentText.trim() && currentUserId && !postingComment) handleComment()
+            }
+          }}
+        />
+        <button
+          type="button"
+          disabled={!commentText.trim() || postingComment || !currentUserId}
+          onClick={handleComment}
+          className="rounded-full bg-pink-500 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-40 shrink-0"
+        >
+          {postingComment ? '...' : 'Post'}
+        </button>
+      </div>
+    </div>
+  </>
+)}
         {isPostModalOpen && (
           <div
             className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center p-4"
