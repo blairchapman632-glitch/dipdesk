@@ -90,33 +90,45 @@ export default function WDYWTPage() {
   const [toast, setToast] = useState('')
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
   const [likedPosts, setLikedPosts] = useState<Set<string>>(new Set())
-  const [commentingPostId, setCommentingPostId] = useState<string | null>(null)
+
+  // Comment sheet state
+  const [commentSheet, setCommentSheet] = useState<WDYWTPost | null>(null)
   const [comments, setComments] = useState<Comment[]>([])
   const [commentText, setCommentText] = useState('')
   const [loadingComments, setLoadingComments] = useState(false)
   const [postingComment, setPostingComment] = useState(false)
   const commentCacheRef = useRef<Record<string, Comment[]>>({})
+  const commentsEndRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
 
-  async function loadComments(postId: string) {
-    if (commentCacheRef.current[postId]) {
-      setComments(commentCacheRef.current[postId])
+  async function openCommentSheet(post: WDYWTPost) {
+    setCommentSheet(post)
+    setCommentText('')
+    setComments([])
+    setLoadingComments(true)
+
+    // Show cached instantly
+    const cached = commentCacheRef.current[post.id]
+    if (cached) {
+      setComments(cached)
       setLoadingComments(false)
     } else {
-      const sessionCached = sessionStorage.getItem(`wdywt_comments_${postId}`)
+      const sessionCached = sessionStorage.getItem(`wdywt_comments_${post.id}`)
       if (sessionCached) {
         try {
           const parsed = JSON.parse(sessionCached)
           setComments(parsed)
-          commentCacheRef.current[postId] = parsed
+          commentCacheRef.current[post.id] = parsed
           setLoadingComments(false)
         } catch {}
       }
     }
 
+    // Always fetch fresh
     const { data } = await supabase
       .from('wdywt_comments')
       .select('id, user_id, content, created_at')
-      .eq('post_id', postId)
+      .eq('post_id', post.id)
       .order('created_at', { ascending: true })
 
     if (data && data.length > 0) {
@@ -129,28 +141,27 @@ export default function WDYWTPage() {
       ;(profileData || []).forEach((p: any) => { profileMap[p.id] = p })
       const normalized = data.map((c: any) => ({ ...c, profiles: profileMap[c.user_id] || null }))
       setComments(normalized)
-      commentCacheRef.current[postId] = normalized
-      sessionStorage.setItem(`wdywt_comments_${postId}`, JSON.stringify(normalized))
+      commentCacheRef.current[post.id] = normalized
+      sessionStorage.setItem(`wdywt_comments_${post.id}`, JSON.stringify(normalized))
     } else {
       setComments([])
-      commentCacheRef.current[postId] = []
+      commentCacheRef.current[post.id] = []
     }
     setLoadingComments(false)
   }
 
-  function toggleComments(postId: string) {
-    if (commentingPostId === postId) {
-      setCommentingPostId(null)
-      setComments([])
-      setCommentText('')
-    } else {
-      setCommentingPostId(postId)
-      setCommentText('')
-      setComments([])
-      setLoadingComments(true)
-      loadComments(postId)
-    }
+  function closeCommentSheet() {
+    setCommentSheet(null)
+    setComments([])
+    setCommentText('')
   }
+
+  // Scroll to bottom when new comments appear
+  useEffect(() => {
+    if (comments.length > 0) {
+      setTimeout(() => commentsEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 50)
+    }
+  }, [comments])
 
   useEffect(() => {
     const cachedProfile = localStorage.getItem('dipdesk_dashboard_profile')
@@ -303,12 +314,13 @@ export default function WDYWTPage() {
   }
 
   async function handleComment() {
-    if (!commentText.trim() || !currentUserId || !commentingPostId || postingComment) return
+    if (!commentText.trim() || !currentUserId || !commentSheet || postingComment) return
     setPostingComment(true)
 
+    const postId = commentSheet.id
     const { data, error } = await supabase
       .from('wdywt_comments')
-      .insert({ post_id: commentingPostId, user_id: currentUserId, content: commentText.trim() })
+      .insert({ post_id: postId, user_id: currentUserId, content: commentText.trim() })
       .select('id, user_id, content, created_at')
       .single()
 
@@ -322,22 +334,21 @@ export default function WDYWTPage() {
       const newComment: Comment = { ...data, profiles: profileData || null }
       const newComments = [...comments, newComment]
       setComments(newComments)
-      commentCacheRef.current[commentingPostId] = newComments
-      sessionStorage.setItem(`wdywt_comments_${commentingPostId}`, JSON.stringify(newComments))
-      setCommentText('')
-      setCommentingPostId(null)
+      commentCacheRef.current[postId] = newComments
+      sessionStorage.setItem(`wdywt_comments_${postId}`, JSON.stringify(newComments))
 
-      setPosts(prev => prev.map(p => p.id === commentingPostId
+      // Clear input, stay open
+      setCommentText('')
+      inputRef.current?.focus()
+
+      // Update count on post card
+      setPosts(prev => prev.map(p => p.id === postId
         ? { ...p, wdywt_comments: [...p.wdywt_comments, { id: data.id }] }
         : p))
 
-      setToast('Comment added')
-      setTimeout(() => setToast(''), 2500)
-
-      const commentedPost = posts.find(p => p.id === commentingPostId)
-      if (commentedPost && commentedPost.user_id !== currentUserId) {
+      if (commentSheet.user_id !== currentUserId) {
         await supabase.from('notifications').insert({
-          recipient_user_id: commentedPost.user_id,
+          recipient_user_id: commentSheet.user_id,
           actor_user_id: currentUserId,
           type: 'comment',
         })
@@ -427,7 +438,7 @@ export default function WDYWTPage() {
                   <img src={post.photo_url} alt={post.caption || 'WDYWT post'} loading="lazy" className="h-full w-full object-cover object-top" />
                 </div>
 
-                {/* Like + Comment buttons */}
+                {/* Like + Comment */}
                 <div className="flex items-center gap-4 px-4 pt-3 pb-1">
                   <button
                     type="button"
@@ -456,7 +467,7 @@ export default function WDYWTPage() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => toggleComments(post.id)}
+                    onClick={() => openCommentSheet(post)}
                     className="flex items-center gap-1.5 text-sm text-gray-600"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
@@ -471,64 +482,6 @@ export default function WDYWTPage() {
                       <span className="font-semibold text-gray-900 mr-1">{getDisplayName(post)}</span>
                       {post.caption}
                     </p>
-                  </div>
-                )}
-
-                {/* Inline comments */}
-                {commentingPostId === post.id && (
-                  <div className="border-t px-4 py-3">
-                    {loadingComments ? (
-                      <p className="text-sm text-gray-400 py-2">Loading...</p>
-                    ) : comments.length === 0 ? (
-                      <p className="text-sm text-gray-400 py-2">No comments yet</p>
-                    ) : (
-                      <div className="space-y-3 mb-3">
-                        {comments.map((comment) => {
-                          const name = comment.profiles?.full_name?.split(' ')[0] || comment.profiles?.username || 'Someone'
-                          return (
-                            <div key={comment.id} className="flex items-start gap-2">
-                              {comment.profiles?.avatar_url ? (
-                                <img src={comment.profiles.avatar_url} alt={name} className="h-7 w-7 rounded-full object-cover shrink-0" />
-                              ) : (
-                                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-pink-500 to-rose-500 text-xs font-bold text-white">
-                                  {name[0]?.toUpperCase() || '?'}
-                                </div>
-                              )}
-                              <div>
-                                <p className="text-sm text-gray-900">
-                                  <span className="font-semibold mr-1">{name}</span>
-                                  {comment.content}
-                                </p>
-                                <p className="text-xs text-gray-400 mt-0.5">{timeAgo(comment.created_at)}</p>
-                              </div>
-                            </div>
-                          )
-                        })}
-                      </div>
-                    )}
-                    <div className="flex items-center gap-2 mt-2">
-                      <input
-                        type="text"
-                        value={commentText}
-                        onChange={(e) => setCommentText(e.target.value)}
-                        placeholder="Add a comment..."
-                        className="flex-1 rounded-full border border-gray-200 bg-gray-50 px-4 py-2 text-[16px] text-gray-900 outline-none focus:border-pink-400"
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' && !e.shiftKey) {
-                            e.preventDefault()
-                            if (commentText.trim() && currentUserId && !postingComment) handleComment()
-                          }
-                        }}
-                      />
-                      <button
-                        type="button"
-                        disabled={!commentText.trim() || postingComment || !currentUserId}
-                        onClick={handleComment}
-                        className="rounded-full bg-pink-500 px-4 py-2 text-sm font-semibold text-white disabled:opacity-40 shrink-0"
-                      >
-                        {postingComment ? '...' : 'Post'}
-                      </button>
-                    </div>
                   </div>
                 )}
               </article>
@@ -573,6 +526,96 @@ export default function WDYWTPage() {
         )}
 
       </div>
+
+      {/* ── Comment sheet ── */}
+      {commentSheet && (
+        <>
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 z-40 bg-black/40"
+            onClick={closeCommentSheet}
+          />
+
+          {/* Sheet — fixed, never moves, keyboard pushes content up inside it */}
+          <div
+            className="fixed inset-x-0 bottom-0 z-50 flex flex-col rounded-t-3xl bg-white"
+            style={{ maxHeight: '75vh' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Handle + header */}
+            <div className="flex shrink-0 flex-col items-center pt-3 pb-2 border-b border-gray-100">
+              <div className="mb-2 h-1 w-10 rounded-full bg-gray-200" />
+              <div className="flex w-full items-center justify-between px-5">
+                <h3 className="font-bold text-gray-900">Comments</h3>
+                <button type="button" onClick={closeCommentSheet} className="text-sm text-gray-400 font-medium">Close</button>
+              </div>
+            </div>
+
+            {/* Scrollable comment list */}
+            <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+              {loadingComments ? (
+                <p className="text-center text-sm text-gray-400 py-6">Loading...</p>
+              ) : comments.length === 0 ? (
+                <p className="text-center text-sm text-gray-400 py-6">No comments yet. Be the first!</p>
+              ) : (
+                comments.map((comment) => {
+                  const name = comment.profiles?.full_name?.split(' ')[0] || comment.profiles?.username || 'Someone'
+                  return (
+                    <div key={comment.id} className="flex items-start gap-3">
+                      {comment.profiles?.avatar_url ? (
+                        <img src={comment.profiles.avatar_url} alt={name} className="h-8 w-8 rounded-full object-cover shrink-0" />
+                      ) : (
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-pink-500 to-rose-500 text-xs font-bold text-white">
+                          {name[0]?.toUpperCase() || '?'}
+                        </div>
+                      )}
+                      <div className="flex-1">
+                        <p className="text-sm text-gray-900">
+                          <span className="font-semibold mr-1">{name}</span>
+                          {comment.content}
+                        </p>
+                        <p className="text-xs text-gray-400 mt-0.5">{timeAgo(comment.created_at)}</p>
+                      </div>
+                    </div>
+                  )
+                })
+              )}
+              <div ref={commentsEndRef} />
+            </div>
+
+            {/* Input — pinned to bottom of sheet, keyboard pushes sheet up */}
+            <div
+              className="shrink-0 border-t border-gray-100 px-4 py-3 bg-white"
+              style={{ paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}
+            >
+              <div className="flex items-center gap-3">
+                <input
+                  ref={inputRef}
+                  type="text"
+                  value={commentText}
+                  onChange={(e) => setCommentText(e.target.value)}
+                  placeholder="Add a comment..."
+                  className="flex-1 rounded-full border border-gray-200 bg-gray-50 px-4 py-2.5 text-[16px] text-gray-900 placeholder:text-gray-400 outline-none focus:border-pink-400 focus:ring-2 focus:ring-pink-100"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault()
+                      if (commentText.trim() && currentUserId && !postingComment) handleComment()
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  disabled={!commentText.trim() || postingComment || !currentUserId}
+                  onClick={handleComment}
+                  className="rounded-full bg-pink-500 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-40 shrink-0 transition"
+                >
+                  {postingComment ? '...' : 'Post'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
 
       {/* Delete confirm */}
       {confirmDelete && (
