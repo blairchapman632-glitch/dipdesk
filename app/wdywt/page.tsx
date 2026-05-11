@@ -23,6 +23,14 @@ type WDYWTPost = {
   wdywt_comments: { id: string }[]
 }
 
+type Comment = {
+  id: string
+  user_id: string
+  content: string
+  created_at: string
+  profiles: { full_name: string | null; username: string | null; avatar_url: string | null } | null
+}
+
 function timeAgo(dateString: string) {
   const now = Date.now()
   const then = new Date(dateString).getTime()
@@ -43,16 +51,7 @@ function getDisplayName(post: WDYWTPost) {
 async function fetchPosts(): Promise<WDYWTPost[]> {
   const { data, error } = await supabase
     .from('wdywt_posts')
-    .select(`
-      id,
-      user_id,
-      photo_url,
-      thumbnail_url,
-      caption,
-      created_at,
-      wdywt_likes ( id ),
-      wdywt_comments ( id )
-    `)
+    .select(`id, user_id, photo_url, thumbnail_url, caption, created_at, wdywt_likes ( id ), wdywt_comments ( id )`)
     .order('created_at', { ascending: false })
     .limit(30)
 
@@ -90,41 +89,70 @@ export default function WDYWTPage() {
   const [hasPostedToday, setHasPostedToday] = useState(false)
   const [toast, setToast] = useState('')
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
-const [likedPosts, setLikedPosts] = useState<Set<string>>(new Set())
-const [commentingPost, setCommentingPost] = useState<WDYWTPost | null>(null)
-
-function openComments(post: WDYWTPost) {
-  scrollRef.current = window.scrollY
-  document.body.style.overflow = 'hidden'
-  document.body.style.position = 'fixed'
-  document.body.style.top = `-${window.scrollY}px`
-  document.body.style.width = '100%'
-  setCommentingPost(post)
-  setCommentText('')
-  setComments([])
-  setLoadingComments(false)
-}
-
-function closeComments() {
-  const scrollY = scrollRef.current
-  document.body.style.overflow = ''
-  document.body.style.position = ''
-  document.body.style.top = ''
-  document.body.style.width = ''
-  window.scrollTo(0, scrollY)
-  setCommentingPost(null)
-  setComments([])
-  setCommentText('')
-  setLoadingComments(false)
-}
-
-const [comments, setComments] = useState<{id: string, user_id: string, content: string, created_at: string, profiles: {full_name: string | null, username: string | null, avatar_url: string | null} | null}[]>([])
+  const [likedPosts, setLikedPosts] = useState<Set<string>>(new Set())
+  const [commentingPostId, setCommentingPostId] = useState<string | null>(null)
+  const [comments, setComments] = useState<Comment[]>([])
   const [commentText, setCommentText] = useState('')
   const [loadingComments, setLoadingComments] = useState(false)
   const [postingComment, setPostingComment] = useState(false)
-  const commentCacheRef = useRef<Record<string, typeof comments>>({})
+  const commentCacheRef = useRef<Record<string, Comment[]>>({})
+
+  async function loadComments(postId: string) {
+    if (commentCacheRef.current[postId]) {
+      setComments(commentCacheRef.current[postId])
+      setLoadingComments(false)
+    } else {
+      const sessionCached = sessionStorage.getItem(`wdywt_comments_${postId}`)
+      if (sessionCached) {
+        try {
+          const parsed = JSON.parse(sessionCached)
+          setComments(parsed)
+          commentCacheRef.current[postId] = parsed
+          setLoadingComments(false)
+        } catch {}
+      }
+    }
+
+    const { data } = await supabase
+      .from('wdywt_comments')
+      .select('id, user_id, content, created_at')
+      .eq('post_id', postId)
+      .order('created_at', { ascending: true })
+
+    if (data && data.length > 0) {
+      const userIds = [...new Set(data.map((c: any) => c.user_id))]
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('id, full_name, username, avatar_url')
+        .in('id', userIds)
+      const profileMap: Record<string, any> = {}
+      ;(profileData || []).forEach((p: any) => { profileMap[p.id] = p })
+      const normalized = data.map((c: any) => ({ ...c, profiles: profileMap[c.user_id] || null }))
+      setComments(normalized)
+      commentCacheRef.current[postId] = normalized
+      sessionStorage.setItem(`wdywt_comments_${postId}`, JSON.stringify(normalized))
+    } else {
+      setComments([])
+      commentCacheRef.current[postId] = []
+    }
+    setLoadingComments(false)
+  }
+
+  function toggleComments(postId: string) {
+    if (commentingPostId === postId) {
+      setCommentingPostId(null)
+      setComments([])
+      setCommentText('')
+    } else {
+      setCommentingPostId(postId)
+      setCommentText('')
+      setComments([])
+      setLoadingComments(true)
+      loadComments(postId)
+    }
+  }
+
   useEffect(() => {
-    // Load current user from profile cache instantly
     const cachedProfile = localStorage.getItem('dipdesk_dashboard_profile')
     if (cachedProfile) {
       try {
@@ -133,7 +161,6 @@ const [comments, setComments] = useState<{id: string, user_id: string, content: 
       } catch {}
     }
 
-    // Load posted today from cache instantly
     const cachedPostedToday = localStorage.getItem('wdywt_posted_today')
     if (cachedPostedToday) {
       try {
@@ -157,7 +184,6 @@ const [comments, setComments] = useState<{id: string, user_id: string, content: 
       const { data: { user } } = await supabase.auth.getUser()
       setCurrentUserId(user?.id || null)
 
-      // Check if user has already posted today
       if (user) {
         const now = new Date()
         const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString()
@@ -222,58 +248,39 @@ const [comments, setComments] = useState<{id: string, user_id: string, content: 
     let file = photoFile
     try {
       const { default: imageCompression } = await import('browser-image-compression')
-      file = await imageCompression(photoFile, {
-        maxSizeMB: 1,
-        maxWidthOrHeight: 1080,
-        useWebWorker: true,
-      })
+      file = await imageCompression(photoFile, { maxSizeMB: 1, maxWidthOrHeight: 1080, useWebWorker: true })
     } catch {}
 
     const ext = file.name.split('.').pop() || 'jpg'
     const fileName = `${currentUserId}/${Date.now()}.${ext}`
 
-    const { error: uploadError } = await supabase.storage
-      .from('wdywt-photos')
-      .upload(fileName, file)
-
+    const { error: uploadError } = await supabase.storage.from('wdywt-photos').upload(fileName, file)
     if (uploadError) {
       setPostError('Upload failed. Please try again.')
       setIsPosting(false)
       return
     }
 
-    const { data: urlData } = supabase.storage
-      .from('wdywt-photos')
-      .getPublicUrl(fileName)
+    const { data: urlData } = supabase.storage.from('wdywt-photos').getPublicUrl(fileName)
 
     let thumbUrl = urlData.publicUrl
     try {
       const { default: imageCompression } = await import('browser-image-compression')
-      const thumb = await imageCompression(photoFile, {
-        maxSizeMB: 0.1,
-        maxWidthOrHeight: 400,
-        useWebWorker: true,
-      })
+      const thumb = await imageCompression(photoFile, { maxSizeMB: 0.1, maxWidthOrHeight: 400, useWebWorker: true })
       const thumbName = `${currentUserId}/thumb_${Date.now()}.${ext}`
-      const { error: thumbError } = await supabase.storage
-        .from('wdywt-photos')
-        .upload(thumbName, thumb)
+      const { error: thumbError } = await supabase.storage.from('wdywt-photos').upload(thumbName, thumb)
       if (!thumbError) {
-        const { data: thumbUrlData } = supabase.storage
-          .from('wdywt-photos')
-          .getPublicUrl(thumbName)
+        const { data: thumbUrlData } = supabase.storage.from('wdywt-photos').getPublicUrl(thumbName)
         thumbUrl = thumbUrlData.publicUrl
       }
     } catch {}
 
-    const { error: insertError } = await supabase
-      .from('wdywt_posts')
-      .insert({
-        user_id: currentUserId,
-        photo_url: urlData.publicUrl,
-        thumbnail_url: thumbUrl,
-        caption: caption.trim() || null,
-      })
+    const { error: insertError } = await supabase.from('wdywt_posts').insert({
+      user_id: currentUserId,
+      photo_url: urlData.publicUrl,
+      thumbnail_url: thumbUrl,
+      caption: caption.trim() || null,
+    })
 
     if (insertError) {
       setPostError('Could not save post. Please try again.')
@@ -294,17 +301,14 @@ const [comments, setComments] = useState<{id: string, user_id: string, content: 
     localStorage.setItem(WDYWT_CACHE_KEY, JSON.stringify(result))
     localStorage.setItem(WDYWT_CACHE_KEY + '_time', String(Date.now()))
   }
-async function handleComment() {
-    if (!commentText.trim() || !currentUserId || !commentingPost || postingComment) return
+
+  async function handleComment() {
+    if (!commentText.trim() || !currentUserId || !commentingPostId || postingComment) return
     setPostingComment(true)
 
     const { data, error } = await supabase
       .from('wdywt_comments')
-      .insert({
-        post_id: commentingPost.id,
-        user_id: currentUserId,
-        content: commentText.trim(),
-      })
+      .insert({ post_id: commentingPostId, user_id: currentUserId, content: commentText.trim() })
       .select('id, user_id, content, created_at')
       .single()
 
@@ -315,33 +319,24 @@ async function handleComment() {
         .eq('id', currentUserId)
         .single()
 
-            const newComments = [...comments, { ...data, profiles: profileData || null }]
+      const newComment: Comment = { ...data, profiles: profileData || null }
+      const newComments = [...comments, newComment]
       setComments(newComments)
-      commentCacheRef.current[commentingPost.id] = newComments
-      sessionStorage.setItem(`wdywt_comments_${commentingPost.id}`, JSON.stringify(newComments))
-
-      const commentedPostId = commentingPost.id
-
+      commentCacheRef.current[commentingPostId] = newComments
+      sessionStorage.setItem(`wdywt_comments_${commentingPostId}`, JSON.stringify(newComments))
       setCommentText('')
-      setCommentingPost(null)
 
-      setPosts(prev => prev.map(p => p.id === commentedPostId
+      setPosts(prev => prev.map(p => p.id === commentingPostId
         ? { ...p, wdywt_comments: [...p.wdywt_comments, { id: data.id }] }
         : p))
 
       setToast('Comment added')
       setTimeout(() => setToast(''), 2500)
 
-      setTimeout(() => {
-        document.getElementById(`wdywt-post-${commentedPostId}`)?.scrollIntoView({
-          block: 'center',
-          behavior: 'smooth',
-        })
-      }, 50)
-
-      if (commentingPost.user_id !== currentUserId) {
+      const commentedPost = posts.find(p => p.id === commentingPostId)
+      if (commentedPost && commentedPost.user_id !== currentUserId) {
         await supabase.from('notifications').insert({
-          recipient_user_id: commentingPost.user_id,
+          recipient_user_id: commentedPost.user_id,
           actor_user_id: currentUserId,
           type: 'comment',
         })
@@ -350,6 +345,7 @@ async function handleComment() {
 
     setPostingComment(false)
   }
+
   return (
     <AppLayout>
       <div className="mx-auto max-w-lg space-y-4">
@@ -403,55 +399,34 @@ async function handleComment() {
                 key={post.id}
                 className="overflow-hidden rounded-2xl bg-white shadow-sm"
               >
+                {/* Header */}
                 <div className="flex items-center gap-3 p-4 pb-3">
-                  <button
-                    type="button"
-                    onClick={() => router.push(`/user/${post.user_id}`)}
-                    className="shrink-0 group"
-                  >
+                  <button type="button" onClick={() => router.push(`/user/${post.user_id}`)} className="shrink-0 group">
                     {post.profiles?.avatar_url ? (
-                      <img
-                        src={post.profiles.avatar_url}
-                        alt={getDisplayName(post)}
-                        className="h-10 w-10 rounded-full object-cover ring-2 ring-pink-100 group-hover:ring-pink-400 group-hover:scale-110 transition duration-200"
-                      />
+                      <img src={post.profiles.avatar_url} alt={getDisplayName(post)} className="h-10 w-10 rounded-full object-cover ring-2 ring-pink-100 group-hover:ring-pink-400 transition duration-200" />
                     ) : (
-                      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-pink-500 to-rose-500 text-sm font-bold text-white ring-2 ring-pink-100 group-hover:ring-pink-400 group-hover:scale-110 transition duration-200">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-pink-500 to-rose-500 text-sm font-bold text-white ring-2 ring-pink-100">
                         {getDisplayName(post)[0]?.toUpperCase() || '?'}
                       </div>
                     )}
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => router.push(`/user/${post.user_id}`)}
-                    className="min-w-0 flex-1 text-left"
-                  >
-                    <p className="font-semibold text-gray-900 text-sm hover:text-pink-500 transition">
-                      {getDisplayName(post)}
-                    </p>
+                  <button type="button" onClick={() => router.push(`/user/${post.user_id}`)} className="min-w-0 flex-1 text-left">
+                    <p className="font-semibold text-gray-900 text-sm hover:text-pink-500 transition">{getDisplayName(post)}</p>
                     <p className="text-xs text-pink-400">View collection →</p>
                   </button>
-
                   {post.user_id === currentUserId && (
-                    <button
-                      type="button"
-                      onClick={() => setConfirmDelete(post.id)}
-                      className="shrink-0 rounded-full p-1.5 text-gray-300 hover:text-red-400 hover:bg-red-50 transition"
-                    >
+                    <button type="button" onClick={() => setConfirmDelete(post.id)} className="shrink-0 rounded-full p-1.5 text-gray-300 hover:text-red-400 hover:bg-red-50 transition">
                       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
                     </button>
                   )}
                 </div>
 
+                {/* Photo */}
                 <div className="relative aspect-[4/5] w-full bg-gray-100">
-                  <img
-                    src={post.photo_url}
-                    alt={post.caption || 'WDYWT post'}
-                    loading="lazy"
-                    className="h-full w-full object-cover object-top"
-                  />
+                  <img src={post.photo_url} alt={post.caption || 'WDYWT post'} loading="lazy" className="h-full w-full object-cover object-top" />
                 </div>
 
+                {/* Like + Comment buttons */}
                 <div className="flex items-center gap-4 px-4 pt-3 pb-1">
                   <button
                     type="button"
@@ -459,26 +434,16 @@ async function handleComment() {
                       if (!currentUserId) return
                       const isLiked = likedPosts.has(post.id)
                       if (isLiked) {
-                        await supabase.from('wdywt_likes').delete()
-                          .eq('post_id', post.id).eq('user_id', currentUserId)
+                        await supabase.from('wdywt_likes').delete().eq('post_id', post.id).eq('user_id', currentUserId)
                         setLikedPosts(prev => { const next = new Set(prev); next.delete(post.id); return next })
-                        setPosts(prev => prev.map(p => p.id === post.id
-                          ? { ...p, wdywt_likes: p.wdywt_likes.filter(l => l.id !== currentUserId) }
-                          : p))
+                        setPosts(prev => prev.map(p => p.id === post.id ? { ...p, wdywt_likes: p.wdywt_likes.filter(l => l.id !== currentUserId) } : p))
                       } else {
-                        const { data } = await supabase.from('wdywt_likes')
-                          .insert({ post_id: post.id, user_id: currentUserId }).select('id').single()
+                        const { data } = await supabase.from('wdywt_likes').insert({ post_id: post.id, user_id: currentUserId }).select('id').single()
                         if (data) {
                           setLikedPosts(prev => new Set(prev).add(post.id))
-                          setPosts(prev => prev.map(p => p.id === post.id
-                            ? { ...p, wdywt_likes: [...p.wdywt_likes, { id: data.id }] }
-                            : p))
+                          setPosts(prev => prev.map(p => p.id === post.id ? { ...p, wdywt_likes: [...p.wdywt_likes, { id: data.id }] } : p))
                           if (post.user_id !== currentUserId) {
-                            await supabase.from('notifications').insert({
-                              recipient_user_id: post.user_id,
-                              actor_user_id: currentUserId,
-                              type: 'like',
-                            })
+                            await supabase.from('notifications').insert({ recipient_user_id: post.user_id, actor_user_id: currentUserId, type: 'like' })
                           }
                         }
                       }
@@ -486,54 +451,11 @@ async function handleComment() {
                     className="flex items-center gap-1.5 text-sm transition"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill={likedPosts.has(post.id) ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`h-5 w-5 ${likedPosts.has(post.id) ? 'text-pink-500' : 'text-gray-600'}`}><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
-                    <span className={likedPosts.has(post.id) ? 'text-pink-500 font-semibold' : 'text-gray-600'}>
-                      {post.wdywt_likes?.length || 0}
-                    </span>
+                    <span className={likedPosts.has(post.id) ? 'text-pink-500 font-semibold' : 'text-gray-600'}>{post.wdywt_likes?.length || 0}</span>
                   </button>
                   <button
                     type="button"
-                    onClick={async () => {
-                      openComments(post)
-                      const sessionCached = sessionStorage.getItem(`wdywt_comments_${post.id}`)
-                      if (commentCacheRef.current[post.id]) {
-                        setComments(commentCacheRef.current[post.id])
-                        setLoadingComments(false)
-                      } else if (sessionCached) {
-                        try {
-                          const parsed = JSON.parse(sessionCached)
-                          setComments(parsed)
-                          commentCacheRef.current[post.id] = parsed
-                          setLoadingComments(false)
-                        } catch {
-                          setLoadingComments(true)
-                        }
-                      } else {
-                        setLoadingComments(true)
-                      }
-                      const { data } = await supabase
-                        .from('wdywt_comments')
-                        .select('id, user_id, content, created_at')
-                        .eq('post_id', post.id)
-                        .order('created_at', { ascending: true })
-                      if (data && data.length > 0) {
-                        const userIds = [...new Set(data.map((c: any) => c.user_id))]
-                        const { data: profileData } = await supabase
-                          .from('profiles')
-                          .select('id, full_name, username, avatar_url')
-                          .in('id', userIds)
-                        const profileMap: Record<string, any> = {}
-                        ;(profileData || []).forEach((p: any) => { profileMap[p.id] = p })
-                        const normalized = data.map((c: any) => ({ ...c, profiles: profileMap[c.user_id] || null }))
-                        setComments(normalized)
-                        commentCacheRef.current[post.id] = normalized
-                        sessionStorage.setItem(`wdywt_comments_${post.id}`, JSON.stringify(normalized))
-                      } else {
-                        setComments([])
-                        commentCacheRef.current[post.id] = []
-                        sessionStorage.setItem(`wdywt_comments_${post.id}`, JSON.stringify([]))
-                      }
-                      setLoadingComments(false)
-                    }}
+                    onClick={() => toggleComments(post.id)}
                     className="flex items-center gap-1.5 text-sm text-gray-600"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
@@ -541,178 +463,108 @@ async function handleComment() {
                   </button>
                 </div>
 
+                {/* Caption */}
                 {post.caption && (
-                  <div className="px-4 pb-4 pt-1">
+                  <div className="px-4 pt-1 pb-3">
                     <p className="text-sm text-gray-700">
                       <span className="font-semibold text-gray-900 mr-1">{getDisplayName(post)}</span>
                       {post.caption}
                     </p>
                   </div>
                 )}
+
+                {/* Inline comments */}
+                {commentingPostId === post.id && (
+                  <div className="border-t px-4 py-3">
+                    {loadingComments ? (
+                      <p className="text-sm text-gray-400 py-2">Loading...</p>
+                    ) : comments.length === 0 ? (
+                      <p className="text-sm text-gray-400 py-2">No comments yet</p>
+                    ) : (
+                      <div className="space-y-3 mb-3">
+                        {comments.map((comment) => {
+                          const name = comment.profiles?.full_name?.split(' ')[0] || comment.profiles?.username || 'Someone'
+                          return (
+                            <div key={comment.id} className="flex items-start gap-2">
+                              {comment.profiles?.avatar_url ? (
+                                <img src={comment.profiles.avatar_url} alt={name} className="h-7 w-7 rounded-full object-cover shrink-0" />
+                              ) : (
+                                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-pink-500 to-rose-500 text-xs font-bold text-white">
+                                  {name[0]?.toUpperCase() || '?'}
+                                </div>
+                              )}
+                              <div>
+                                <p className="text-sm text-gray-900">
+                                  <span className="font-semibold mr-1">{name}</span>
+                                  {comment.content}
+                                </p>
+                                <p className="text-xs text-gray-400 mt-0.5">{timeAgo(comment.created_at)}</p>
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+                    <div className="flex items-center gap-2 mt-2">
+                      <input
+                        type="text"
+                        value={commentText}
+                        onChange={(e) => setCommentText(e.target.value)}
+                        placeholder="Add a comment..."
+                        className="flex-1 rounded-full border border-gray-200 bg-gray-50 px-4 py-2 text-[16px] outline-none focus:border-pink-400"
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault()
+                            if (commentText.trim() && currentUserId && !postingComment) handleComment()
+                          }
+                        }}
+                      />
+                      <button
+                        type="button"
+                        disabled={!commentText.trim() || postingComment || !currentUserId}
+                        onClick={handleComment}
+                        className="rounded-full bg-pink-500 px-4 py-2 text-sm font-semibold text-white disabled:opacity-40 shrink-0"
+                      >
+                        {postingComment ? '...' : 'Post'}
+                      </button>
+                    </div>
+                  </div>
+                )}
               </article>
             ))}
           </div>
         )}
-{commentingPost && (
-  <>
-    {/* Dim backdrop - closes on tap */}
-    <div
-      className="fixed inset-0 z-40 bg-black/40"
-      onClick={closeComments}
-    />
 
-    {/* Comments list - sits above input, scrollable, not full screen */}
-    <div className="fixed inset-x-0 bottom-[64px] z-50 flex justify-center pointer-events-none">
-      <div
-        className="w-full max-w-lg pointer-events-auto"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 py-3 bg-white border-b rounded-t-3xl shadow-lg">
-          <h3 className="font-bold text-gray-900 text-sm">Comments</h3>
-          <button type="button" onClick={closeComments} className="text-xs text-gray-400 font-medium">
-            Close
-          </button>
-        </div>
-
-        {/* Comment list */}
-        <div className="bg-white max-h-[40vh] overflow-y-auto px-5 py-3 space-y-4">
-          {loadingComments ? (
-            <p className="text-sm text-gray-400 text-center py-4">Loading...</p>
-          ) : comments.length === 0 ? (
-            <p className="text-sm text-gray-400 text-center py-4">No comments yet. Be the first!</p>
-          ) : (
-            comments.map((comment) => {
-              const name = comment.profiles?.full_name?.split(' ')[0] || comment.profiles?.username || 'Someone'
-              return (
-                <div key={comment.id} className="flex items-start gap-3">
-                  {comment.profiles?.avatar_url ? (
-                    <img src={comment.profiles.avatar_url} alt={name} className="h-8 w-8 rounded-full object-cover shrink-0" />
-                  ) : (
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-pink-500 to-rose-500 text-xs font-bold text-white">
-                      {name[0]?.toUpperCase() || '?'}
-                    </div>
-                  )}
-                  <div>
-                    <p className="text-sm text-gray-900">
-                      <span className="font-semibold mr-1">{name}</span>
-                      {comment.content}
-                    </p>
-                    <p className="text-xs text-gray-400 mt-0.5">{timeAgo(comment.created_at)}</p>
-                  </div>
-                </div>
-              )
-            })
-          )}
-        </div>
-      </div>
-    </div>
-
-    {/* Input - fixed to bottom, keyboard pushes it up naturally */}
-    <div
-      className="fixed inset-x-0 bottom-0 z-50 flex justify-center bg-white border-t shadow-2xl"
-      onClick={(e) => e.stopPropagation()}
-    >
-      <div className="w-full max-w-lg flex items-center gap-3 px-4 py-3">
-        <input
-          type="text"
-          value={commentText}
-          onChange={(e) => setCommentText(e.target.value)}
-          placeholder="Add a comment..."
-          autoFocus
-          className="flex-1 rounded-full border border-gray-300 bg-gray-50 px-4 py-2.5 text-[16px] text-gray-900 placeholder:text-gray-400 outline-none focus:border-pink-400 focus:ring-2 focus:ring-pink-100"
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-              e.preventDefault()
-              if (commentText.trim() && currentUserId && !postingComment) handleComment()
-            }
-          }}
-        />
-        <button
-          type="button"
-          disabled={!commentText.trim() || postingComment || !currentUserId}
-          onClick={handleComment}
-          className="rounded-full bg-pink-500 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-40 shrink-0"
-        >
-          {postingComment ? '...' : 'Post'}
-        </button>
-      </div>
-    </div>
-  </>
-)}
+        {/* Post modal */}
         {isPostModalOpen && (
-          <div
-            className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center p-4"
-            onClick={() => { if (!isPosting) setIsPostModalOpen(false) }}
-          >
-            <div
-              className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl max-h-[90vh] overflow-y-auto"
-              onClick={(e) => e.stopPropagation()}
-            >
+          <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center p-4" onClick={() => { if (!isPosting) setIsPostModalOpen(false) }}>
+            <div className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
               <div className="mb-5 flex items-center justify-between">
                 <h2 className="text-xl font-bold text-gray-900">WDYWT</h2>
-                <button
-                  type="button"
-                  onClick={() => setIsPostModalOpen(false)}
-                  disabled={isPosting}
-                  className="rounded-full border px-3 py-1 text-sm text-gray-600 disabled:opacity-50"
-                >
-                  Close
-                </button>
+                <button type="button" onClick={() => setIsPostModalOpen(false)} disabled={isPosting} className="rounded-full border px-3 py-1 text-sm text-gray-600 disabled:opacity-50">Close</button>
               </div>
-
               {!photoPreview ? (
                 <label className="flex h-40 w-full cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-gray-200 bg-gray-50 hover:border-pink-300 hover:bg-pink-50 transition">
                   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="h-8 w-8 text-gray-300 mb-2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
                   <p className="text-sm font-semibold text-gray-500">Tap to add photo</p>
                   <p className="text-xs text-gray-400 mt-1">Choose from camera or library</p>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0]
-                      if (!file) return
-                      setPhotoFile(file)
-                      setPhotoPreview(URL.createObjectURL(file))
-                    }}
-                  />
+                  <input type="file" accept="image/*" className="hidden" onChange={(e) => {
+                    const file = e.target.files?.[0]
+                    if (!file) return
+                    setPhotoFile(file)
+                    setPhotoPreview(URL.createObjectURL(file))
+                  }} />
                 </label>
               ) : (
                 <div className="relative h-64 w-full overflow-hidden rounded-2xl bg-black">
                   <img src={photoPreview} alt="Preview" className="h-full w-full object-contain" />
-                  <button
-                    type="button"
-                    onClick={() => { setPhotoFile(null); setPhotoPreview(null) }}
-                    className="absolute right-3 top-3 rounded-full bg-black/60 px-3 py-1 text-xs font-semibold text-white"
-                  >
-                    Change
-                  </button>
+                  <button type="button" onClick={() => { setPhotoFile(null); setPhotoPreview(null) }} className="absolute right-3 top-3 rounded-full bg-black/60 px-3 py-1 text-xs font-semibold text-white">Change</button>
                 </div>
               )}
-
-              <textarea
-                value={caption}
-                onChange={(e) => setCaption(e.target.value)}
-                placeholder="What are you wearing today? Add details about your wrap..."
-                rows={3}
-                maxLength={300}
-                className="mt-4 w-full rounded-2xl border border-gray-200 px-4 py-3 text-[16px] text-gray-700 outline-none focus:border-pink-300 focus:ring-2 focus:ring-pink-100 resize-none"
-              />
+              <textarea value={caption} onChange={(e) => setCaption(e.target.value)} placeholder="What are you wearing today? Add details about your wrap..." rows={3} maxLength={300} className="mt-4 w-full rounded-2xl border border-gray-200 px-4 py-3 text-[16px] text-gray-700 outline-none focus:border-pink-300 focus:ring-2 focus:ring-pink-100 resize-none" />
               <p className="mt-1 text-right text-xs text-gray-400">{caption.length}/300</p>
-
-              {postError && (
-                <p className="mt-2 rounded-xl bg-red-50 px-4 py-2 text-sm font-medium text-red-600">
-                  {postError}
-                </p>
-              )}
-
-              <button
-                type="button"
-                disabled={!photoFile || isPosting}
-                onClick={handlePost}
-                className="mt-4 w-full rounded-2xl bg-gradient-to-r from-pink-500 to-rose-500 py-3 text-sm font-bold text-white shadow-sm disabled:opacity-50 transition"
-              >
+              {postError && <p className="mt-2 rounded-xl bg-red-50 px-4 py-2 text-sm font-medium text-red-600">{postError}</p>}
+              <button type="button" disabled={!photoFile || isPosting} onClick={handlePost} className="mt-4 w-full rounded-2xl bg-gradient-to-r from-pink-500 to-rose-500 py-3 text-sm font-bold text-white shadow-sm disabled:opacity-50 transition">
                 {isPosting ? 'Posting...' : 'Share WDYWT'}
               </button>
             </div>
@@ -720,19 +572,15 @@ async function handleComment() {
         )}
 
       </div>
-{confirmDelete && (
+
+      {/* Delete confirm */}
+      {confirmDelete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl">
             <h3 className="text-lg font-bold text-gray-900 mb-2">Delete post?</h3>
             <p className="text-sm text-gray-500 mb-6">This cannot be undone.</p>
             <div className="flex gap-3">
-              <button
-                type="button"
-                onClick={() => setConfirmDelete(null)}
-                className="flex-1 rounded-xl border px-4 py-2.5 text-sm font-semibold text-gray-700"
-              >
-                Cancel
-              </button>
+              <button type="button" onClick={() => setConfirmDelete(null)} className="flex-1 rounded-xl border px-4 py-2.5 text-sm font-semibold text-gray-700">Cancel</button>
               <button
                 type="button"
                 onClick={async () => {
@@ -755,6 +603,8 @@ async function handleComment() {
           </div>
         </div>
       )}
+
+      {/* Toast */}
       {toast && (
         <div className="pointer-events-none fixed bottom-24 left-1/2 z-50 -translate-x-1/2">
           <div className="rounded-2xl border border-white/20 bg-gray-900/90 px-5 py-3 text-sm font-semibold text-white shadow-2xl backdrop-blur">
