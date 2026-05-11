@@ -569,7 +569,7 @@ async function handleComment() {
                   value={commentText}
                   onChange={(e) => setCommentText(e.target.value)}
                   placeholder="Add a comment..."
-                  className="flex-1 rounded-full border border-gray-200 px-4 py-2 text-sm outline-none focus:border-pink-300"
+                  className="flex-1 rounded-full border border-gray-200 px-4 py-2 text-[16px] outline-none focus:border-pink-300"
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && !e.shiftKey) {
                       e.preventDefault()
@@ -648,7 +648,7 @@ async function handleComment() {
                 placeholder="What are you wearing today? Add details about your wrap..."
                 rows={3}
                 maxLength={300}
-                className="mt-4 w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm text-gray-700 outline-none focus:border-pink-300 focus:ring-2 focus:ring-pink-100 resize-none"
+                className="mt-4 w-full rounded-2xl border border-gray-200 px-4 py-3 text-[16px] text-gray-700 outline-none focus:border-pink-300 focus:ring-2 focus:ring-pink-100 resize-none"
               />
               <p className="mt-1 text-right text-xs text-gray-400">{caption.length}/300</p>
 

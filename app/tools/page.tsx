@@ -419,14 +419,14 @@ const { data: dipHistory } = await supabase
               value={city}
               onChange={(e) => setCity(e.target.value)}
               placeholder="City (e.g. Perth, London)"
-              className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-gray-700 outline-none focus:border-pink-300 mb-3"
+              className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-[16px] text-gray-700 outline-none focus:border-pink-300 mb-3"
             />
             <input
               type="text"
               value={country}
               onChange={(e) => setCountry(e.target.value)}
               placeholder="Country (e.g. Australia, UK)"
-              className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-gray-700 outline-none focus:border-pink-300"
+              className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-[16px] text-gray-700 outline-none focus:border-pink-30className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-[16px] text-gray-700 outline-none focus:border-pink-300"0 mb-3"
             />
             <button
               type="button"
@@ -470,7 +470,7 @@ const { data: dipHistory } = await supabase
               value={feedbackHubLink}
               onChange={(e) => setFeedbackHubLink(e.target.value)}
               placeholder="https://..."
-              className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-gray-700 outline-none focus:border-pink-300"
+              className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-[16px] text-gray-700 outline-none focus:border-pink-30className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-[16px] text-gray-700 outline-none focus:border-pink-300"0 mb-3"
             />
             <button
               type="button"
@@ -513,7 +513,7 @@ const { data: dipHistory } = await supabase
               value={editName}
               onChange={(e) => setEditName(e.target.value)}
               placeholder="Your full name"
-              className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-gray-700 outline-none focus:border-pink-300"
+              className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-[16px] text-gray-700 outline-none focus:border-pink-30className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-[16px] text-gray-700 outline-none focus:border-pink-300"0 mb-3"
             />
             <button
               type="button"
@@ -558,7 +558,7 @@ const { data: dipHistory } = await supabase
               placeholder="Tell the wrap community about yourself..."
               rows={4}
               maxLength={200}
-              className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-700 outline-none focus:border-pink-300 resize-none"
+              className="w-full rounded-xl border border-gray-200 px-3 py-2 text-[16px] text-gray-700 outline-none focus:border-pink-300 resize-none"
             />
             <div className="mt-1 flex items-center justify-between mb-4">
               <p className="text-xs text-gray-400">{bio.length}/200</p>

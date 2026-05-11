@@ -649,7 +649,9 @@ $${dip.shipping_credit || '?'} USD shipping credit included
 Shipping from ${dip.shipping_from || '[location]'}
 ${household}
 
-Feedback Hub: ${dip.feedback_hub_link || '[add Feedback Hub link]'}`
+Feedback Hub: ${dip.feedback_hub_link || '[add Feedback Hub link]'}
+
+Managed with WrapApp 🎲 wrapapp.com.au`
   }
 
   function buildQueuePost() {
@@ -683,7 +685,9 @@ $${dip.shipping_credit || '?'} USD shipping credit included
 Shipping from ${dip.shipping_from || '[location]'}
 ${household}
 
-Feedback Hub: ${dip.feedback_hub_link || '[add Feedback Hub link]'}`
+Feedback Hub: ${dip.feedback_hub_link || '[add Feedback Hub link]'}
+
+Managed with WrapApp 🎲 wrapapp.com.au`
   }
 
   function buildLivePost() {
@@ -725,7 +729,9 @@ $${dip.shipping_credit || '?'} USD shipping credit included
 Shipping from ${dip.shipping_from || '[location]'}
 ${household}
 
-Feedback Hub: ${dip.feedback_hub_link || '[add Feedback Hub link]'}${likerTags ? `\n\n❤️ Likers — you have 24hrs to claim your liker special! Comment below with your number/s.\n${likerTags}` : ''}`
+Feedback Hub: ${dip.feedback_hub_link || '[add Feedback Hub link]'}${likerTags ? `\n\n❤️ Likers — you have 24hrs to claim your liker special! Comment below with your number/s.\n${likerTags}` : ''}
+
+Managed with WrapApp 🎲 wrapapp.com.au`
   }
 
   function buildPaymentPost() {
@@ -743,7 +749,9 @@ Post a screenshot of your payment in the comments 📸
 
 ${tagList ? `Tagging those who need to pay:\n${tagList}` : ''}
 
-Thank you everyone — so close! 🦄`
+Thank you everyone — so close! 🦄
+
+Managed with WrapApp 🎲 wrapapp.com.au`
   }
 function buildWinnerPost() {
     if (!dip) return ''
@@ -774,7 +782,9 @@ If you still owe payment, please pay ASAP — unpaid spots will be reallocated a
 
 ${tagList ? `Still needs to pay:\n${tagList}` : 'All paid — ready for draw! 🎲'}
 
-Thank you all so much! Drawing soon! 🎲`
+Thank you all so much! Drawing soon! 🎲
+
+Managed with WrapApp 🎲 wrapapp.com.au`
   }
 
   const stageGuide: Record<string, {
@@ -1980,7 +1990,7 @@ Thank you all so much! Drawing soon! 🎲`
                 value={googleSheetLink}
                 onChange={(e) => setGoogleSheetLink(e.target.value)}
                 placeholder="https://docs.google.com/..."
-                className="w-full rounded-xl border px-3 py-2.5 text-sm outline-none focus:border-pink-500"
+                className="w-full rounded-xl border px-3 py-2.5 text-[16px] outline-none focus:border-pink-500"
               />
               <button
                 type="button"
@@ -2005,7 +2015,7 @@ Thank you all so much! Drawing soon! 🎲`
                 onChange={(e) => setPaymentMethods(e.target.value)}
                 placeholder="e.g. PayPal Friends & Family, Wise"
                 rows={3}
-                className="w-full rounded-xl border px-3 py-2.5 text-sm outline-none focus:border-pink-500 resize-none"
+                className="w-full rounded-xl border px-3 py-2.5 text-[16px] outline-none focus:border-pink-500 resize-none"
               />
               <button
                 type="button"
