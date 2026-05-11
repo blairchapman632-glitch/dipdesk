@@ -559,12 +559,12 @@ async function handleComment() {
               <div className="flex items-center justify-between px-5 py-4 border-b">
                 <h3 className="font-bold text-gray-900">Comments</h3>
                 <button
-                  type="button"
-                  onClick={closeComments}className="flex-1 rounded-full border border-gray-200 px-4 py-2 text-[16px] outline-none focus:border-pink-300"
-                  className="text-sm text-gray-500"
-                >
-                  Close
-                </button>
+  type="button"
+  onClick={closeComments}
+  className="text-sm text-gray-500"
+>
+  Close
+</button>
               </div>
 
               <div className="flex-1 overflow-y-auto px-5 py-3 space-y-4">
