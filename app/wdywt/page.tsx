@@ -325,6 +325,7 @@ export default function WDYWTPage() {
       commentCacheRef.current[commentingPostId] = newComments
       sessionStorage.setItem(`wdywt_comments_${commentingPostId}`, JSON.stringify(newComments))
       setCommentText('')
+      setCommentingPostId(null)
 
       setPosts(prev => prev.map(p => p.id === commentingPostId
         ? { ...p, wdywt_comments: [...p.wdywt_comments, { id: data.id }] }
@@ -511,7 +512,7 @@ export default function WDYWTPage() {
                         value={commentText}
                         onChange={(e) => setCommentText(e.target.value)}
                         placeholder="Add a comment..."
-                        className="flex-1 rounded-full border border-gray-200 bg-gray-50 px-4 py-2 text-[16px] outline-none focus:border-pink-400"
+                        className="flex-1 rounded-full border border-gray-200 bg-gray-50 px-4 py-2 text-[16px] text-gray-900 outline-none focus:border-pink-400"
                         onKeyDown={(e) => {
                           if (e.key === 'Enter' && !e.shiftKey) {
                             e.preventDefault()
