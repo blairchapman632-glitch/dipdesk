@@ -93,41 +93,7 @@ export default function WDYWTPage() {
 const [likedPosts, setLikedPosts] = useState<Set<string>>(new Set())
 const [commentingPost, setCommentingPost] = useState<WDYWTPost | null>(null)
 
-  function closeComments() {
-    const postId = commentingPost?.id
 
-    setCommentingPost(null)
-    setComments([])
-    setCommentText('')
-    setLoadingComments(false)
-
-    if (postId) {
-      setTimeout(() => {
-        document.getElementById(`wdywt-post-${postId}`)?.scrollIntoView({
-          block: 'center',
-          behavior: 'smooth',
-        })
-      }, 50)
-    }
-  }
-
-  function closeComments() {
-    const postId = commentingPost?.id
-
-    setCommentingPost(null)
-    setComments([])
-    setCommentText('')
-    setLoadingComments(false)
-
-    if (postId) {
-      setTimeout(() => {
-        document.getElementById(`wdywt-post-${postId}`)?.scrollIntoView({
-          block: 'center',
-          behavior: 'smooth',
-        })
-      }, 50)
-    }
-  }
   const [comments, setComments] = useState<{id: string, user_id: string, content: string, created_at: string, profiles: {full_name: string | null, username: string | null, avatar_url: string | null} | null}[]>([])
   const [commentText, setCommentText] = useState('')
   const [loadingComments, setLoadingComments] = useState(false)
