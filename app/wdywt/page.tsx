@@ -93,22 +93,29 @@ export default function WDYWTPage() {
 const [likedPosts, setLikedPosts] = useState<Set<string>>(new Set())
 const [commentingPost, setCommentingPost] = useState<WDYWTPost | null>(null)
 
-function closeComments() {
-  const postId = commentingPost?.id
+function openComments(post: WDYWTPost) {
+  scrollRef.current = window.scrollY
+  document.body.style.overflow = 'hidden'
+  document.body.style.position = 'fixed'
+  document.body.style.top = `-${window.scrollY}px`
+  document.body.style.width = '100%'
+  setCommentingPost(post)
+  setCommentText('')
+  setComments([])
+  setLoadingComments(false)
+}
 
+function closeComments() {
+  const scrollY = scrollRef.current
+  document.body.style.overflow = ''
+  document.body.style.position = ''
+  document.body.style.top = ''
+  document.body.style.width = ''
+  window.scrollTo(0, scrollY)
   setCommentingPost(null)
   setComments([])
   setCommentText('')
   setLoadingComments(false)
-
-  if (postId) {
-    setTimeout(() => {
-      document.getElementById(`wdywt-post-${postId}`)?.scrollIntoView({
-        block: 'center',
-        behavior: 'smooth',
-      })
-    }, 50)
-  }
 }
 
 const [comments, setComments] = useState<{id: string, user_id: string, content: string, created_at: string, profiles: {full_name: string | null, username: string | null, avatar_url: string | null} | null}[]>([])
@@ -486,8 +493,7 @@ async function handleComment() {
                   <button
                     type="button"
                     onClick={async () => {
-                      setCommentingPost(post)
-                      setCommentText('')
+                      openComments(post)
                       const sessionCached = sessionStorage.getItem(`wdywt_comments_${post.id}`)
                       if (commentCacheRef.current[post.id]) {
                         setComments(commentCacheRef.current[post.id])
