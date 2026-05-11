@@ -92,6 +92,42 @@ export default function WDYWTPage() {
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
 const [likedPosts, setLikedPosts] = useState<Set<string>>(new Set())
 const [commentingPost, setCommentingPost] = useState<WDYWTPost | null>(null)
+
+  function closeComments() {
+    const postId = commentingPost?.id
+
+    setCommentingPost(null)
+    setComments([])
+    setCommentText('')
+    setLoadingComments(false)
+
+    if (postId) {
+      setTimeout(() => {
+        document.getElementById(`wdywt-post-${postId}`)?.scrollIntoView({
+          block: 'center',
+          behavior: 'smooth',
+        })
+      }, 50)
+    }
+  }
+
+  function closeComments() {
+    const postId = commentingPost?.id
+
+    setCommentingPost(null)
+    setComments([])
+    setCommentText('')
+    setLoadingComments(false)
+
+    if (postId) {
+      setTimeout(() => {
+        document.getElementById(`wdywt-post-${postId}`)?.scrollIntoView({
+          block: 'center',
+          behavior: 'smooth',
+        })
+      }, 50)
+    }
+  }
   const [comments, setComments] = useState<{id: string, user_id: string, content: string, created_at: string, profiles: {full_name: string | null, username: string | null, avatar_url: string | null} | null}[]>([])
   const [commentText, setCommentText] = useState('')
   const [loadingComments, setLoadingComments] = useState(false)
@@ -289,15 +325,29 @@ async function handleComment() {
         .eq('id', currentUserId)
         .single()
 
-      const newComments = [...comments, { ...data, profiles: profileData || null }]
+            const newComments = [...comments, { ...data, profiles: profileData || null }]
       setComments(newComments)
       commentCacheRef.current[commentingPost.id] = newComments
       sessionStorage.setItem(`wdywt_comments_${commentingPost.id}`, JSON.stringify(newComments))
-      setCommentText('')
 
-      setPosts(prev => prev.map(p => p.id === commentingPost.id
+      const commentedPostId = commentingPost.id
+
+      setCommentText('')
+      setCommentingPost(null)
+
+      setPosts(prev => prev.map(p => p.id === commentedPostId
         ? { ...p, wdywt_comments: [...p.wdywt_comments, { id: data.id }] }
         : p))
+
+      setToast('Comment added')
+      setTimeout(() => setToast(''), 2500)
+
+      setTimeout(() => {
+        document.getElementById(`wdywt-post-${commentedPostId}`)?.scrollIntoView({
+          block: 'center',
+          behavior: 'smooth',
+        })
+      }, 50)
 
       if (commentingPost.user_id !== currentUserId) {
         await supabase.from('notifications').insert({
@@ -359,6 +409,7 @@ async function handleComment() {
           <div className="space-y-4">
             {posts.map((post) => (
               <article
+                id={`wdywt-post-${post.id}`}
                 key={post.id}
                 className="overflow-hidden rounded-2xl bg-white shadow-sm"
               >
@@ -516,7 +567,7 @@ async function handleComment() {
 {commentingPost && (
           <div
             className="fixed inset-0 z-50 flex items-end justify-center bg-black/40"
-            onClick={() => { setCommentingPost(null); setComments([]) }}
+            onClick={closeComments}
           >
             <div
               className="w-full max-w-lg rounded-t-3xl bg-white shadow-2xl max-h-[80vh] flex flex-col"
@@ -526,7 +577,7 @@ async function handleComment() {
                 <h3 className="font-bold text-gray-900">Comments</h3>
                 <button
                   type="button"
-                  onClick={() => { setCommentingPost(null); setComments([]) }}
+                  onClick={closeComments}className="flex-1 rounded-full border border-gray-200 px-4 py-2 text-[16px] outline-none focus:border-pink-300"
                   className="text-sm text-gray-500"
                 >
                   Close
@@ -565,11 +616,11 @@ async function handleComment() {
 
               <div className="border-t px-4 py-3 flex items-center gap-3">
                 <input
-                  type="text"
-                  value={commentText}
-                  onChange={(e) => setCommentText(e.target.value)}
-                  placeholder="Add a comment..."
-                  className="flex-1 rounded-full border border-gray-200 px-4 py-2 text-[16px] outline-none focus:border-pink-300"
+  type="text"
+  value={commentText}
+  onChange={(e) => setCommentText(e.target.value)}
+  placeholder="Add a comment..."
+  className="flex-1 rounded-full border border-gray-300 bg-white px-4 py-2 text-[16px] text-gray-900 placeholder:text-gray-500 outline-none focus:border-pink-400 focus:ring-2 focus:ring-pink-100"
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && !e.shiftKey) {
                       e.preventDefault()
