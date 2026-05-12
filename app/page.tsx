@@ -12,6 +12,9 @@ export default function Home() {
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
   const [isSignUp, setIsSignUp] = useState(false)
+const [isForgotPassword, setIsForgotPassword] = useState(false)
+const [forgotEmail, setForgotEmail] = useState('')
+const [forgotMessage, setForgotMessage] = useState('')
 
   useEffect(() => {
     const checkSession = async () => {
@@ -51,7 +54,20 @@ export default function Home() {
     setPassword('')
     setLoading(false)
   }
-
+const handleForgotPassword = async () => {
+  if (!forgotEmail) return
+  setLoading(true)
+  setForgotMessage('')
+  const { error } = await supabase.auth.resetPasswordForEmail(forgotEmail, {
+    redirectTo: `https://wrapapp.com.au/reset-password`,
+  })
+  setLoading(false)
+  if (error) {
+    setForgotMessage(error.message)
+  } else {
+    setForgotMessage('Check your email for a reset link!')
+  }
+}
   const handleLogin = async () => {
     setLoading(true)
     setMessage('')
@@ -404,11 +420,46 @@ export default function Home() {
               boxShadow: '0 8px 40px rgba(0,0,0,0.06)',
             }}>
               <h3 style={{ fontFamily: 'Syne, sans-serif', fontWeight: 700, fontSize: '1.3rem', margin: '0 0 6px', textAlign: 'center' }}>
-                {isSignUp ? 'Create your account' : 'Welcome back'}
+                {isForgotPassword ? 'Reset password' : isSignUp ? 'Create your account' : 'Welcome back'}
               </h3>
               <p style={{ color: '#999', fontSize: '0.85rem', textAlign: 'center', margin: '0 0 24px', fontWeight: 300 }}>
-                {isSignUp ? 'Join the wrap community' : 'Sign in to your collection'}
+                {isForgotPassword ? "Enter your email and we'll send a reset link" : isSignUp ? 'Join the wrap community' : 'Sign in to your collection'}
               </p>
+
+              {isForgotPassword && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  <input
+                    className="auth-input"
+                    type="email"
+                    placeholder="Your email address"
+                    value={forgotEmail}
+                    onChange={(e) => setForgotEmail(e.target.value)}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleForgotPassword}
+                    disabled={loading || !forgotEmail}
+                    className="cta-btn cta-primary grad-bg"
+                    style={{ justifyContent: 'center', borderRadius: 14, padding: '14px', fontSize: '15px', opacity: loading ? 0.7 : 1 }}
+                  >
+                    {loading ? 'Sending...' : 'Send reset link'}
+                  </button>
+                  {forgotMessage && (
+                    <p style={{ fontSize: '13px', textAlign: 'center', color: forgotMessage.includes('Check') ? '#10b981' : '#ef4444' }}>
+                      {forgotMessage}
+                    </p>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => { setIsForgotPassword(false); setForgotMessage('') }}
+                    style={{ background: 'none', border: '1.5px solid #e5e7eb', borderRadius: 14, padding: '13px', fontSize: '14px', color: '#555', cursor: 'pointer', fontFamily: 'DM Sans, sans-serif', fontWeight: 500 }}
+                  >
+                    ← Back to sign in
+                  </button>
+                </div>
+              )}
+
+              {!isForgotPassword && (
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
 
@@ -448,6 +499,17 @@ export default function Home() {
 )}
 <input className="auth-input" type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} />
                 <input className="auth-input" type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} />
+{!isSignUp && (
+  <div style={{ textAlign: 'right', marginTop: -4 }}>
+    <button
+      type="button"
+      onClick={() => { setIsForgotPassword(true); setForgotMessage(''); setForgotEmail('') }}
+      style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px', color: '#a855f7', fontFamily: 'DM Sans, sans-serif', padding: 0 }}
+    >
+      Forgot password?
+    </button>
+  </div>
+)}
 
                 <button
                   type="button"
@@ -472,6 +534,7 @@ export default function Home() {
                   {isSignUp ? 'Already have an account? Sign in' : 'New here? Create account'}
                 </button>
               </div>
+              )}
 
               {message && (
                 <p style={{
