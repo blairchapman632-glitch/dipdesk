@@ -13,8 +13,15 @@ export default function ResetPasswordPage() {
   const [ready, setReady] = useState(false)
 
   useEffect(() => {
+    // Check if tokens are in the URL hash (Supabase puts them there)
+    const hash = window.location.hash
+    if (hash && hash.includes('access_token')) {
+      setReady(true)
+      return
+    }
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-      if (event === 'PASSWORD_RECOVERY') {
+      if (event === 'PASSWORD_RECOVERY' || event === 'SIGNED_IN') {
         setReady(true)
       }
     })
