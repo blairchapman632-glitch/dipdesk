@@ -424,16 +424,16 @@ const unreadNotificationCount = useMemo(() => {
 const userEmail = user.email || ''
 setEmail(userEmail)
 localStorage.setItem(DASHBOARD_EMAIL_KEY, userEmail)
-const { data: profileData } = await supabase
+const { data: userProfile } = await supabase
   .from('profiles')
   .select('full_name, username, avatar_url, role')
   .eq('id', user.id)
   .single()
 
-if (profileData) {
-  setProfile(profileData)
-  setIsAdmin((profileData as any).role === 'super_admin')
-  localStorage.setItem(DASHBOARD_PROFILE_KEY, JSON.stringify({ ...profileData, id: user.id }))
+if (userProfile) {
+  setProfile(userProfile)
+  setIsAdmin((userProfile as any).role === 'super_admin')
+  localStorage.setItem(DASHBOARD_PROFILE_KEY, JSON.stringify({ ...userProfile, id: user.id }))
 }
 
 
@@ -582,7 +582,7 @@ if (!notificationError && notificationData) {
 
     setLoading(false)
 
-    const hasNoAvatar = !profileData?.avatar_url
+    const hasNoAvatar = !userProfile?.avatar_url
     const hasNoWraps = !wrapData || (wrapData as any[]).length === 0
     if (hasNoAvatar && hasNoWraps) {
       setShowOnboarding(true)
@@ -1313,7 +1313,11 @@ async function replaceWrapImage(imageId: string, incomingFile: File) {
     async function saveWrap() {
     if (!currentUserId) return
     if (!wrapForm.name.trim()) return
-if (isUploadingImages) return
+    if (isUploadingImages) return
+    if (wrapForm.images.filter(i => i.status === 'uploaded').length === 0) {
+      window.alert('Please add at least one photo before saving.')
+      return
+    }
 
     setIsSavingWrap(true)
 
@@ -3100,7 +3104,7 @@ Record own currency for accurate reporting
         )}
       </div>
     {showOnboarding && (
-        <div className="fixed inset-0 z-[100] flex flex-col bg-white">
+        <div className="fixed inset-0 z-[100] flex flex-col bg-white overflow-y-auto">
 
           {onboardingStep === 1 && (
             <div className="flex flex-1 flex-col items-center justify-center px-8 text-center">

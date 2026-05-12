@@ -24,6 +24,10 @@ export default function Home() {
   }, [router])
 
   const handleSignUp = async () => {
+    if (!fullName.trim()) {
+      setMessage('Please enter your name to continue.')
+      return
+    }
     setLoading(true)
     setMessage('')
     const { data, error } = await supabase.auth.signUp({
@@ -440,7 +444,7 @@ export default function Home() {
                   <div style={{ flex: 1, height: 1, background: '#f0f0f0' }} />
                 </div>
                 {isSignUp && (
-  <input className="auth-input" type="text" placeholder="Your name" value={fullName} onChange={(e) => setFullName(e.target.value)} />
+  <input className="auth-input" type="text" placeholder="Your name" value={fullName} onChange={(e) => setFullName(e.target.value.replace(/[^a-zA-Z\s'-]/g, ''))} />
 )}
 <input className="auth-input" type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} />
                 <input className="auth-input" type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} />
