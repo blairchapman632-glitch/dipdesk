@@ -687,11 +687,7 @@ const { data: dipData } = await supabase
                       <p><span className="font-semibold text-gray-900">Favourite:</span> {selectedWrap.is_favourite ? 'Yes' : 'No'}</p>
                       {selectedWrap.for_sale && <p><span className="font-semibold text-gray-900">For Sale:</span> {selectedWrap.for_sale_price_is_pm ? 'PM' : selectedWrap.for_sale_price !== null ? formatCurrency(selectedWrap.for_sale_price, selectedWrap.for_sale_currency || 'AUD') : 'Yes'}</p>}
                       {selectedWrap.status === 'holiday' && <p><span className="font-semibold text-gray-900">On Holiday With:</span> {selectedWrap.on_loan_to || '—'}</p>}
-                      {selectedWrap.status === 'departed' && <>
-                        <p><span className="font-semibold text-gray-900">Sold To:</span> {selectedWrap.sold_to || '—'}</p>
-                        <p><span className="font-semibold text-gray-900">Sold Date:</span> {selectedWrap.sold_date || '—'}</p>
-                        <p><span className="font-semibold text-gray-900">Sold Price:</span> {selectedWrap.sold_price !== null ? formatCurrency(selectedWrap.sold_price, selectedWrap.sold_currency || 'AUD') : '—'}</p>
-                      </>}
+                      
                     </div>
                   </div>
                   {selectedWrap.description && (

@@ -428,15 +428,25 @@ const allActiveDipsRef = React.useRef<string[]>([])
     } catch {}
   }
 
-  if (cachedUsers) {
-    try {
-      setUsers(JSON.parse(cachedUsers))
-    } catch {}
-  }
-
   if (cachedFollowing) {
     try {
-      setFollowingUsers(JSON.parse(cachedFollowing))
+      const following = JSON.parse(cachedFollowing)
+      setFollowingUsers(following)
+      if (cachedUsers) {
+        try {
+          const cachedUsersList = JSON.parse(cachedUsers)
+          const cachedFollowedIds = new Set(following.map((u: FollowingUser) => u.id))
+          const merged = [
+            ...following,
+            ...cachedUsersList.filter((u: ExploreUser) => !cachedFollowedIds.has(u.id)),
+          ]
+          setUsers(merged)
+        } catch {}
+      }
+    } catch {}
+  } else if (cachedUsers) {
+    try {
+      setUsers(JSON.parse(cachedUsers))
     } catch {}
   }
 
@@ -471,7 +481,6 @@ async function loadActiveDips() {
           'id, user_id, name, brand, colour, size, material, description, purchase_date, purchased_from, purchase_country, status, on_loan_to, sold_to, sold_price, sold_currency, sold_date, is_favourite, for_sale, for_sale_price, for_sale_currency, for_sale_price_is_pm, created_at, wrap_images(id, image_url, is_primary, sort_order)'
         )
         .order('created_at', { ascending: false })
-        .limit(50)
 
       if (wrapError) {
         console.error(wrapError)
@@ -570,25 +579,56 @@ if (currentUserId) {
 
   const followingIds = (followsData || []).map((f) => f.following_id)
 
-  const followingUsersData = followingIds
-  .slice(0, 10)
-  .map((userId) => {
-    const userWraps = wraps.filter((wrap) => wrap.user_id === userId)
-    const latestUserWrap = userWraps[0]
+  if (followingIds.length > 0) {
+    const [{ data: followingProfiles }, { data: followingWrapData }, { data: followingCounts }] = await Promise.all([
+      supabase.from('profiles').select('id, full_name, username, avatar_url').in('id', followingIds),
+      supabase.from('wraps').select('id, user_id, wrap_images(id, image_url, is_primary, sort_order)').in('user_id', followingIds).eq('status', 'active').order('created_at', { ascending: false }),
+      supabase.from('wraps').select('user_id').in('user_id', followingIds),
+    ])
 
-    if (!profileMap[userId]) return null
+    const followingProfileMap: Record<string, any> = {}
+    ;(followingProfiles || []).forEach((p: any) => { followingProfileMap[p.id] = p })
 
-    return {
-      id: userId,
-      name: getDisplayName(profileMap[userId]),
-      image_url: getPrimaryImage(latestUserWrap),
-      wrap_count: userWraps.length,
-    }
-  })
-  .filter(Boolean) as FollowingUser[]
+    const followingWrapsByUser: Record<string, any[]> = {}
+    ;(followingWrapData || []).forEach((w: any) => {
+      if (!followingWrapsByUser[w.user_id]) followingWrapsByUser[w.user_id] = []
+      followingWrapsByUser[w.user_id].push(w)
+    })
 
-  setFollowingUsers(followingUsersData)
-  localStorage.setItem(EXPLORE_FOLLOWING_KEY, JSON.stringify(followingUsersData))
+    const followingRealCounts: Record<string, number> = {}
+    ;(followingCounts || []).forEach((w: any) => {
+      followingRealCounts[w.user_id] = (followingRealCounts[w.user_id] || 0) + 1
+    })
+
+    const followingAvatarMap: Record<string, string | null> = {}
+    ;(followingProfiles || []).forEach((p: any) => {
+      followingAvatarMap[p.id] = p.avatar_url || null
+    })
+    setAvatarMap((prev) => ({ ...prev, ...followingAvatarMap }))
+
+    const followingUsersData: FollowingUser[] = followingIds.map((id) => {
+      const userWraps = followingWrapsByUser[id] || []
+      return {
+        id,
+        name: getDisplayName(followingProfileMap[id]),
+        image_url: getPrimaryImage(userWraps[0]),
+        wrap_count: followingRealCounts[id] || 0,
+      }
+    }).filter((u) => followingProfileMap[u.id])
+
+    setFollowingUsers(followingUsersData)
+    localStorage.setItem(EXPLORE_FOLLOWING_KEY, JSON.stringify(followingUsersData))
+
+    const followedIds = new Set(followingUsersData.map((u: FollowingUser) => u.id))
+    const mergedUsers: ExploreUser[] = [
+      ...followingUsersData,
+      ...usersFromWraps.filter((u: ExploreUser) => !followedIds.has(u.id)),
+    ]
+    setUsers(mergedUsers)
+    localStorage.setItem(EXPLORE_USERS_KEY, JSON.stringify(mergedUsers))
+  } else {
+    setFollowingUsers([])
+  }
 } else {
   setFollowingUsers([])
 }
@@ -663,7 +703,7 @@ return () => {
         const matchedUserIds = matchedProfiles.map((profile) => profile.id)
 
         let matchedUsers: ExploreUser[] = matchedProfiles
-          .filter((profile) => profile.id !== currentUserId)
+          .filter((profile) => profile.id !== currentUserId && profile.id !== null)
           .map((profile) => ({
             id: profile.id,
             name: getDisplayName(profile),
@@ -716,7 +756,6 @@ matchedUsers = matchedProfiles.map((profile) => {
         )
         .or(`name.ilike.%${term}%,brand.ilike.%${term}%,colour.ilike.%${term}%,description.ilike.%${term}%`)
         .order('created_at', { ascending: false })
-        .limit(100)
 
       if (wrapError) {
         console.error(wrapError)
