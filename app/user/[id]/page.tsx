@@ -397,7 +397,7 @@ const { data: dipData } = await supabase
               </div>
             </div>
 
-            {currentUserId !== userId && (
+            {currentUserId && currentUserId !== userId && (
               <div className="flex gap-2 xl:shrink-0">
                 <button
                   type="button"
