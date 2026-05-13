@@ -33,6 +33,9 @@ export default function AdminPage() {
   const [isAdmin, setIsAdmin] = useState(false)
   const [users, setUsers] = useState<AdminUserRow[]>([])
   const [actionUserId, setActionUserId] = useState<string | null>(null)
+  const [broadcastMessage, setBroadcastMessage] = useState('')
+  const [isBroadcasting, setIsBroadcasting] = useState(false)
+  const [broadcastResult, setBroadcastResult] = useState<string | null>(null)
 
   useEffect(() => {
     void loadAdminData()
@@ -135,13 +138,72 @@ export default function AdminPage() {
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={() => router.push('/tools')}
-            className="cursor-pointer rounded-xl border px-4 py-2 text-sm font-semibold text-gray-700 shadow-sm hover:bg-gray-50"
-          >
-            Back to Tools
-          </button>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
+            <div className="flex flex-col gap-2">
+              <textarea
+                value={broadcastMessage}
+                onChange={(e) => setBroadcastMessage(e.target.value)}
+                placeholder="Broadcast message to all users..."
+                rows={2}
+                className="w-full rounded-xl border px-3 py-2 text-sm text-gray-900 outline-none focus:border-pink-500 sm:w-72"
+              />
+              {broadcastResult && (
+                <p className="text-xs font-semibold text-green-600">{broadcastResult}</p>
+              )}
+            </div>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                disabled={isBroadcasting || !broadcastMessage.trim()}
+                onClick={async () => {
+                  if (!broadcastMessage.trim()) return
+                  const confirmed = window.confirm(`Send this message to all ${users.filter(u => u.email !== 'blairchapman632@gmail.com').length} users?`)
+                  if (!confirmed) return
+                  setIsBroadcasting(true)
+                  setBroadcastResult(null)
+                  const { data: { user } } = await supabase.auth.getUser()
+                  if (!user) { setIsBroadcasting(false); return }
+                  const otherUsers = users.filter(u => u.email !== 'blairchapman632@gmail.com')
+                  let sent = 0
+                  for (const recipient of otherUsers) {
+                    const { data: existing } = await supabase
+                      .from('conversations')
+                      .select('id')
+                      .or(`and(participant_1_id.eq.${user.id},participant_2_id.eq.${recipient.id}),and(participant_1_id.eq.${recipient.id},participant_2_id.eq.${user.id})`)
+                      .maybeSingle()
+                    let convId = existing?.id
+                    if (!convId) {
+                      const { data: newConv } = await supabase
+                        .from('conversations')
+                        .insert({ participant_1_id: user.id, participant_2_id: recipient.id, last_message: broadcastMessage.trim(), last_message_at: new Date().toISOString() })
+                        .select('id')
+                        .single()
+                      convId = newConv?.id
+                    } else {
+                      await supabase.from('conversations').update({ last_message: broadcastMessage.trim(), last_message_at: new Date().toISOString() }).eq('id', convId)
+                    }
+                    if (convId) {
+                      await supabase.from('messages').insert({ conversation_id: convId, sender_id: user.id, content: broadcastMessage.trim(), read: false })
+                      sent++
+                    }
+                  }
+                  setBroadcastMessage('')
+                  setBroadcastResult(`✓ Sent to ${sent} users`)
+                  setIsBroadcasting(false)
+                }}
+                className="cursor-pointer rounded-xl bg-pink-600 px-4 py-2 text-sm font-semibold text-white shadow-sm disabled:opacity-50"
+              >
+                {isBroadcasting ? 'Sending...' : '📢 Broadcast'}
+              </button>
+              <button
+                type="button"
+                onClick={() => router.push('/tools')}
+                className="cursor-pointer rounded-xl border px-4 py-2 text-sm font-semibold text-gray-700 shadow-sm hover:bg-gray-50"
+              >
+                Back to Tools
+              </button>
+            </div>
+          </div>
         </div>
 
         <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
