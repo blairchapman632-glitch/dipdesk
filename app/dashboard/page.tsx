@@ -1685,13 +1685,26 @@ function exportReportCsv() {
     Your Collection
   </h2>
 
-  <button
-    type="button"
-    onClick={openNewWrapModal}
-    className="shrink-0 cursor-pointer rounded-full bg-gradient-to-r from-pink-500 to-rose-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:opacity-90"
-  >
-    + Add Wrap
-  </button>
+  <div className="flex items-center gap-2">
+    <button
+      type="button"
+      onClick={async () => {
+        const url = `https://wrapapp.com.au/user/${currentUserId}`
+        await navigator.clipboard.writeText(url)
+        alert('Collection link copied! Share it anywhere 💕')
+      }}
+      className="shrink-0 cursor-pointer rounded-full border border-pink-300 px-4 py-2 text-sm font-semibold text-pink-600 shadow-sm hover:bg-pink-50"
+    >
+      Share 🔗
+    </button>
+    <button
+      type="button"
+      onClick={openNewWrapModal}
+      className="shrink-0 cursor-pointer rounded-full bg-gradient-to-r from-pink-500 to-rose-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:opacity-90"
+    >
+      + Add Wrap
+    </button>
+  </div>
 </div>
 
             {loading && wraps.length === 0 ? (

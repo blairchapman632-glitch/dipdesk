@@ -117,6 +117,7 @@ export default function UserCollectionPage() {
   const [hasWishlistedSelectedWrap, setHasWishlistedSelectedWrap] = useState(false)
   const [socialLoading, setSocialLoading] = useState(false)
   const [activeDips, setActiveDips] = useState<{id: string, title: string, wrap_id: string | null, total_spots: number, price_per_spot: number, stage: string | null, wrap_name: string | null, brand: string | null, facebook_group: string | null}[]>([])
+  const [authChecked, setAuthChecked] = useState(true)
 
   // WDYWT post modal
   const [selectedPost, setSelectedPost] = useState<WDYWTPost | null>(null)
@@ -155,6 +156,7 @@ export default function UserCollectionPage() {
       const { data: { user } } = await supabase.auth.getUser()
       const loggedInUserId = user?.id || null
       setCurrentUserId(loggedInUserId)
+      setAuthChecked(true)
 
       const [{ data: profileData }, { data: wrapData }] = await Promise.all([
         supabase.from('profiles').select('id, full_name, username, avatar_url').eq('id', userId).single(),
@@ -347,11 +349,23 @@ const { data: dipData } = await supabase
   }
 
   if (loading && wraps.length === 0 && !profile) {
-    return <AppLayout><div className="space-y-6"><section className="rounded-3xl border bg-white p-5 shadow-sm"><p className="text-sm text-gray-500">Loading collection...</p></section></div></AppLayout>
+    return <AppLayout hideHeader={authChecked && !currentUserId}><div className="space-y-6"><section className="rounded-3xl border bg-white p-5 shadow-sm"><p className="text-sm text-gray-500">Loading collection...</p></section></div></AppLayout>
   }
 
   return (
-    <AppLayout>
+    <AppLayout hideHeader={authChecked && !currentUserId}>
+      {!currentUserId && (
+        <div className="mb-4 rounded-2xl bg-gradient-to-r from-pink-500 to-rose-500 px-4 py-3 flex items-center justify-between gap-3">
+          <p className="text-sm font-semibold text-white">👋 You're viewing a wrap collection on WrapApp — the home for wrap collectors.</p>
+          <button
+            type="button"
+            onClick={() => router.push('/')}
+            className="shrink-0 rounded-xl bg-white px-3 py-1.5 text-sm font-bold text-pink-600 shadow-sm"
+          >
+            Join free →
+          </button>
+        </div>
+      )}
       <div className="space-y-6">
         <section className="rounded-3xl border bg-white p-2 shadow-sm xl:p-5">
 
