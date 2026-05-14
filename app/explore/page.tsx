@@ -369,6 +369,9 @@ const BLEND_TAGS = [
 const [sizeMin, setSizeMin] = useState('')
 const [sizeMax, setSizeMax] = useState('')
 const [sizeRingSling, setSizeRingSling] = useState(false)
+const [selectedTypes, setSelectedTypes] = useState<string[]>([])
+const [showTypeFilter, setShowTypeFilter] = useState(false)
+const TYPE_TAGS = ['Hand Woven', 'Machine Woven', 'Ring Sling', 'Carrier']
 const [brandSearch, setBrandSearch] = useState('')
 const [brandSearchResults, setBrandSearchResults] = useState<string[]>([])
 const [selectedBrands, setSelectedBrands] = useState<string[]>([])
@@ -478,7 +481,7 @@ async function loadActiveDips() {
       const { data: wrapData, error: wrapError } = await supabase
         .from('wraps')
                 .select(
-          'id, user_id, name, brand, colour, size, material, description, purchase_date, purchased_from, purchase_country, status, on_loan_to, sold_to, sold_price, sold_currency, sold_date, is_favourite, for_sale, for_sale_price, for_sale_currency, for_sale_price_is_pm, created_at, wrap_images(id, image_url, is_primary, sort_order)'
+          'id, user_id, name, brand, colour, size, material, wrap_type, description, purchase_date, purchased_from, purchase_country, status, on_loan_to, sold_to, sold_price, sold_currency, sold_date, is_favourite, for_sale, for_sale_price, for_sale_currency, for_sale_price_is_pm, created_at, wrap_images(id, image_url, is_primary, sort_order)'
         )
         .order('created_at', { ascending: false })
 
@@ -715,7 +718,7 @@ return () => {
           const { data: searchUserWrapData } = await supabase
             .from('wraps')
             .select(
-              'id, user_id, name, brand, description, colour, purchase_date, purchased_from, purchase_country, status, on_loan_to, sold_to, sold_price, sold_currency, sold_date, is_favourite, for_sale, for_sale_price, for_sale_currency, for_sale_price_is_pm, created_at, wrap_images(id, image_url, is_primary, sort_order)'
+              'id, user_id, name, brand, description, colour, wrap_type, purchase_date, purchased_from, purchase_country, status, on_loan_to, sold_to, sold_price, sold_currency, sold_date, is_favourite, for_sale, for_sale_price, for_sale_currency, for_sale_price_is_pm, created_at, wrap_images(id, image_url, is_primary, sort_order)'
             )
             .in('user_id', matchedUserIds)
             .order('created_at', { ascending: false })
@@ -752,7 +755,7 @@ matchedUsers = matchedProfiles.map((profile) => {
       const { data: wrapData, error: wrapError } = await supabase
         .from('wraps')
         .select(
-          'id, user_id, name, brand, description, colour, purchase_date, purchased_from, purchase_country, status, on_loan_to, sold_to, sold_price, sold_currency, sold_date, is_favourite, for_sale, for_sale_price, for_sale_currency, for_sale_price_is_pm, created_at, wrap_images(id, image_url, is_primary, sort_order)'
+          'id, user_id, name, brand, description, colour, wrap_type, purchase_date, purchased_from, purchase_country, status, on_loan_to, sold_to, sold_price, sold_currency, sold_date, is_favourite, for_sale, for_sale_price, for_sale_currency, for_sale_price_is_pm, created_at, wrap_images(id, image_url, is_primary, sort_order)'
         )
         .or(`name.ilike.%${term}%,brand.ilike.%${term}%,colour.ilike.%${term}%,description.ilike.%${term}%`)
         .order('created_at', { ascending: false })
@@ -863,6 +866,10 @@ const filteredWraps = (
     const matches = selectedBlends.some(b => wrapMaterial.includes(b.toLowerCase().split('/')[0].trim()))
     if (!matches) return false
   }
+  if (selectedTypes.length > 0) {
+    const wrapType = ((wrap as any).wrap_type || '').toLowerCase()
+    if (!selectedTypes.some(t => wrapType === t.toLowerCase())) return false
+  }
   return true
 })
   const hasSearch = searchTerm.trim().length > 0
@@ -948,18 +955,15 @@ const filteredWraps = (
                   : 'border-gray-200 bg-white text-gray-600'
               }`}
             >
-              For Sale
+              Available
             </button>
+
             <button
               type="button"
-              onClick={() => setResultType('dipping' as any)}
-              className={`whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-semibold ${
-                resultType === ('dipping' as any)
-                  ? 'border-purple-500 bg-purple-500 text-white'
-                  : 'border-gray-200 bg-white text-gray-600'
-              }`}
+              onClick={() => { setShowTypeFilter(!showTypeFilter); setShowBlendFilter(false); setShowBrandFilter(false); setShowColourFilter(false); setShowSizeFilter(false) }}
+              className={`whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-semibold ${selectedTypes.length > 0 ? 'border-pink-500 bg-pink-500 text-white' : 'border-gray-200 bg-white text-gray-600'}`}
             >
-              🎲 Dipping
+              {selectedTypes.length > 0 ? `Type: ${selectedTypes.length}` : 'Type'} {showTypeFilter ? '▲' : '▼'}
             </button>
           </div>
 
@@ -979,7 +983,7 @@ const filteredWraps = (
               onClick={() => { setShowSizeFilter(!showSizeFilter); setShowBrandFilter(false); setShowColourFilter(false); setShowBlendFilter(false) }}
               className={`whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-semibold ${filterSize ? 'border-pink-500 bg-pink-50 text-pink-700' : 'border-gray-200 bg-white text-gray-600'}`}
             >
-              {sizeMin || sizeMax || sizeRingSling ? 'Sizes ✓' : 'Sizes'} {showSizeFilter ? '▲' : '▼'}
+              {sizeMin || sizeMax || sizeRingSling ? 'Length ✓' : 'Length'} {showSizeFilter ? '▲' : '▼'}
             </button>
 
             <button
@@ -992,14 +996,16 @@ const filteredWraps = (
 
             <button
               type="button"
-              onClick={() => { setShowBlendFilter(!showBlendFilter); setShowBrandFilter(false); setShowColourFilter(false); setShowSizeFilter(false) }}
+              onClick={() => { setShowBlendFilter(!showBlendFilter); setShowBrandFilter(false); setShowColourFilter(false); setShowSizeFilter(false); setShowTypeFilter(false) }}
               className={`whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-semibold ${filterMaterial ? 'border-pink-500 bg-pink-50 text-pink-700' : 'border-gray-200 bg-white text-gray-600'}`}
             >
               {selectedBlends.length > 0 ? `Blends: ${selectedBlends.length}` : 'Blends'} {showBlendFilter ? '▲' : '▼'}
             </button>
 
+            
+
             </div>
-            {(filterBrand || sizeMin || sizeMax || sizeRingSling || filterColour || selectedBlends.length > 0) && (
+            {(filterBrand || sizeMin || sizeMax || sizeRingSling || filterColour || selectedBlends.length > 0 || selectedTypes.length > 0) && (
               <button
                 type="button"
                 onClick={() => {
@@ -1014,6 +1020,7 @@ const filteredWraps = (
                   setFilterColour('')
                   setFilterMaterial('')
                   setSelectedBlends([])
+                  setSelectedTypes([])
                 }}
                 className="whitespace-nowrap rounded-full border border-red-200 px-3 py-1 text-xs font-semibold text-red-500"
               >
@@ -1114,17 +1121,35 @@ const filteredWraps = (
                   />
                   <span className="text-xs text-gray-400">meters</span>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setSizeRingSling(!sizeRingSling)}
-                  className={`whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-semibold transition ${
-                    sizeRingSling
-                      ? 'border-pink-500 bg-pink-500 text-white'
-                      : 'border-gray-200 bg-white text-gray-600'
-                  }`}
-                >
-                  Ring Sling
-                </button>
+                
+              </div>
+            )}
+
+            {/* Expanded type filter */}
+            {showTypeFilter && (
+              <div className="flex flex-wrap gap-1.5">
+                {TYPE_TAGS.map((tag) => {
+                  const selected = selectedTypes.includes(tag)
+                  return (
+                    <button
+                      key={tag}
+                      type="button"
+                      onClick={() => {
+                        const updated = selected
+                          ? selectedTypes.filter(t => t !== tag)
+                          : [...selectedTypes, tag]
+                        setSelectedTypes(updated)
+                      }}
+                      className={`whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-semibold transition ${
+                        selected
+                          ? 'border-pink-500 bg-pink-500 text-white'
+                          : 'border-gray-200 bg-white text-gray-600'
+                      }`}
+                    >
+                      {tag}
+                    </button>
+                  )
+                })}
               </div>
             )}
 
@@ -1564,7 +1589,7 @@ setTimeout(() => setToastMessage(''), 2000)
                         {selectedWrap.brand || '—'}
                       </p>
                       <p>
-                        <span className="font-semibold text-gray-900">Size / STIH:</span>{' '}
+                        <span className="font-semibold text-gray-900">STIH (length):</span>{' '}
                         {(selectedWrap as any).size || '—'}
                       </p>
                       <p>

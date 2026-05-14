@@ -109,6 +109,7 @@ purchase_date: string
   for_sale_currency: CurrencyCode
   for_sale_price_is_pm: boolean
   status: 'active' | 'holiday' | 'departed'
+  wrap_type: string
 }
 type DibsUser = {
   id: string
@@ -173,6 +174,7 @@ purchase_date: new Date().toISOString().slice(0, 10),
   for_sale_currency: 'AUD',
   for_sale_price_is_pm: false,
   status: 'active',
+  wrap_type: '',
 }
 
 const WRAP_PLACEHOLDER =
@@ -454,7 +456,7 @@ if (userProfile) {
   supabase
     .from('wraps')
     .select(
-'id, name, brand, description, size, material, colour, purchase_date, purchase_price, purchase_currency, purchased_from, purchase_country, status, on_loan_to, sold_to, sold_price, sold_currency, sold_date, is_favourite, for_sale, for_sale_price, for_sale_currency, for_sale_price_is_pm, created_at, wrap_images(id, image_url, is_primary, sort_order)'
+'id, name, brand, description, size, material, colour, wrap_type, purchase_date, purchase_price, purchase_currency, purchased_from, purchase_country, status, on_loan_to, sold_to, sold_price, sold_currency, sold_date, is_favourite, for_sale, for_sale_price, for_sale_currency, for_sale_price_is_pm, created_at, wrap_images(id, image_url, is_primary, sort_order)'
 )
     .eq('user_id', user.id)
     .order('is_favourite', { ascending: false })
@@ -1021,6 +1023,7 @@ purchase_date: wrap.purchase_date || '',
   for_sale_price_is_pm: wrap.for_sale_price_is_pm || false,
 
   status: wrap.status,
+  wrap_type: (wrap as any).wrap_type || '',
 })
 
     supabase
@@ -1365,6 +1368,7 @@ const wrapPayload = {
       : null,
 
   is_favourite: wrapForm.is_favourite,
+  wrap_type: wrapForm.wrap_type || null,
 }
 
     let wrapId = wrapForm.id
@@ -2496,14 +2500,14 @@ function exportReportCsv() {
 
     <div className="relative">
     <label className="mb-1 block text-sm font-medium text-gray-700">
-      Size / STIH
+      STIH (length)
     </label>
     <input
       value={wrapForm.size}
       onChange={(event) => updateWrapForm('size', event.target.value)}
       onFocus={() => setSizeFocused(true)}
       onBlur={() => setTimeout(() => { setSizeFocused(false); setSizeSuggestions([]) }, 200)}
-      placeholder="e.g. 4.2 (meters)"
+      placeholder="e.g. 4.2m"
       className="w-full rounded-xl border px-3 py-2 text-base text-gray-900 placeholder:text-gray-400 outline-none focus:border-pink-500 xl:text-sm"
     />
     {sizeSuggestions.length > 0 && (
@@ -2520,6 +2524,23 @@ function exportReportCsv() {
         ))}
       </div>
     )}
+  </div>
+
+  <div>
+    <label className="mb-1 block text-sm font-medium text-gray-700">
+      Type
+    </label>
+    <select
+      value={wrapForm.wrap_type}
+      onChange={(event) => updateWrapForm('wrap_type', event.target.value)}
+      className="w-full rounded-xl border px-3 py-2 text-base text-gray-900 outline-none focus:border-pink-500 xl:text-sm"
+    >
+      <option value="">Select type...</option>
+      <option value="Hand Woven">Hand Woven</option>
+      <option value="Machine Woven">Machine Woven</option>
+      <option value="Ring Sling">Ring Sling</option>
+      <option value="Carrier">Carrier</option>
+    </select>
   </div>
 
   <div className="relative">
