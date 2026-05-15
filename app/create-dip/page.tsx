@@ -466,8 +466,8 @@ Thank you all so much! Drawing soon! 🎲`
               {numericValue > 0 && (
                 <div className="rounded-xl bg-pink-50 p-4 space-y-2 text-sm">
                   <div className="flex justify-between border-t pt-2">
-                    <span className="text-gray-600">Likes needed</span>
-                    <span className="font-bold">{likesRequired}</span>
+                    <span className="text-gray-900">Likes needed</span>
+                    <span className="font-bold text-gray-900">{likesRequired}</span>
                   </div>
                   <div className="flex items-center justify-between border-t pt-2 gap-3">
                     <span className="text-gray-600 font-semibold text-sm">Number of Dips</span>
@@ -536,8 +536,8 @@ Thank you all so much! Drawing soon! 🎲`
                 <div className="rounded-xl bg-gray-50 p-3 space-y-2">
                   <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-2">Standard</p>
                   <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-600">Main (per spot)</span>
-                    <span className="font-semibold">${mainPrice} USD</span>
+                    <span className="text-gray-900">Main (per spot)</span>
+                    <span className="font-semibold text-gray-900">${mainPrice} USD</span>
                   </div>
                   <div className="flex items-center justify-between gap-3 text-sm">
                     <div className="shrink-0">
