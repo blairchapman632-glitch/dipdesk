@@ -731,13 +731,19 @@ function handleNotificationClick(notification: NotificationItem) {
     return
   }
 
-  if (notification.actor_user_id) {
-    router.push(`/user/${notification.actor_user_id}`)
+  if ((notification.type === 'like' || notification.type === 'wishlist') && notification.wrap) {
+    openViewWrapModal(notification.wrap, true)
     return
   }
 
-  if (notification.wrap) {
-    openViewWrapModal(notification.wrap, true)
+  if (notification.type === 'comment' || (notification.type === 'like' && !notification.wrap)) {
+    router.push('/wdywt')
+    return
+  }
+
+  if (notification.actor_user_id) {
+    router.push(`/user/${notification.actor_user_id}`)
+    return
   }
 }
 async function uploadAvatar(file: File) {
@@ -1618,6 +1624,8 @@ function exportReportCsv() {
     if (wrapForm.id) params.set('wrapId', wrapForm.id)
     if (wrapForm.name) params.set('wrapName', wrapForm.name)
     if (wrapForm.brand) params.set('brand', wrapForm.brand)
+    if (wrapForm.purchase_price) params.set('wrapPrice', wrapForm.purchase_price)
+    if (wrapForm.purchase_currency) params.set('wrapCurrency', wrapForm.purchase_currency)
 
     router.push(`/create-dip?${params.toString()}`)
   }
@@ -2077,6 +2085,8 @@ function exportReportCsv() {
                   params.set('wrapId', selectedWrap.id)
                   params.set('wrapName', selectedWrap.name)
                   if (selectedWrap.brand) params.set('brand', selectedWrap.brand)
+                  if (selectedWrap.purchase_price) params.set('wrapPrice', String(selectedWrap.purchase_price))
+                  if (selectedWrap.purchase_currency) params.set('wrapCurrency', selectedWrap.purchase_currency)
                   router.push(`/create-dip?${params.toString()}`)
                 }}
                 className="cursor-pointer rounded-xl border border-pink-500 px-3 py-1 text-sm font-semibold text-pink-500 whitespace-nowrap"

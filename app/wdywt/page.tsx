@@ -352,6 +352,18 @@ export default function WDYWTPage() {
           actor_user_id: currentUserId,
           type: 'comment',
         })
+        const myProfile = localStorage.getItem('dipdesk_dashboard_profile')
+        const myName = myProfile ? JSON.parse(myProfile)?.full_name?.split(' ')[0] || 'Someone' : 'Someone'
+        fetch('/api/push', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            user_ids: [commentSheet.user_id],
+            title: `💬 ${myName} commented on your WDYWT post`,
+            body: commentText.trim(),
+            url: '/wdywt',
+          }),
+        }).catch(() => {})
       }
     }
 
@@ -456,6 +468,18 @@ export default function WDYWTPage() {
                           setPosts(prev => prev.map(p => p.id === post.id ? { ...p, wdywt_likes: [...p.wdywt_likes, { id: data.id }] } : p))
                           if (post.user_id !== currentUserId) {
                             await supabase.from('notifications').insert({ recipient_user_id: post.user_id, actor_user_id: currentUserId, type: 'like' })
+                            const myProfile = localStorage.getItem('dipdesk_dashboard_profile')
+                            const myName = myProfile ? JSON.parse(myProfile)?.full_name?.split(' ')[0] || 'Someone' : 'Someone'
+                            fetch('/api/push', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({
+                                user_ids: [post.user_id],
+                                title: `❤️ ${myName} liked your WDYWT post`,
+                                body: post.caption || 'Check it out',
+                                url: '/wdywt',
+                              }),
+                            }).catch(() => {})
                           }
                         }
                       }

@@ -21,6 +21,8 @@ function CreateDipInner() {
   const wrapIdFromUrl = searchParams.get('wrapId') || ''
   const wrapNameFromUrl = searchParams.get('wrapName') || ''
   const brandFromUrl = searchParams.get('brand') || ''
+  const wrapPriceFromUrl = searchParams.get('wrapPrice') || ''
+  const wrapCurrencyFromUrl = searchParams.get('wrapCurrency') || 'AUD'
 
   const [step, setStep] = useState<Step>('calculator')
   const [creating, setCreating] = useState(false)
@@ -52,9 +54,31 @@ function CreateDipInner() {
   const [selectedEmojis, setSelectedEmojis] = useState<string[]>([])
   const [gamePriceOverrides, setGamePriceOverrides] = useState<Record<number, string>>({})
 
+  // Currency calculator
+  const [calcAmount, setCalcAmount] = useState('')
+  const [calcFrom, setCalcFrom] = useState('USD')
+  const [calcTo, setCalcTo] = useState('AUD')
+  const [calcResult, setCalcResult] = useState<number | null>(null)
+  const [calcRate, setCalcRate] = useState<number | null>(null)
+  const [calcLoading, setCalcLoading] = useState(false)
+  const CALC_CURRENCIES = ['AUD', 'USD', 'EUR', 'GBP', 'NZD', 'CAD', 'CHF', 'JPY', 'SEK', 'NOK', 'DKK', 'SGD', 'HKD']
+
   // UI
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [copied, setCopied] = useState<string | null>(null)
+
+  async function handleConvert() {
+    if (!calcAmount || !calcFrom || !calcTo || calcFrom === calcTo) return
+    setCalcLoading(true)
+    try {
+      const res = await fetch(`https://api.frankfurter.dev/v1/latest?base=${calcFrom}&symbols=${calcTo}`)
+      const data = await res.json()
+      const rate = data.rates[calcTo]
+      setCalcRate(rate)
+      setCalcResult(Number(calcAmount) * rate)
+    } catch {}
+    setCalcLoading(false)
+  }
 
   useEffect(() => {
     supabase.auth.getUser().then(async ({ data: { user } }) => {
@@ -346,11 +370,77 @@ Thank you all so much! Drawing soon! 🎲`
               </div>
 
             <div className="rounded-2xl border bg-white p-5 shadow-sm space-y-4">
+              <div>
+                <h2 className="font-bold text-gray-900">💱 Currency Calculator</h2>
+                <p className="text-xs text-gray-500 mt-1">Live rates — helpful for international buyers.</p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">From</label>
+                  <select
+                    value={calcFrom}
+                    onChange={(e) => { setCalcFrom(e.target.value); setCalcResult(null) }}
+                    className="w-full rounded-xl border px-3 py-2.5 text-base outline-none focus:border-pink-500"
+                  >
+                    {CALC_CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">To</label>
+                  <select
+                    value={calcTo}
+                    onChange={(e) => { setCalcTo(e.target.value); setCalcResult(null) }}
+                    className="w-full rounded-xl border px-3 py-2.5 text-base outline-none focus:border-pink-500"
+                  >
+                    {CALC_CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700">Amount</label>
+                <input
+                  type="number"
+                  value={calcAmount}
+                  onChange={(e) => { setCalcAmount(e.target.value); setCalcResult(null) }}
+                  placeholder="e.g. 30"
+                  className="w-full rounded-xl border px-3 py-2.5 text-base outline-none focus:border-pink-500"
+                />
+              </div>
+
+              <button
+                type="button"
+                onClick={handleConvert}
+                disabled={calcLoading || !calcAmount}
+                className="w-full rounded-xl bg-gradient-to-r from-pink-500 to-rose-500 py-2.5 text-sm font-bold text-white disabled:opacity-40"
+              >
+                {calcLoading ? 'Converting...' : 'Convert'}
+              </button>
+
+              {calcResult !== null && calcRate !== null && (
+                <div className="rounded-xl bg-pink-50 p-4 text-center">
+                  <p className="text-2xl font-bold text-pink-700">
+                    {new Intl.NumberFormat('en-AU', { style: 'currency', currency: calcTo, maximumFractionDigits: 2 }).format(calcResult)}
+                  </p>
+                  <p className="text-xs text-gray-400 mt-1">
+                    1 {calcFrom} = {calcRate.toFixed(4)} {calcTo}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <div className="rounded-2xl border bg-white p-5 shadow-sm space-y-4">
               <h2 className="font-bold text-gray-900">Dip Calculator</h2>
               <p className="text-xs text-gray-500">Enter your wrap value and ticket price to get suggested pricing.</p>
 
               <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">Wrap Value (USD)</label>
+                <label className="mb-1 block text-sm font-medium text-gray-700">Money Goal (USD)</label>
+                {wrapPriceFromUrl && (
+                  <div className="mb-2 rounded-xl bg-pink-50 px-3 py-2 text-xs text-pink-700 font-medium">
+                    📌 Your purchase price was {wrapCurrencyFromUrl} ${wrapPriceFromUrl} — use this as a reference for your goal.
+                  </div>
+                )}
                 <input
                   type="number"
                   value={wrapValue}
@@ -358,7 +448,7 @@ Thank you all so much! Drawing soon! 🎲`
                   placeholder="e.g. 800"
                   className="w-full rounded-xl border px-3 py-2.5 text-base outline-none focus:border-pink-500"
                 />
-                <p className="mt-1 text-xs text-gray-400">Use current market value, not what you paid</p>
+                <p className="mt-1 text-xs text-gray-400">How much do you want to recover? We'll add a 20% buffer and $20 shipping to calculate your dips.</p>
               </div>
 
               <div>
@@ -375,29 +465,9 @@ Thank you all so much! Drawing soon! 🎲`
 
               {numericValue > 0 && (
                 <div className="rounded-xl bg-pink-50 p-4 space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Wrap value</span>
-                    <span className="font-bold">${numericValue}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">+ 20% buffer for specials</span>
-                    <span className="font-bold">+${Math.round(numericValue * 0.20)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">+ $20 shipping</span>
-                    <span className="font-bold">+$20</span>
-                  </div>
-                  <div className="flex justify-between border-t pt-2">
-                    <span className="text-gray-600 font-semibold">Target to recover</span>
-                    <span className="font-bold text-pink-600">${targetAmount}</span>
-                  </div>
                   <div className="flex justify-between border-t pt-2">
                     <span className="text-gray-600">Likes needed</span>
                     <span className="font-bold">{likesRequired}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Total value</span>
-                    <span className="font-bold">${totalValue}</span>
                   </div>
                   <div className="flex items-center justify-between border-t pt-2 gap-3">
                     <span className="text-gray-600 font-semibold text-sm">Number of Dips</span>
@@ -409,6 +479,12 @@ Thank you all so much! Drawing soon! 🎲`
                       className="w-24 rounded-xl border px-3 py-1.5 text-base font-bold text-center outline-none focus:border-pink-500 bg-white"
                     />
                   </div>
+
+                  <div className="flex justify-between border-t pt-2">
+                    <span className="text-gray-600 font-semibold">Estimated Return</span>
+                    <span className="font-bold text-green-600">${Math.max(0, totalValue - Math.round(numericValue * 0.20) - 20)} USD</span>
+                  </div>
+                  <p className="text-xs text-gray-400">Adjust number of dips to change your return</p>
                   {isOver2000 && (
                     <div className="rounded-lg bg-amber-100 px-3 py-2 text-xs font-semibold text-amber-800 mt-2">
                       ⚠️ Value over $2000 — Random.org paid draw (+$4.95) and Google Sheet mandatory
