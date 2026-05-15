@@ -117,7 +117,7 @@ export default function UserCollectionPage() {
   const [hasWishlistedSelectedWrap, setHasWishlistedSelectedWrap] = useState(false)
   const [socialLoading, setSocialLoading] = useState(false)
   const [activeDips, setActiveDips] = useState<{id: string, title: string, wrap_id: string | null, total_spots: number, price_per_spot: number, stage: string | null, wrap_name: string | null, brand: string | null, facebook_group: string | null}[]>([])
-  const [authChecked, setAuthChecked] = useState(true)
+  const [authChecked, setAuthChecked] = useState(false)
 
   // WDYWT post modal
   const [selectedPost, setSelectedPost] = useState<WDYWTPost | null>(null)
