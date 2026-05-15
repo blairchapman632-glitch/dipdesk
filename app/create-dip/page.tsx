@@ -475,7 +475,6 @@ Thank you all so much! Drawing soon! 🎲`
                       type="number"
                       value={totalDips !== '' ? totalDips : calculatedDips}
                       onChange={(e) => setTotalDips(e.target.value)}
-                      min={1}
                       className="w-24 rounded-xl border px-3 py-1.5 text-base font-bold text-center outline-none focus:border-pink-500 bg-white"
                     />
                   </div>
@@ -528,7 +527,7 @@ Thank you all so much! Drawing soon! 🎲`
                     <span className="font-semibold">${mainPrice} USD</span>
                   </div>
                   <div className="flex items-center justify-between gap-3 text-sm">
-                    <span className="text-gray-600 shrink-0">Bookend (spots 1 & {resolvedDips})</span>
+                    <span className="text-gray-600 shrink-0">Bookend (spots 1 & {resolvedDips}) <span className="text-xs text-gray-400">— price is per spot</span></span>
                     <div className="flex items-center gap-1 ml-auto">
                       <span className="text-gray-400 text-xs">$</span>
                       <input
