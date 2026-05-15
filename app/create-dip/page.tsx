@@ -540,7 +540,10 @@ Thank you all so much! Drawing soon! 🎲`
                     <span className="font-semibold">${mainPrice} USD</span>
                   </div>
                   <div className="flex items-center justify-between gap-3 text-sm">
-                    <span className="text-gray-600 shrink-0">Bookend (spots 1 & {resolvedDips}) <span className="text-xs text-gray-400">— price is per spot</span></span>
+                    <div className="shrink-0">
+                      <span className="text-gray-600">Bookend (spots 1 & {resolvedDips})</span>
+                      <p className="text-xs text-gray-400">price is per spot</p>
+                    </div>
                     <div className="flex items-center gap-1 ml-auto">
                       <span className="text-gray-400 text-xs">$</span>
                       <input
