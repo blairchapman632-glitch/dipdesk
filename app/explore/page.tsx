@@ -570,9 +570,7 @@ const usersFromWraps: ExploreUser[] = uniqueUserIds.slice(0, 12)
     return bFollowing - aFollowing
   })
 
-      setUsers(usersFromWraps)
-localStorage.setItem(EXPLORE_USERS_KEY, JSON.stringify(usersFromWraps))
-// 🔽 LOAD FOLLOWING USERS
+      // 🔽 LOAD FOLLOWING USERS
 if (currentUserId) {
   const { data: followsData } = await supabase
     .from('follows')
@@ -631,9 +629,13 @@ if (currentUserId) {
     localStorage.setItem(EXPLORE_USERS_KEY, JSON.stringify(mergedUsers))
   } else {
     setFollowingUsers([])
+    setUsers(usersFromWraps)
+    localStorage.setItem(EXPLORE_USERS_KEY, JSON.stringify(usersFromWraps))
   }
 } else {
   setFollowingUsers([])
+  setUsers(usersFromWraps)
+  localStorage.setItem(EXPLORE_USERS_KEY, JSON.stringify(usersFromWraps))
 }
 
 setLoading(false)
