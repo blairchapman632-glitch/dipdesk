@@ -312,6 +312,23 @@ const [showOnboarding, setShowOnboarding] = useState(false)
 const [onboardingStep, setOnboardingStep] = useState(1)
 const [onboardingAvatar, setOnboardingAvatar] = useState<string | null>(null)
 const [isUploadingOnboardingAvatar, setIsUploadingOnboardingAvatar] = useState(false)
+
+// Collection filters
+const [collectionSearch, setCollectionSearch] = useState('')
+const [showCollectionBrandFilter, setShowCollectionBrandFilter] = useState(false)
+const [showCollectionLengthFilter, setShowCollectionLengthFilter] = useState(false)
+const [showCollectionColourFilter, setShowCollectionColourFilter] = useState(false)
+const [showCollectionBlendFilter, setShowCollectionBlendFilter] = useState(false)
+const [showCollectionTypeFilter, setShowCollectionTypeFilter] = useState(false)
+const [collectionFilterBrand, setCollectionFilterBrand] = useState('')
+const [collectionFilterColour, setCollectionFilterColour] = useState('')
+const [collectionFilterBlend, setCollectionFilterBlend] = useState<string[]>([])
+const [collectionFilterType, setCollectionFilterType] = useState<string[]>([])
+const [collectionSizeMin, setCollectionSizeMin] = useState('')
+const [collectionSizeMax, setCollectionSizeMax] = useState('')
+const COLLECTION_COLOUR_TAGS = ['White/Cream', 'Grey', 'Black', 'Brown/Tan', 'Pink/Blush', 'Red/Burgundy', 'Orange/Rust', 'Yellow/Mustard', 'Green', 'Teal/Petrol', 'Blue', 'Navy', 'Purple', 'Rainbow', 'Multi/Variegated', 'Natural/Undyed']
+const COLLECTION_BLEND_TAGS = ['Cotton', 'Linen', 'Silk', 'Hemp', 'Wool/Merino', 'Seacell', 'Tencel', 'Chenille', 'Camel', 'Bamboo', 'Cashmere']
+const COLLECTION_TYPE_TAGS = ['Hand Woven', 'Machine Woven', 'Ring Sling', 'Carrier']
     const router = useRouter()
 
   const handleLogout = async () => {
@@ -345,6 +362,41 @@ const updateWrapForm = <K extends keyof WrapFormState>(
       })
   }, [wraps])
 
+  const filteredCollectionWraps = useMemo(() => {
+    return collectionWraps.filter((wrap) => {
+      if (collectionSearch.trim()) {
+        const term = collectionSearch.toLowerCase()
+        const matchesName = wrap.name.toLowerCase().includes(term)
+        const matchesBrand = (wrap.brand || '').toLowerCase().includes(term)
+        if (!matchesName && !matchesBrand) return false
+      }
+      if (collectionFilterBrand) {
+        const wrapBrand = (wrap.brand || '').toLowerCase()
+        if (!wrapBrand.includes(collectionFilterBrand.toLowerCase())) return false
+      }
+      if (collectionSizeMin || collectionSizeMax) {
+        const wrapSize = parseFloat((wrap.size || ''))
+        if (isNaN(wrapSize)) return false
+        if (collectionSizeMin && wrapSize < parseFloat(collectionSizeMin)) return false
+        if (collectionSizeMax && wrapSize > parseFloat(collectionSizeMax)) return false
+      }
+      if (collectionFilterColour) {
+        const selected = collectionFilterColour.split(',').map(c => c.trim().toLowerCase()).filter(Boolean)
+        const wrapColour = ((wrap as any).colour || '').toLowerCase()
+        if (!selected.some(c => wrapColour.includes(c.split('/')[0].trim()))) return false
+      }
+      if (collectionFilterBlend.length > 0) {
+        const wrapMaterial = ((wrap as any).material || '').toLowerCase()
+        if (!collectionFilterBlend.some(b => wrapMaterial.includes(b.toLowerCase().split('/')[0].trim()))) return false
+      }
+      if (collectionFilterType.length > 0) {
+        const wrapType = ((wrap as any).wrap_type || '').toLowerCase()
+        if (!collectionFilterType.some(t => wrapType === t.toLowerCase())) return false
+      }
+      return true
+    })
+  }, [collectionWraps, collectionSearch, collectionFilterBrand, collectionSizeMin, collectionSizeMax, collectionFilterColour, collectionFilterBlend, collectionFilterType])
+
   const departedWraps = useMemo(() => {
     return wraps
       .filter((wrap) => wrap.status === 'departed')
@@ -353,6 +405,35 @@ const updateWrapForm = <K extends keyof WrapFormState>(
         return (b.purchase_price || 0) - (a.purchase_price || 0)
       })
   }, [wraps])
+
+  const filteredDepartedWraps = useMemo(() => {
+    return departedWraps.filter((wrap) => {
+      if (collectionFilterBrand) {
+        const wrapBrand = (wrap.brand || '').toLowerCase()
+        if (!wrapBrand.includes(collectionFilterBrand.toLowerCase())) return false
+      }
+      if (collectionSizeMin || collectionSizeMax) {
+        const wrapSize = parseFloat((wrap.size || ''))
+        if (isNaN(wrapSize)) return false
+        if (collectionSizeMin && wrapSize < parseFloat(collectionSizeMin)) return false
+        if (collectionSizeMax && wrapSize > parseFloat(collectionSizeMax)) return false
+      }
+      if (collectionFilterColour) {
+        const selected = collectionFilterColour.split(',').map(c => c.trim().toLowerCase()).filter(Boolean)
+        const wrapColour = ((wrap as any).colour || '').toLowerCase()
+        if (!selected.some(c => wrapColour.includes(c.split('/')[0].trim()))) return false
+      }
+      if (collectionFilterBlend.length > 0) {
+        const wrapMaterial = ((wrap as any).material || '').toLowerCase()
+        if (!collectionFilterBlend.some(b => wrapMaterial.includes(b.toLowerCase().split('/')[0].trim()))) return false
+      }
+      if (collectionFilterType.length > 0) {
+        const wrapType = ((wrap as any).wrap_type || '').toLowerCase()
+        if (!collectionFilterType.some(t => wrapType === t.toLowerCase())) return false
+      }
+      return true
+    })
+  }, [departedWraps, collectionFilterBrand, collectionSizeMin, collectionSizeMax, collectionFilterColour, collectionFilterBlend, collectionFilterType])
 const reportRows = useMemo<ReportRow[]>(() => {
   return wraps
     .filter((wrap) => {
@@ -1696,7 +1777,6 @@ function exportReportCsv() {
   <h2 className="text-xl font-bold text-gray-900">
     Your Collection
   </h2>
-
   <div className="flex items-center gap-2">
     <button
       type="button"
@@ -1719,6 +1799,116 @@ function exportReportCsv() {
   </div>
 </div>
 
+<div className="mb-4 space-y-2 px-1">
+  
+  <div className="flex gap-1.5 justify-between">
+    {[
+      { label: collectionFilterBrand ? 'Brand ✓' : 'Brand', key: 'brand', active: !!collectionFilterBrand },
+      { label: (collectionSizeMin || collectionSizeMax) ? 'Length ✓' : 'Length', key: 'length', active: !!(collectionSizeMin || collectionSizeMax) },
+      { label: collectionFilterColour ? 'Colour ✓' : 'Colour', key: 'colour', active: !!collectionFilterColour },
+      { label: collectionFilterBlend.length > 0 ? 'Blend ✓' : 'Blend', key: 'blend', active: collectionFilterBlend.length > 0 },
+      { label: collectionFilterType.length > 0 ? 'Type ✓' : 'Type', key: 'type', active: collectionFilterType.length > 0 },
+    ].map(({ label, key, active }) => (
+      <button
+        key={key}
+        type="button"
+        onClick={() => {
+          setShowCollectionBrandFilter(key === 'brand' ? !showCollectionBrandFilter : false)
+          setShowCollectionLengthFilter(key === 'length' ? !showCollectionLengthFilter : false)
+          setShowCollectionColourFilter(key === 'colour' ? !showCollectionColourFilter : false)
+          setShowCollectionBlendFilter(key === 'blend' ? !showCollectionBlendFilter : false)
+          setShowCollectionTypeFilter(key === 'type' ? !showCollectionTypeFilter : false)
+        }}
+        className={`flex-1 rounded-full border px-1.5 py-1 text-xs font-semibold transition ${active ? 'border-pink-500 bg-pink-50 text-pink-700' : 'border-gray-200 bg-white text-gray-600'}`}
+      >
+        {label}
+      </button>
+    ))}
+  </div>
+
+  {showCollectionBrandFilter && (
+    <input
+      type="text"
+      value={collectionFilterBrand}
+      onChange={(e) => setCollectionFilterBrand(e.target.value)}
+      placeholder="Filter by brand..."
+      className="w-full rounded-xl border px-3 py-2 text-base text-gray-900 outline-none focus:border-pink-500"
+    />
+  )}
+
+  {showCollectionLengthFilter && (
+    <div className="flex items-center gap-2">
+      <input type="number" step="0.1" value={collectionSizeMin} onChange={(e) => setCollectionSizeMin(e.target.value)} placeholder="Min m" className="w-24 rounded-xl border px-3 py-2 text-base outline-none focus:border-pink-300" />
+      <span className="text-xs text-gray-400">to</span>
+      <input type="number" step="0.1" value={collectionSizeMax} onChange={(e) => setCollectionSizeMax(e.target.value)} placeholder="Max m" className="w-24 rounded-xl border px-3 py-2 text-base outline-none focus:border-pink-300" />
+      <span className="text-xs text-gray-400">meters</span>
+    </div>
+  )}
+
+  {(collectionFilterBrand || collectionSizeMin || collectionSizeMax || collectionFilterColour || collectionFilterBlend.length > 0 || collectionFilterType.length > 0) && (
+    <button
+      type="button"
+      onClick={() => {
+        setCollectionFilterBrand('')
+        setCollectionSizeMin('')
+        setCollectionSizeMax('')
+        setCollectionFilterColour('')
+        setCollectionFilterBlend([])
+        setCollectionFilterType([])
+      }}
+      className="rounded-full border border-red-200 px-3 py-1 text-xs font-semibold text-red-500"
+    >
+      Clear filters
+    </button>
+  )}
+
+  {showCollectionBlendFilter && (
+    <div className="flex flex-wrap gap-1.5">
+      {COLLECTION_BLEND_TAGS.map((tag) => {
+        const selected = collectionFilterBlend.includes(tag)
+        return (
+          <button key={tag} type="button"
+            onClick={() => setCollectionFilterBlend(prev => selected ? prev.filter(b => b !== tag) : [...prev, tag])}
+            className={`rounded-full border px-2.5 py-1 text-xs font-semibold transition ${selected ? 'border-pink-500 bg-pink-500 text-white' : 'border-gray-200 bg-white text-gray-600'}`}
+          >{tag}</button>
+        )
+      })}
+    </div>
+  )}
+
+  {showCollectionTypeFilter && (
+    <div className="flex flex-wrap gap-1.5">
+      {COLLECTION_TYPE_TAGS.map((tag) => {
+        const selected = collectionFilterType.includes(tag)
+        return (
+          <button key={tag} type="button"
+            onClick={() => setCollectionFilterType(prev => selected ? prev.filter(t => t !== tag) : [...prev, tag])}
+            className={`rounded-full border px-2.5 py-1 text-xs font-semibold transition ${selected ? 'border-pink-500 bg-pink-500 text-white' : 'border-gray-200 bg-white text-gray-600'}`}
+          >{tag}</button>
+        )
+      })}
+    </div>
+  )}
+
+  {showCollectionColourFilter && (
+    <div className="flex flex-wrap gap-1.5">
+      {COLLECTION_COLOUR_TAGS.map((tag) => {
+        const selected = collectionFilterColour.split(',').map(c => c.trim()).filter(Boolean).includes(tag)
+        return (
+          <button key={tag} type="button"
+            onClick={() => {
+              const current = collectionFilterColour.split(',').map(c => c.trim()).filter(Boolean)
+              const updated = selected ? current.filter(c => c !== tag) : [...current, tag]
+              setCollectionFilterColour(updated.join(', '))
+            }}
+            className={`rounded-full border px-2.5 py-1 text-xs font-semibold transition ${selected ? 'border-pink-500 bg-pink-500 text-white' : 'border-gray-200 bg-white text-gray-600'}`}
+          >{tag}</button>
+        )
+      })}
+    </div>
+  )}
+</div>
+
             {loading && wraps.length === 0 ? (
               <p className="text-sm text-gray-500">Loading wraps...</p>
             ) : collectionWraps.length === 0 ? (
@@ -1734,7 +1924,7 @@ function exportReportCsv() {
               </div>
             ) : (<div className="grid grid-cols-2 gap-3 sm:grid-cols-2 xl:grid-cols-3 xl:gap-4">
               
-                {collectionWraps.map((wrap) => {
+                {filteredCollectionWraps.map((wrap) => {
                   const imageUrl = getPrimaryImage(wrap)
 
                   return (
@@ -1801,11 +1991,11 @@ function exportReportCsv() {
     <div className="h-px flex-1 bg-gray-200" />
   </div>
 
-              {departedWraps.length === 0 ? (
+              {filteredDepartedWraps.length === 0 ? (
                 <p className="text-sm text-gray-500">No departed wraps yet</p>
               ) : (
                 <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 xl:grid-cols-5">
-                  {departedWraps.map((wrap) => (
+                  {filteredDepartedWraps.map((wrap) => (
                     <button
                       key={wrap.id}
                       type="button"
