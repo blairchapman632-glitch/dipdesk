@@ -471,12 +471,25 @@ Thank you all so much! Drawing soon! 🎲`
                   </div>
                   <div className="flex items-center justify-between border-t pt-2 gap-3">
                     <span className="text-gray-600 font-semibold text-sm">Number of Dips</span>
-                    <input
-                      type="number"
-                      value={totalDips !== '' ? totalDips : calculatedDips}
-                      onChange={(e) => setTotalDips(e.target.value)}
-                      className="w-24 rounded-xl border px-3 py-1.5 text-base font-bold text-center outline-none focus:border-pink-500 bg-white"
-                    />
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setTotalDips(String(Math.max(1, (Number(totalDips) || calculatedDips) - 1)))}
+                        className="h-9 w-9 rounded-xl border bg-white text-lg font-bold text-gray-700 flex items-center justify-center hover:bg-gray-50"
+                      >
+                        −
+                      </button>
+                      <span className="w-12 text-center text-base font-bold text-gray-900">
+                        {totalDips !== '' ? totalDips : calculatedDips}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setTotalDips(String((Number(totalDips) || calculatedDips) + 1))}
+                        className="h-9 w-9 rounded-xl border bg-white text-lg font-bold text-gray-700 flex items-center justify-center hover:bg-gray-50"
+                      >
+                        +
+                      </button>
+                    </div>
                   </div>
 
                   <div className="flex justify-between border-t pt-2">
