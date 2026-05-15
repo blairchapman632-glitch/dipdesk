@@ -354,7 +354,7 @@ const { data: dipData } = await supabase
 
   return (
     <AppLayout hideHeader={authChecked && !currentUserId}>
-      {!currentUserId && (
+      {authChecked && !currentUserId && (
         <div className="mb-4 rounded-2xl bg-gradient-to-r from-pink-500 to-rose-500 px-4 py-3 flex items-center justify-between gap-3">
           <p className="text-sm font-semibold text-white">👋 You're viewing a wrap collection on WrapApp — the home for wrap collectors.</p>
           <button
