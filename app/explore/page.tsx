@@ -362,6 +362,7 @@ const [showColourFilter, setShowColourFilter] = useState(false)
 const [showBrandFilter, setShowBrandFilter] = useState(false)
 const [showSizeFilter, setShowSizeFilter] = useState(false)
 const [showBlendFilter, setShowBlendFilter] = useState(false)
+const [showFilterSheet, setShowFilterSheet] = useState(false)
 const [selectedBlends, setSelectedBlends] = useState<string[]>([])
 const BLEND_TAGS = [
   'Cotton', 'Linen', 'Silk', 'Hemp', 'Wool/Merino', 'Seacell', 'Tencel', 'Chenille', 'Camel', 'Bamboo', 'Cashmere'
@@ -492,8 +493,8 @@ async function loadActiveDips() {
       }
 
       const wraps = ((wrapData as Wrap[]) || []).filter(w => w.user_id !== currentUserId && w.status !== 'departed')
-      setLatestWraps(wraps)
-      localStorage.setItem(EXPLORE_WRAPS_KEY, JSON.stringify(wraps))
+
+      // Initial unranked set — will be replaced with ranked version below
       const uniqueUserIds = [...new Set(wraps.map((wrap) => wrap.user_id))]
 
       if (uniqueUserIds.length === 0) {
@@ -536,12 +537,24 @@ const nextAvatarMap: Record<string, string | null> = {}
       })
       setAvatarMap(nextAvatarMap)
       localStorage.setItem(EXPLORE_AVATARS_KEY, JSON.stringify(nextAvatarMap))
-      const [{ data: wrapCountData }, { data: followsDataEarly }] = await Promise.all([
+      const [{ data: wrapCountData }, { data: followsDataEarly }, { data: likesData }, { data: wishlistsData }] = await Promise.all([
   supabase.from('wraps').select('user_id').in('user_id', uniqueUserIds),
   currentUserId
     ? supabase.from('follows').select('following_id').eq('follower_id', currentUserId).eq('status', 'accepted')
     : Promise.resolve({ data: [] }),
+  supabase.from('wrap_likes').select('wrap_id'),
+  supabase.from('wishlists').select('wrap_id'),
 ])
+
+// Build like + wishlist count maps
+const likeCounts: Record<string, number> = {}
+;(likesData || []).forEach((r: any) => {
+  likeCounts[r.wrap_id] = (likeCounts[r.wrap_id] || 0) + 1
+})
+const wishlistCounts: Record<string, number> = {}
+;(wishlistsData || []).forEach((r: any) => {
+  wishlistCounts[r.wrap_id] = (wishlistCounts[r.wrap_id] || 0) + 1
+})
 
 const realWrapCounts: Record<string, number> = {}
 ;(wrapCountData || []).forEach((w: any) => {
@@ -552,23 +565,46 @@ const earlyFollowingIds = new Set((followsDataEarly || []).map((f: any) => f.fol
 
 const followingIdsSet = earlyFollowingIds
 
-const usersFromWraps: ExploreUser[] = uniqueUserIds.slice(0, 12)
+// Score and rank wraps
+function scoreWrap(wrap: Wrap): number {
+  const likes = likeCounts[wrap.id] || 0
+  const wishlists = wishlistCounts[wrap.id] || 0
+  const isFollowed = earlyFollowingIds.has(wrap.user_id) ? 20 : 0
+  const isForSale = wrap.for_sale ? 5 : 0
+  const ageMs = Date.now() - new Date(wrap.created_at).getTime()
+  const ageDays = ageMs / (1000 * 60 * 60 * 24)
+  const recency = Math.max(0, 10 - (ageDays / 3))
+  return (likes * 3) + (wishlists * 2) + isFollowed + isForSale + recency
+}
+
+const rankedWraps = [...wraps].sort((a, b) => scoreWrap(b) - scoreWrap(a))
+setLatestWraps(rankedWraps)
+localStorage.setItem(EXPLORE_WRAPS_KEY, JSON.stringify(rankedWraps))
+
+const usersFromWraps: ExploreUser[] = uniqueUserIds
   .map((userId) => {
     const userWraps = wraps.filter((wrap) => wrap.user_id === userId)
     const latestUserWrap = userWraps[0]
+    const wrapCount = realWrapCounts[userId] || userWraps.length
+
+    // Score each user
+    const isFollowing = followingIdsSet.has(userId) ? 100 : 0
+    const wrapScore = Math.min(wrapCount * 2, 40)
+    const latestWrapDate = userWraps[0]?.created_at
+    const ageDays = latestWrapDate ? (Date.now() - new Date(latestWrapDate).getTime()) / (1000 * 60 * 60 * 24) : 999
+    const recency = Math.max(0, 10 - (ageDays / 7))
+    const score = isFollowing + wrapScore + recency
 
     return {
       id: userId,
       name: getDisplayName(profileMap[userId]),
       image_url: getPrimaryImage(latestUserWrap),
-      wrap_count: realWrapCounts[userId] || userWraps.length,
+      wrap_count: wrapCount,
+      score,
     }
   })
-  .sort((a, b) => {
-    const aFollowing = followingIdsSet.has(a.id) ? 1 : 0
-    const bFollowing = followingIdsSet.has(b.id) ? 1 : 0
-    return bFollowing - aFollowing
-  })
+  .sort((a, b) => b.score - a.score)
+  .slice(0, 20)
 
       // 🔽 LOAD FOLLOWING USERS
 if (currentUserId) {
@@ -884,335 +920,169 @@ const filteredWraps = (
   return (
     <AppLayout>
       <div className="space-y-2">
-        <section className="rounded-xl bg-white px-3 py-3">
-                    <div className="relative">
-            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 leading-none">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="h-4 w-4"
-              >
-                <circle cx="11" cy="11" r="8"></circle>
-                <path d="m21 21-4.3-4.3"></path>
-              </svg>
-            </span>
-
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(event) => setSearchTerm(event.target.value)}
-              placeholder="Search by wrap name or collector"
-              className="w-full rounded-lg border pl-11 pr-3 py-2 text-[16px] text-gray-900 outline-none focus:border-pink-500"
-            />
-          </div>
-
-          <div className="mt-3 flex gap-1.5 overflow-x-auto pb-1 scrollbar-none">
-            <button
-              type="button"
-              onClick={() => setResultType('all')}
-              className={`whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-semibold ${
-                resultType === 'all'
-                  ? 'border-pink-500 bg-pink-500 text-white'
-                  : 'border-gray-200 bg-white text-gray-600'
-              }`}
-            >
-              All
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setResultType('wraps')}
-              className={`whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-semibold ${
-                resultType === 'wraps'
-                  ? 'border-pink-500 bg-pink-500 text-white'
-                  : 'border-gray-200 bg-white text-gray-600'
-              }`}
-            >
-              Wraps
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setResultType('users')}
-              className={`whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-semibold ${
-                resultType === 'users'
-                  ? 'border-pink-500 bg-pink-500 text-white'
-                  : 'border-gray-200 bg-white text-gray-600'
-              }`}
-            >
-              Users
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setResultType('for-sale')}
-              className={`whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-semibold ${
-                resultType === 'for-sale'
-                  ? 'border-pink-500 bg-pink-500 text-white'
-                  : 'border-gray-200 bg-white text-gray-600'
-              }`}
-            >
-              Available
-            </button>
-
-            <button
-              type="button"
-              onClick={() => { setShowTypeFilter(!showTypeFilter); setShowBlendFilter(false); setShowBrandFilter(false); setShowColourFilter(false); setShowSizeFilter(false) }}
-              className={`whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-semibold ${selectedTypes.length > 0 ? 'border-pink-500 bg-pink-500 text-white' : 'border-gray-200 bg-white text-gray-600'}`}
-            >
-              {selectedTypes.length > 0 ? `Type: ${selectedTypes.length}` : 'Type'} {showTypeFilter ? '▲' : '▼'}
-            </button>
-          </div>
-
-          {/* Filter dropdowns */}
-          <div className="mt-2 space-y-2">
-            <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none">
-            <button
-                type="button"
-                onClick={() => { setShowBrandFilter(!showBrandFilter); setShowColourFilter(false); setShowSizeFilter(false); setShowBlendFilter(false) }}
-                className={`whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-semibold ${selectedBrands.length > 0 ? 'border-pink-500 bg-pink-50 text-pink-700' : 'border-gray-200 bg-white text-gray-600'}`}
-              >
-                {selectedBrands.length > 0 ? `Brands: ${selectedBrands.length}` : 'Brands'} {showBrandFilter ? '▲' : '▼'}
-              </button>
-
-            <button
-              type="button"
-              onClick={() => { setShowSizeFilter(!showSizeFilter); setShowBrandFilter(false); setShowColourFilter(false); setShowBlendFilter(false) }}
-              className={`whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-semibold ${filterSize ? 'border-pink-500 bg-pink-50 text-pink-700' : 'border-gray-200 bg-white text-gray-600'}`}
-            >
-              {sizeMin || sizeMax || sizeRingSling ? 'Length ✓' : 'Length'} {showSizeFilter ? '▲' : '▼'}
-            </button>
-
-            <button
-                type="button"
-                onClick={() => { setShowColourFilter(!showColourFilter); setShowBrandFilter(false); setShowSizeFilter(false); setShowBlendFilter(false) }}
-                className={`whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-semibold ${filterColour ? 'border-pink-500 bg-pink-50 text-pink-700' : 'border-gray-200 bg-white text-gray-600'}`}
-              >
-                {filterColour ? `Colours: ${filterColour.split(',').length}` : 'Colours'} {showColourFilter ? '▲' : '▼'}
-              </button>
-
-            <button
-              type="button"
-              onClick={() => { setShowBlendFilter(!showBlendFilter); setShowBrandFilter(false); setShowColourFilter(false); setShowSizeFilter(false); setShowTypeFilter(false) }}
-              className={`whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-semibold ${filterMaterial ? 'border-pink-500 bg-pink-50 text-pink-700' : 'border-gray-200 bg-white text-gray-600'}`}
-            >
-              {selectedBlends.length > 0 ? `Blends: ${selectedBlends.length}` : 'Blends'} {showBlendFilter ? '▲' : '▼'}
-            </button>
-
-            
-
+        <section className="sticky top-0 z-40 rounded-xl bg-white px-3 pt-1.5 pb-1.5 shadow-sm">
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 leading-none">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+                  <circle cx="11" cy="11" r="8"></circle>
+                  <path d="m21 21-4.3-4.3"></path>
+                </svg>
+              </span>
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+                placeholder="Search wraps or collectors"
+                className="w-full rounded-lg border pl-9 pr-3 py-1.5 text-[16px] text-gray-900 outline-none focus:border-pink-500"
+              />
             </div>
-            {(filterBrand || sizeMin || sizeMax || sizeRingSling || filterColour || selectedBlends.length > 0 || selectedTypes.length > 0) && (
-              <button
-                type="button"
-                onClick={() => {
-                  setFilterBrand('')
-                  setSelectedBrands([])
-                  setBrandSearch('')
-                  setBrandSearchResults([])
-                  setFilterSize('')
-                  setSizeMin('')
-                  setSizeMax('')
-                  setSizeRingSling(false)
-                  setFilterColour('')
-                  setFilterMaterial('')
-                  setSelectedBlends([])
-                  setSelectedTypes([])
-                }}
-                className="whitespace-nowrap rounded-full border border-red-200 px-3 py-1 text-xs font-semibold text-red-500"
-              >
-                Clear filters
-              </button>
-            )}
-
-            {/* Expanded brand filter */}
-            {showBrandFilter && (
-              <div className="space-y-2">
-                {selectedBrands.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5">
-                    {selectedBrands.map((brand) => (
-                      <button
-                        key={brand}
-                        type="button"
-                        onClick={() => {
-                          const updated = selectedBrands.filter(b => b !== brand)
-                          setSelectedBrands(updated)
-                          setFilterBrand(updated.join(','))
-                        }}
-                        className="rounded-full border border-pink-500 bg-pink-500 px-2.5 py-1 text-xs font-semibold text-white"
-                      >
-                        {brand} ×
-                      </button>
-                    ))}
-                  </div>
-                )}
-                <input
-                  type="text"
-                  value={brandSearch}
-                  onChange={async (e) => {
-                    setBrandSearch(e.target.value)
-                    const term = e.target.value.trim()
-                    if (!term) { setBrandSearchResults([]); return }
-                    const { data } = await supabase
-                      .from('wraps')
-                      .select('brand')
-                      .ilike('brand', `%${term}%`)
-                      .limit(20)
-                    const seen = new Map<string, string>()
-                    ;((data as any[]) || []).forEach((w) => {
-                      if (w.brand && !seen.has(w.brand.toLowerCase())) {
-                        seen.set(w.brand.toLowerCase(), w.brand)
-                      }
-                    })
-                    setBrandSearchResults([...seen.values()].sort().filter(b => !selectedBrands.includes(b)))
-                  }}
-                  placeholder="Search brands..."
-                  className="w-full rounded-xl border border-gray-200 px-3 py-2 text-[16px] outline-none focus:border-pink-300"
-                />
-                {brandSearchResults.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5">
-                    {brandSearchResults.map((brand) => (
-                      <button
-                        key={brand}
-                        type="button"
-                        onClick={() => {
-                          const updated = [...selectedBrands, brand]
-                          setSelectedBrands(updated)
-                          setFilterBrand(updated.join(','))
-                          setBrandSearch('')
-                          setBrandSearchResults([])
-                        }}
-                        className="rounded-full border border-gray-200 bg-white px-2.5 py-1 text-xs font-semibold text-gray-600 hover:border-pink-300"
-                      >
-                        {brand}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-{/* Expanded size filter */}
-            {showSizeFilter && (
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <input
-                    type="number"
-                    step="0.1"
-                    min="2"
-                    max="6"
-                    value={sizeMin}
-                    onChange={(e) => setSizeMin(e.target.value)}
-                    placeholder="Min m"
-                    className="w-24 rounded-xl border border-gray-200 px-3 py-2 text-[16px] outline-none focus:border-pink-300"
-                  />
-                  <span className="text-xs text-gray-400">to</span>
-                  <input
-                    type="number"
-                    step="0.1"
-                    min="2"
-                    max="6"
-                    value={sizeMax}
-                    onChange={(e) => setSizeMax(e.target.value)}
-                    placeholder="Max m"
-                    className="w-24 rounded-xl border border-gray-200 px-3 py-2 text-[16px] outline-none focus:border-pink-300"
-                  />
-                  <span className="text-xs text-gray-400">meters</span>
-                </div>
-                
-              </div>
-            )}
-
-            {/* Expanded type filter */}
-            {showTypeFilter && (
-              <div className="flex flex-wrap gap-1.5">
-                {TYPE_TAGS.map((tag) => {
-                  const selected = selectedTypes.includes(tag)
-                  return (
-                    <button
-                      key={tag}
-                      type="button"
-                      onClick={() => {
-                        const updated = selected
-                          ? selectedTypes.filter(t => t !== tag)
-                          : [...selectedTypes, tag]
-                        setSelectedTypes(updated)
-                      }}
-                      className={`whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-semibold transition ${
-                        selected
-                          ? 'border-pink-500 bg-pink-500 text-white'
-                          : 'border-gray-200 bg-white text-gray-600'
-                      }`}
-                    >
-                      {tag}
-                    </button>
-                  )
-                })}
-              </div>
-            )}
-
-            {/* Expanded blend filter */}
-            {showBlendFilter && (
-              <div className="flex flex-wrap gap-1.5">
-                {BLEND_TAGS.map((tag) => {
-                  const selected = selectedBlends.includes(tag)
-                  return (
-                    <button
-                      key={tag}
-                      type="button"
-                      onClick={() => {
-                        const updated = selected
-                          ? selectedBlends.filter(b => b !== tag)
-                          : [...selectedBlends, tag]
-                        setSelectedBlends(updated)
-                        setFilterMaterial(updated.join(','))
-                      }}
-                      className={`whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-semibold transition ${
-                        selected
-                          ? 'border-pink-500 bg-pink-500 text-white'
-                          : 'border-gray-200 bg-white text-gray-600'
-                      }`}
-                    >
-                      {tag}
-                    </button>
-                  )
-                })}
-              </div>
-            )}
-            {/* Expanded colour filter */}
-            {showColourFilter && (
-              <div className="flex flex-wrap gap-1.5">
-                {EXPLORE_COLOUR_TAGS.map((tag) => {
-                  const selected = filterColour.split(',').map(c => c.trim()).filter(Boolean).includes(tag)
-                  return (
-                    <button
-                      key={tag}
-                      type="button"
-                      onClick={() => {
-                        const current = filterColour.split(',').map(c => c.trim()).filter(Boolean)
-                        const updated = selected
-                          ? current.filter(c => c !== tag)
-                          : [...current, tag]
-                        setFilterColour(updated.join(', '))
-                      }}
-                      className={`whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-semibold transition ${
-                        selected
-                          ? 'border-pink-500 bg-pink-500 text-white'
-                          : 'border-gray-200 bg-white text-gray-600'
-                      }`}
-                    >
-                      {tag}
-                    </button>
-                  )
-                })}
-              </div>
-            )}
+            <button
+              type="button"
+              onClick={() => setShowFilterSheet(true)}
+              className={`relative shrink-0 rounded-xl border px-3 py-1.5 text-sm font-semibold transition ${
+                (filterBrand || sizeMin || sizeMax || sizeRingSling || filterColour || selectedBlends.length > 0 || selectedTypes.length > 0 || resultType !== 'all')
+                  ? 'border-pink-500 bg-pink-500 text-white'
+                  : 'border-gray-200 bg-white text-gray-600'
+              }`}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+                <line x1="4" y1="6" x2="20" y2="6"/>
+                <line x1="8" y1="12" x2="16" y2="12"/>
+                <line x1="11" y1="18" x2="13" y2="18"/>
+              </svg>
+            </button>
           </div>
         </section>
+
+        {/* Filter bottom sheet */}
+        {showFilterSheet && (
+          <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40" onClick={() => setShowFilterSheet(false)}>
+            <div className="w-full max-w-lg rounded-t-3xl bg-white px-4 pt-4 pb-8 shadow-2xl" onClick={e => e.stopPropagation()}>
+              {/* Handle */}
+              <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-gray-200" />
+
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-bold text-gray-900">Filter</h3>
+                <button type="button" onClick={() => setShowFilterSheet(false)} className="text-sm text-gray-500">Done</button>
+              </div>
+
+              {/* View tabs row 1 */}
+              <div className="flex gap-1.5 mb-2">
+                {(['all', 'wraps', 'users', 'for-sale'] as const).map((type) => (
+                  <button
+                    key={type}
+                    type="button"
+                    onClick={() => setResultType(type)}
+                    className={`flex-1 rounded-full border py-1.5 text-xs font-semibold ${resultType === type ? 'border-pink-500 bg-pink-500 text-white' : 'border-gray-200 bg-white text-gray-600'}`}
+                  >
+                    {type === 'all' ? 'All' : type === 'wraps' ? 'Wraps' : type === 'users' ? 'Users' : 'Available'}
+                  </button>
+                ))}
+              </div>
+
+              {/* Filter row 2 */}
+              <div className="flex gap-1.5 mb-4">
+                {[
+                  { label: selectedTypes.length > 0 ? `Type (${selectedTypes.length})` : 'Type', key: 'type' },
+                  { label: selectedBrands.length > 0 ? `Brands (${selectedBrands.length})` : 'Brands', key: 'brand' },
+                  { label: sizeMin || sizeMax ? 'Length ✓' : 'Length', key: 'size' },
+                  { label: filterColour ? `Colours (${filterColour.split(',').filter(Boolean).length})` : 'Colours', key: 'colour' },
+                  { label: selectedBlends.length > 0 ? `Blends (${selectedBlends.length})` : 'Blends', key: 'blend' },
+                ].map(({ label, key }) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => {
+                      setShowBrandFilter(key === 'brand' ? !showBrandFilter : false)
+                      setShowSizeFilter(key === 'size' ? !showSizeFilter : false)
+                      setShowColourFilter(key === 'colour' ? !showColourFilter : false)
+                      setShowBlendFilter(key === 'blend' ? !showBlendFilter : false)
+                      setShowTypeFilter(key === 'type' ? !showTypeFilter : false)
+                    }}
+                    className={`flex-1 rounded-full border py-1.5 text-[10px] font-semibold ${
+                      (() => {
+                        if (key === 'brand' && selectedBrands.length > 0) return 'border-pink-500 bg-pink-50 text-pink-700'
+                        if (key === 'size' && (sizeMin || sizeMax)) return 'border-pink-500 bg-pink-50 text-pink-700'
+                        if (key === 'colour' && filterColour) return 'border-pink-500 bg-pink-50 text-pink-700'
+                        if (key === 'blend' && selectedBlends.length > 0) return 'border-pink-500 bg-pink-50 text-pink-700'
+                        if (key === 'type' && selectedTypes.length > 0) return 'border-pink-500 bg-pink-50 text-pink-700'
+                        return 'border-gray-200 bg-white text-gray-600'
+                      })()
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Expanded filters */}
+              <div className="space-y-3">
+                {showBrandFilter && (
+                  <div className="space-y-2">
+                    {selectedBrands.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5">
+                        {selectedBrands.map((brand) => (
+                          <button key={brand} type="button" onClick={() => { const updated = selectedBrands.filter(b => b !== brand); setSelectedBrands(updated); setFilterBrand(updated.join(',')) }} className="rounded-full border border-pink-500 bg-pink-500 px-2.5 py-1 text-xs font-semibold text-white">{brand} ×</button>
+                        ))}
+                      </div>
+                    )}
+                    <input type="text" value={brandSearch} onChange={async (e) => { setBrandSearch(e.target.value); const term = e.target.value.trim(); if (!term) { setBrandSearchResults([]); return } const { data } = await supabase.from('wraps').select('brand').ilike('brand', `%${term}%`).limit(20); const seen = new Map<string, string>(); ((data as any[]) || []).forEach((w) => { if (w.brand && !seen.has(w.brand.toLowerCase())) seen.set(w.brand.toLowerCase(), w.brand) }); setBrandSearchResults([...seen.values()].sort().filter(b => !selectedBrands.includes(b))) }} placeholder="Search brands..." className="w-full rounded-xl border border-gray-200 px-3 py-2 text-[16px] outline-none focus:border-pink-300" />
+                    {brandSearchResults.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5">
+                        {brandSearchResults.map((brand) => (
+                          <button key={brand} type="button" onClick={() => { const updated = [...selectedBrands, brand]; setSelectedBrands(updated); setFilterBrand(updated.join(',')); setBrandSearch(''); setBrandSearchResults([]) }} className="rounded-full border border-gray-200 bg-white px-2.5 py-1 text-xs font-semibold text-gray-600">{brand}</button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {showSizeFilter && (
+                  <div className="flex items-center gap-2">
+                    <input type="number" step="0.1" min="2" max="6" value={sizeMin} onChange={(e) => setSizeMin(e.target.value)} placeholder="Min m" className="w-24 rounded-xl border border-gray-200 px-3 py-2 text-[16px] outline-none focus:border-pink-300" />
+                    <span className="text-xs text-gray-400">to</span>
+                    <input type="number" step="0.1" min="2" max="6" value={sizeMax} onChange={(e) => setSizeMax(e.target.value)} placeholder="Max m" className="w-24 rounded-xl border border-gray-200 px-3 py-2 text-[16px] outline-none focus:border-pink-300" />
+                    <span className="text-xs text-gray-400">meters</span>
+                  </div>
+                )}
+
+                {showTypeFilter && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {TYPE_TAGS.map((tag) => {
+                      const selected = selectedTypes.includes(tag)
+                      return <button key={tag} type="button" onClick={() => { const updated = selected ? selectedTypes.filter(t => t !== tag) : [...selectedTypes, tag]; setSelectedTypes(updated) }} className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${selected ? 'border-pink-500 bg-pink-500 text-white' : 'border-gray-200 bg-white text-gray-600'}`}>{tag}</button>
+                    })}
+                  </div>
+                )}
+
+                {showBlendFilter && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {BLEND_TAGS.map((tag) => {
+                      const selected = selectedBlends.includes(tag)
+                      return <button key={tag} type="button" onClick={() => { const updated = selected ? selectedBlends.filter(b => b !== tag) : [...selectedBlends, tag]; setSelectedBlends(updated); setFilterMaterial(updated.join(',')) }} className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${selected ? 'border-pink-500 bg-pink-500 text-white' : 'border-gray-200 bg-white text-gray-600'}`}>{tag}</button>
+                    })}
+                  </div>
+                )}
+
+                {showColourFilter && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {EXPLORE_COLOUR_TAGS.map((tag) => {
+                      const selected = filterColour.split(',').map(c => c.trim()).filter(Boolean).includes(tag)
+                      return <button key={tag} type="button" onClick={() => { const current = filterColour.split(',').map(c => c.trim()).filter(Boolean); const updated = selected ? current.filter(c => c !== tag) : [...current, tag]; setFilterColour(updated.join(', ')) }} className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${selected ? 'border-pink-500 bg-pink-500 text-white' : 'border-gray-200 bg-white text-gray-600'}`}>{tag}</button>
+                    })}
+                  </div>
+                )}
+
+                {(filterBrand || sizeMin || sizeMax || sizeRingSling || filterColour || selectedBlends.length > 0 || selectedTypes.length > 0) && (
+                  <button type="button" onClick={() => { setFilterBrand(''); setSelectedBrands([]); setBrandSearch(''); setBrandSearchResults([]); setFilterSize(''); setSizeMin(''); setSizeMax(''); setSizeRingSling(false); setFilterColour(''); setFilterMaterial(''); setSelectedBlends([]); setSelectedTypes([]) }} className="w-full rounded-full border border-red-200 px-3 py-2 text-xs font-semibold text-red-500">
+                    Clear filters
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
                         {hasSearch && filteredUsers.length === 0 && filteredWraps.length === 0 && (
           <section className="rounded-xl border bg-white px-3 py-4 shadow-sm">
             <p className="text-center text-sm text-gray-500">
@@ -1243,26 +1113,26 @@ const filteredWraps = (
     <button
                     type="button"
                     onClick={() => router.push(`/user/${user.id}`)}
-                    className="flex w-[120px] shrink-0 cursor-pointer flex-col items-center rounded-xl border bg-white px-2 py-2 text-center shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-md"
+                    className="flex w-[88px] shrink-0 cursor-pointer flex-col items-center rounded-xl border bg-white px-1.5 py-1.5 text-center shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-md"
                   >
                     {avatarMap[user.id] ? (
                       <img
                         src={avatarMap[user.id]!}
                         loading="lazy"
                         alt={user.name}
-                        className="mb-1.5 h-12 w-12 rounded-full object-cover pointer-events-none"
+                        className="mb-1 h-9 w-9 rounded-full object-cover pointer-events-none"
                       />
                     ) : (
-                      <div className="mb-1.5 flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-pink-500 to-rose-500 text-lg font-bold text-white pointer-events-none">
+                      <div className="mb-1 flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-pink-500 to-rose-500 text-sm font-bold text-white pointer-events-none">
                         {user.name?.[0]?.toUpperCase() || '?'}
                       </div>
                     )}
 
-                    <p className="line-clamp-1 text-sm font-semibold text-gray-900 pointer-events-none">
+                    <p className="line-clamp-1 text-xs font-semibold text-gray-900 pointer-events-none">
                       {user.name}
                     </p>
 
-                    <p className="mt-0.5 text-xs text-gray-500 pointer-events-none">
+                    <p className="mt-0.5 text-[10px] text-gray-500 pointer-events-none">
   {user.wrap_count} wrap{user.wrap_count === 1 ? '' : 's'}
 </p>
                   </button>
@@ -1348,7 +1218,7 @@ setTimeout(() => setToastMessage(''), 2000)
 
         <section className="px-0 py-1">
           <div className="mb-2">
-            <h2 className="text-sm font-bold text-gray-500 uppercase tracking-wide">Latest Wraps</h2>
+            <h2 className="text-sm font-bold text-gray-500 uppercase tracking-wide">Featured Wraps</h2>
           </div>
 
           {loading && latestWraps.length === 0 ? (

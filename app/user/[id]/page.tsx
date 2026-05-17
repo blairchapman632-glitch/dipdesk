@@ -134,6 +134,19 @@ export default function UserCollectionPage() {
     const cachedWraps = localStorage.getItem(getUserCollectionWrapsKey(userId))
     if (cachedWraps) { try { setWraps(JSON.parse(cachedWraps)); setLoading(false) } catch {} }
 
+    // Read current user id synchronously from Supabase session cache
+    try {
+      const supabaseKey = Object.keys(localStorage).find(k => k.startsWith('sb-') && k.endsWith('-auth-token'))
+      if (supabaseKey) {
+        const parsed = JSON.parse(localStorage.getItem(supabaseKey) || '')
+        const uid = parsed?.user?.id || null
+        if (uid) {
+          setCurrentUserId(uid)
+          setAuthChecked(true)
+        }
+      }
+    } catch {}
+
     const cachedProfile = localStorage.getItem(getUserCollectionProfileKey(userId))
     if (cachedProfile) { try { setProfile(JSON.parse(cachedProfile)) } catch {} }
 
@@ -397,7 +410,13 @@ const { data: dipData } = await supabase
               </div>
             </div>
 
-            {currentUserId && currentUserId !== userId && (
+            {!authChecked && (
+              <div className="flex gap-2 xl:shrink-0">
+                <div className="h-9 w-24 animate-pulse rounded-xl bg-gray-100" />
+                <div className="h-9 w-20 animate-pulse rounded-xl bg-gray-100" />
+              </div>
+            )}
+            {authChecked && currentUserId && currentUserId !== userId && (
               <div className="flex gap-2 xl:shrink-0">
                 <button
                   type="button"

@@ -1961,7 +1961,20 @@ function exportReportCsv() {
   </div>
 )}
 
-                        
+{(() => {
+  const missing = [
+    !wrap.brand,
+    !(wrap as any).size,
+    !(wrap as any).material,
+    !(wrap as any).colour,
+    !(wrap as any).wrap_type,
+  ].some(Boolean)
+  return missing ? (
+    <div className="absolute bottom-2 right-2 rounded-full bg-orange-400 px-1.5 py-0.5 text-[10px] font-bold text-white shadow">
+      ⚠
+    </div>
+  ) : null
+})()}
                       </div>
 
                       <div className="space-y-0.5 p-3 pointer-events-none xl:space-y-1 xl:p-5">
@@ -2264,9 +2277,14 @@ function exportReportCsv() {
                   closeViewWrapModal()
                   openEditWrapModal(selectedWrap)
                 }}
-                className="cursor-pointer rounded-xl border px-3 py-1 text-sm font-semibold text-gray-700"
+                className="relative cursor-pointer rounded-xl border px-3 py-1 text-sm font-semibold text-gray-700"
               >
                 Edit
+                {[!selectedWrap.brand, !(selectedWrap as any).size, !(selectedWrap as any).material, !(selectedWrap as any).colour, !(selectedWrap as any).wrap_type].some(Boolean) && (
+                  <span className="absolute -right-1 -top-1 rounded-full bg-orange-400 px-1 py-0.5 text-[10px] font-bold text-white shadow">
+                    ⚠
+                  </span>
+                )}
               </button>
               <button
                 type="button"
@@ -2680,7 +2698,7 @@ function exportReportCsv() {
       onFocus={() => setBrandFocused(true)}
       onBlur={() => setTimeout(() => { setBrandFocused(false); setBrandSuggestions([]) }, 200)}
       placeholder="e.g. Didymos, Oscha"
-      className="w-full rounded-xl border px-3 py-2 text-base text-gray-900 placeholder:text-gray-400 outline-none focus:border-pink-500 xl:text-sm"
+      className={`w-full rounded-xl border px-3 py-2 text-base text-gray-900 placeholder:text-gray-400 outline-none focus:border-pink-500 xl:text-sm ${!wrapForm.brand ? 'border-orange-300 bg-orange-50' : ''}`}
     />
     {brandSuggestions.length > 0 && (
       <div className="absolute z-10 mt-1 w-full rounded-xl border bg-white shadow-lg">
@@ -2708,7 +2726,7 @@ function exportReportCsv() {
       onFocus={() => setSizeFocused(true)}
       onBlur={() => setTimeout(() => { setSizeFocused(false); setSizeSuggestions([]) }, 200)}
       placeholder="e.g. 4.2m"
-      className="w-full rounded-xl border px-3 py-2 text-base text-gray-900 placeholder:text-gray-400 outline-none focus:border-pink-500 xl:text-sm"
+      className={`w-full rounded-xl border px-3 py-2 text-base text-gray-900 placeholder:text-gray-400 outline-none focus:border-pink-500 xl:text-sm ${!wrapForm.size ? 'border-orange-300 bg-orange-50' : ''}`}
     />
     {sizeSuggestions.length > 0 && (
       <div className="absolute z-10 mt-1 w-full rounded-xl border bg-white shadow-lg">
@@ -2733,7 +2751,7 @@ function exportReportCsv() {
     <select
       value={wrapForm.wrap_type}
       onChange={(event) => updateWrapForm('wrap_type', event.target.value)}
-      className="w-full rounded-xl border px-3 py-2 text-base text-gray-900 outline-none focus:border-pink-500 xl:text-sm"
+      className={`w-full rounded-xl border px-3 py-2 text-base text-gray-900 outline-none focus:border-pink-500 xl:text-sm ${!wrapForm.wrap_type ? 'border-orange-300 bg-orange-50' : ''}`}
     >
       <option value="">Select type...</option>
       <option value="Hand Woven">Hand Woven</option>
@@ -2753,7 +2771,7 @@ function exportReportCsv() {
       onFocus={() => setMaterialFocused(true)}
       onBlur={() => setTimeout(() => { setMaterialFocused(false); setMaterialSuggestions([]) }, 200)}
       placeholder="e.g. 100% cotton, linen/cotton"
-      className="w-full rounded-xl border px-3 py-2 text-base text-gray-900 placeholder:text-gray-400 outline-none focus:border-pink-500 xl:text-sm"
+      className={`w-full rounded-xl border px-3 py-2 text-base text-gray-900 placeholder:text-gray-400 outline-none focus:border-pink-500 xl:text-sm ${!wrapForm.material ? 'border-orange-300 bg-orange-50' : ''}`}
     />
     {materialSuggestions.length > 0 && (
       <div className="absolute z-10 mt-1 w-full rounded-xl border bg-white shadow-lg">
@@ -2800,8 +2818,10 @@ function exportReportCsv() {
         )
       })}
     </div>
-    {wrapForm.colour && (
+    {wrapForm.colour ? (
       <p className="mt-2 text-xs text-gray-400">Selected: {wrapForm.colour}</p>
+    ) : (
+      <p className="mt-2 text-xs text-orange-400 font-semibold">⚠ Please select a colour</p>
     )}
   </div>
 
