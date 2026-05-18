@@ -569,12 +569,13 @@ const followingIdsSet = earlyFollowingIds
 function scoreWrap(wrap: Wrap): number {
   const likes = likeCounts[wrap.id] || 0
   const wishlists = wishlistCounts[wrap.id] || 0
-  const isFollowed = earlyFollowingIds.has(wrap.user_id) ? 20 : 0
   const isForSale = wrap.for_sale ? 5 : 0
   const ageMs = Date.now() - new Date(wrap.created_at).getTime()
   const ageDays = ageMs / (1000 * 60 * 60 * 24)
   const recency = Math.max(0, 10 - (ageDays / 3))
-  return (likes * 3) + (wishlists * 2) + isFollowed + isForSale + recency
+  const purchasePrice = (wrap as any).purchase_price || 0
+  const priceScore = Math.min(10, purchasePrice / 300)
+  return (likes * 3) + (wishlists * 2) + isForSale + priceScore + recency
 }
 
 const rankedWraps = [...wraps].sort((a, b) => scoreWrap(b) - scoreWrap(a))
