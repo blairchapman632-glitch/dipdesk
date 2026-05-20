@@ -969,14 +969,7 @@ useEffect(() => {
   }, [wrapForm.material])
 
   useEffect(() => {
-    const term = wrapForm.size.trim()
-    if (!term || term.length < 2 || !sizeFocused) { setSizeSuggestions([]); return }
-    const timeout = setTimeout(async () => {
-      const { data } = await supabase.from('wraps').select('size').ilike('size', `%${term}%`).limit(10)
-      const unique = [...new Set(((data as any[]) || []).map((w) => w.size).filter(Boolean))] as string[]
-      setSizeSuggestions(unique.sort())
-    }, 200)
-    return () => clearTimeout(timeout)
+    setSizeSuggestions([])
   }, [wrapForm.size])
 
   useEffect(() => {
@@ -2716,32 +2709,21 @@ function exportReportCsv() {
     )}
   </div>
 
-    <div className="relative">
+    <div>
     <label className="mb-1 block text-sm font-medium text-gray-700">
       STIH (length)
     </label>
     <input
       value={wrapForm.size}
       onChange={(event) => updateWrapForm('size', event.target.value)}
-      onFocus={() => setSizeFocused(true)}
-      onBlur={() => setTimeout(() => { setSizeFocused(false); setSizeSuggestions([]) }, 200)}
-      placeholder="e.g. 4.2m"
+      onBlur={() => {
+        const cleaned = wrapForm.size.trim().toLowerCase().replace(/\s*(meters?|m)\s*$/i, '').trim()
+        updateWrapForm('size', cleaned)
+      }}
+      placeholder="e.g. 4.2"
       className={`w-full rounded-xl border px-3 py-2 text-base text-gray-900 placeholder:text-gray-400 outline-none focus:border-pink-500 xl:text-sm ${!wrapForm.size ? 'border-orange-300 bg-orange-50' : ''}`}
     />
-    {sizeSuggestions.length > 0 && (
-      <div className="absolute z-10 mt-1 w-full rounded-xl border bg-white shadow-lg">
-        {sizeSuggestions.map((s) => (
-          <button
-            key={s}
-            type="button"
-            onClick={() => { updateWrapForm('size', s); setSizeSuggestions([]) }}
-            className="flex w-full px-3 py-2 text-left text-sm hover:bg-pink-50 first:rounded-t-xl last:rounded-b-xl"
-          >
-            {s}
-          </button>
-        ))}
-      </div>
-    )}
+    <p className="mt-1 text-xs text-gray-400">Enter length in metres, e.g. 4.2</p>
   </div>
 
   <div>

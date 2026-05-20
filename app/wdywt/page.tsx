@@ -28,6 +28,9 @@ type Comment = {
   user_id: string
   content: string
   created_at: string
+  parent_id: string | null
+  like_count: number
+  user_has_liked: boolean
   profiles: { full_name: string | null; username: string | null; avatar_url: string | null } | null
 }
 
@@ -97,13 +100,61 @@ export default function WDYWTPage() {
   const [commentText, setCommentText] = useState('')
   const [loadingComments, setLoadingComments] = useState(false)
   const [postingComment, setPostingComment] = useState(false)
+  const [replyingTo, setReplyingTo] = useState<{ id: string; name: string } | null>(null)
   const commentCacheRef = useRef<Record<string, Comment[]>>({})
   const commentsEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
+  async function loadComments(postId: string, currentUid: string | null) {
+    const { data } = await supabase
+      .from('wdywt_comments')
+      .select('id, user_id, content, created_at, parent_id')
+      .eq('post_id', postId)
+      .order('created_at', { ascending: true })
+
+    if (!data || data.length === 0) {
+      setComments([])
+      commentCacheRef.current[postId] = []
+      return
+    }
+
+    const commentIds = data.map((c: any) => c.id)
+    const userIds = [...new Set(data.map((c: any) => c.user_id))]
+
+    const [profileRes, likesRes, myLikesRes] = await Promise.all([
+      supabase.from('profiles').select('id, full_name, username, avatar_url').in('id', userIds),
+      supabase.from('comment_likes').select('comment_id').in('comment_id', commentIds),
+      currentUid
+        ? supabase.from('comment_likes').select('comment_id').eq('user_id', currentUid).in('comment_id', commentIds)
+        : Promise.resolve({ data: [] }),
+    ])
+
+    const profileMap: Record<string, any> = {}
+    ;(profileRes.data || []).forEach((p: any) => { profileMap[p.id] = p })
+
+    const likeCountMap: Record<string, number> = {}
+    ;(likesRes.data || []).forEach((l: any) => {
+      likeCountMap[l.comment_id] = (likeCountMap[l.comment_id] || 0) + 1
+    })
+
+    const myLikedSet = new Set((myLikesRes.data || []).map((l: any) => l.comment_id))
+
+    const normalized: Comment[] = data.map((c: any) => ({
+      ...c,
+      profiles: profileMap[c.user_id] || null,
+      like_count: likeCountMap[c.id] || 0,
+      user_has_liked: myLikedSet.has(c.id),
+    }))
+
+    setComments(normalized)
+    commentCacheRef.current[postId] = normalized
+    sessionStorage.setItem(`wdywt_comments_${postId}`, JSON.stringify(normalized))
+  }
+
   async function openCommentSheet(post: WDYWTPost) {
     setCommentSheet(post)
     setCommentText('')
+    setReplyingTo(null)
     setComments([])
     setLoadingComments(true)
 
@@ -124,29 +175,7 @@ export default function WDYWTPage() {
       }
     }
 
-    // Always fetch fresh
-    const { data } = await supabase
-      .from('wdywt_comments')
-      .select('id, user_id, content, created_at')
-      .eq('post_id', post.id)
-      .order('created_at', { ascending: true })
-
-    if (data && data.length > 0) {
-      const userIds = [...new Set(data.map((c: any) => c.user_id))]
-      const { data: profileData } = await supabase
-        .from('profiles')
-        .select('id, full_name, username, avatar_url')
-        .in('id', userIds)
-      const profileMap: Record<string, any> = {}
-      ;(profileData || []).forEach((p: any) => { profileMap[p.id] = p })
-      const normalized = data.map((c: any) => ({ ...c, profiles: profileMap[c.user_id] || null }))
-      setComments(normalized)
-      commentCacheRef.current[post.id] = normalized
-      sessionStorage.setItem(`wdywt_comments_${post.id}`, JSON.stringify(normalized))
-    } else {
-      setComments([])
-      commentCacheRef.current[post.id] = []
-    }
+    await loadComments(post.id, currentUserId)
     setLoadingComments(false)
   }
 
@@ -154,14 +183,14 @@ export default function WDYWTPage() {
     setCommentSheet(null)
     setComments([])
     setCommentText('')
+    setReplyingTo(null)
   }
 
-  // Scroll to bottom when new comments appear
   useEffect(() => {
     if (comments.length > 0) {
       setTimeout(() => commentsEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 50)
     }
-  }, [comments])
+  }, [comments.length])
 
   useEffect(() => {
     const cachedProfile = localStorage.getItem('dipdesk_dashboard_profile')
@@ -320,8 +349,13 @@ export default function WDYWTPage() {
     const postId = commentSheet.id
     const { data, error } = await supabase
       .from('wdywt_comments')
-      .insert({ post_id: postId, user_id: currentUserId, content: commentText.trim() })
-      .select('id, user_id, content, created_at')
+      .insert({
+        post_id: postId,
+        user_id: currentUserId,
+        content: commentText.trim(),
+        parent_id: replyingTo?.id || null,
+      })
+      .select('id, user_id, content, created_at, parent_id')
       .single()
 
     if (!error && data) {
@@ -331,29 +365,61 @@ export default function WDYWTPage() {
         .eq('id', currentUserId)
         .single()
 
-      const newComment: Comment = { ...data, profiles: profileData || null }
+      const newComment: Comment = {
+        ...data,
+        profiles: profileData || null,
+        like_count: 0,
+        user_has_liked: false,
+      }
+
       const newComments = [...comments, newComment]
       setComments(newComments)
       commentCacheRef.current[postId] = newComments
       sessionStorage.setItem(`wdywt_comments_${postId}`, JSON.stringify(newComments))
 
-      // Clear input, stay open
       setCommentText('')
+      setReplyingTo(null)
       inputRef.current?.focus()
 
-      // Update count on post card
-      setPosts(prev => prev.map(p => p.id === postId
-        ? { ...p, wdywt_comments: [...p.wdywt_comments, { id: data.id }] }
-        : p))
+      // Only increment count on post card for top-level comments
+      if (!replyingTo) {
+        setPosts(prev => prev.map(p => p.id === postId
+          ? { ...p, wdywt_comments: [...p.wdywt_comments, { id: data.id }] }
+          : p))
+      }
 
-      if (commentSheet.user_id !== currentUserId) {
+      const myProfile = localStorage.getItem('dipdesk_dashboard_profile')
+      const myName = myProfile ? JSON.parse(myProfile)?.full_name?.split(' ')[0] || 'Someone' : 'Someone'
+
+      // Notify post owner (if replying to a comment, only notify comment author — not post owner again)
+      if (replyingTo) {
+        // Find the parent comment to get its author
+        const parentComment = comments.find(c => c.id === replyingTo.id)
+        if (parentComment && parentComment.user_id !== currentUserId) {
+          await supabase.from('notifications').insert({
+            recipient_user_id: parentComment.user_id,
+            actor_user_id: currentUserId,
+            type: 'comment_reply',
+            wdywt_post_id: postId,
+          })
+          fetch('/api/push', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              user_ids: [parentComment.user_id],
+              title: `💬 ${myName} replied to your comment`,
+              body: commentText.trim(),
+              url: '/wdywt',
+            }),
+          }).catch(() => {})
+        }
+      } else if (commentSheet.user_id !== currentUserId) {
         await supabase.from('notifications').insert({
           recipient_user_id: commentSheet.user_id,
           actor_user_id: currentUserId,
           type: 'comment',
+          wdywt_post_id: postId,
         })
-        const myProfile = localStorage.getItem('dipdesk_dashboard_profile')
-        const myName = myProfile ? JSON.parse(myProfile)?.full_name?.split(' ')[0] || 'Someone' : 'Someone'
         fetch('/api/push', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -369,6 +435,31 @@ export default function WDYWTPage() {
 
     setPostingComment(false)
   }
+
+  async function handleCommentLike(comment: Comment) {
+    if (!currentUserId) return
+
+    if (comment.user_has_liked) {
+      await supabase.from('comment_likes').delete().eq('comment_id', comment.id).eq('user_id', currentUserId)
+      setComments(prev => prev.map(c => c.id === comment.id
+        ? { ...c, like_count: Math.max(0, c.like_count - 1), user_has_liked: false }
+        : c))
+    } else {
+      await supabase.from('comment_likes').insert({ comment_id: comment.id, user_id: currentUserId })
+      setComments(prev => prev.map(c => c.id === comment.id
+        ? { ...c, like_count: c.like_count + 1, user_has_liked: true }
+        : c))
+    }
+  }
+
+  // Split comments into top-level and replies
+  const topLevelComments = comments.filter(c => !c.parent_id)
+  const repliesByParent = comments.reduce<Record<string, Comment[]>>((acc, c) => {
+    if (c.parent_id) {
+      acc[c.parent_id] = [...(acc[c.parent_id] || []), c]
+    }
+    return acc
+  }, {})
 
   return (
     <AppLayout>
@@ -467,7 +558,12 @@ export default function WDYWTPage() {
                           setLikedPosts(prev => new Set(prev).add(post.id))
                           setPosts(prev => prev.map(p => p.id === post.id ? { ...p, wdywt_likes: [...p.wdywt_likes, { id: data.id }] } : p))
                           if (post.user_id !== currentUserId) {
-                            await supabase.from('notifications').insert({ recipient_user_id: post.user_id, actor_user_id: currentUserId, type: 'like' })
+                            await supabase.from('notifications').insert({
+                              recipient_user_id: post.user_id,
+                              actor_user_id: currentUserId,
+                              type: 'like',
+                              wdywt_post_id: post.id,
+                            })
                             const myProfile = localStorage.getItem('dipdesk_dashboard_profile')
                             const myName = myProfile ? JSON.parse(myProfile)?.full_name?.split(' ')[0] || 'Someone' : 'Someone'
                             fetch('/api/push', {
@@ -554,13 +650,8 @@ export default function WDYWTPage() {
       {/* ── Comment sheet ── */}
       {commentSheet && (
         <>
-          {/* Backdrop */}
-          <div
-            className="fixed inset-0 z-40 bg-black/40"
-            onClick={closeCommentSheet}
-          />
+          <div className="fixed inset-0 z-40 bg-black/40" onClick={closeCommentSheet} />
 
-          {/* Sheet — fixed, never moves, keyboard pushes content up inside it */}
           <div
             className="fixed inset-x-0 bottom-0 z-50 flex flex-col rounded-t-3xl bg-white"
             style={{ maxHeight: '75vh' }}
@@ -582,24 +673,101 @@ export default function WDYWTPage() {
               ) : comments.length === 0 ? (
                 <p className="text-center text-sm text-gray-400 py-6">No comments yet. Be the first!</p>
               ) : (
-                comments.map((comment) => {
+                topLevelComments.map((comment) => {
                   const name = comment.profiles?.full_name?.split(' ')[0] || comment.profiles?.username || 'Someone'
+                  const replies = repliesByParent[comment.id] || []
                   return (
-                    <div key={comment.id} className="flex items-start gap-3">
-                      {comment.profiles?.avatar_url ? (
-                        <img src={comment.profiles.avatar_url} alt={name} className="h-8 w-8 rounded-full object-cover shrink-0" />
-                      ) : (
-                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-pink-500 to-rose-500 text-xs font-bold text-white">
-                          {name[0]?.toUpperCase() || '?'}
+                    <div key={comment.id}>
+                      {/* Top-level comment */}
+                      <div className="flex items-start gap-3">
+                        {comment.profiles?.avatar_url ? (
+                          <img src={comment.profiles.avatar_url} alt={name} className="h-8 w-8 rounded-full object-cover shrink-0" />
+                        ) : (
+                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-pink-500 to-rose-500 text-xs font-bold text-white">
+                            {name[0]?.toUpperCase() || '?'}
+                          </div>
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm text-gray-900">
+                            <span className="font-semibold mr-1">{name}</span>
+                            {comment.content}
+                          </p>
+                          <div className="flex items-center gap-3 mt-1">
+                            <p className="text-xs text-gray-400">{timeAgo(comment.created_at)}</p>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setReplyingTo({ id: comment.id, name })
+                                setTimeout(() => inputRef.current?.focus(), 50)
+                              }}
+                              className="text-xs font-semibold text-gray-400 hover:text-pink-500 transition"
+                            >
+                              Reply
+                            </button>
+                          </div>
+                        </div>
+                        {/* Like button */}
+                        <button
+                          type="button"
+                          onClick={() => handleCommentLike(comment)}
+                          className="flex flex-col items-center gap-0.5 shrink-0 ml-1"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill={comment.user_has_liked ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`h-3.5 w-3.5 ${comment.user_has_liked ? 'text-pink-500' : 'text-gray-300'}`}><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+                          {comment.like_count > 0 && (
+                            <span className={`text-[10px] font-semibold ${comment.user_has_liked ? 'text-pink-500' : 'text-gray-400'}`}>{comment.like_count}</span>
+                          )}
+                        </button>
+                      </div>
+
+                      {/* Replies — indented */}
+                      {replies.length > 0 && (
+                        <div className="ml-11 mt-3 space-y-3">
+                          {replies.map((reply) => {
+                            const replyName = reply.profiles?.full_name?.split(' ')[0] || reply.profiles?.username || 'Someone'
+                            return (
+                              <div key={reply.id} className="flex items-start gap-2.5">
+                                {reply.profiles?.avatar_url ? (
+                                  <img src={reply.profiles.avatar_url} alt={replyName} className="h-6 w-6 rounded-full object-cover shrink-0" />
+                                ) : (
+                                  <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-pink-400 to-rose-400 text-[10px] font-bold text-white">
+                                    {replyName[0]?.toUpperCase() || '?'}
+                                  </div>
+                                )}
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm text-gray-900">
+                                    <span className="font-semibold mr-1">{replyName}</span>
+                                    {reply.content}
+                                  </p>
+                                  <div className="flex items-center gap-3 mt-0.5">
+                                    <p className="text-xs text-gray-400">{timeAgo(reply.created_at)}</p>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setReplyingTo({ id: comment.id, name })
+                                        setTimeout(() => inputRef.current?.focus(), 50)
+                                      }}
+                                      className="text-xs font-semibold text-gray-400 hover:text-pink-500 transition"
+                                    >
+                                      Reply
+                                    </button>
+                                  </div>
+                                </div>
+                                {/* Like button on reply */}
+                                <button
+                                  type="button"
+                                  onClick={() => handleCommentLike(reply)}
+                                  className="flex flex-col items-center gap-0.5 shrink-0"
+                                >
+                                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill={reply.user_has_liked ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`h-3.5 w-3.5 ${reply.user_has_liked ? 'text-pink-500' : 'text-gray-300'}`}><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+                                  {reply.like_count > 0 && (
+                                    <span className={`text-[10px] font-semibold ${reply.user_has_liked ? 'text-pink-500' : 'text-gray-400'}`}>{reply.like_count}</span>
+                                  )}
+                                </button>
+                              </div>
+                            )
+                          })}
                         </div>
                       )}
-                      <div className="flex-1">
-                        <p className="text-sm text-gray-900">
-                          <span className="font-semibold mr-1">{name}</span>
-                          {comment.content}
-                        </p>
-                        <p className="text-xs text-gray-400 mt-0.5">{timeAgo(comment.created_at)}</p>
-                      </div>
                     </div>
                   )
                 })
@@ -607,18 +775,31 @@ export default function WDYWTPage() {
               <div ref={commentsEndRef} />
             </div>
 
-            {/* Input — pinned to bottom of sheet, keyboard pushes sheet up */}
+            {/* Input — replying to banner + input */}
             <div
-              className="shrink-0 border-t border-gray-100 px-4 py-3 bg-white"
+              className="shrink-0 border-t border-gray-100 bg-white"
               style={{ paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}
             >
-              <div className="flex items-center gap-3">
+              {/* Replying to banner */}
+              {replyingTo && (
+                <div className="flex items-center justify-between px-5 pt-2 pb-1">
+                  <p className="text-xs text-gray-500">Replying to <span className="font-semibold text-pink-500">@{replyingTo.name}</span></p>
+                  <button
+                    type="button"
+                    onClick={() => setReplyingTo(null)}
+                    className="text-xs text-gray-400 font-medium hover:text-gray-600"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
+              <div className="flex items-center gap-3 px-4 py-3">
                 <input
                   ref={inputRef}
                   type="text"
                   value={commentText}
                   onChange={(e) => setCommentText(e.target.value)}
-                  placeholder="Add a comment..."
+                  placeholder={replyingTo ? `Reply to ${replyingTo.name}...` : 'Add a comment...'}
                   className="flex-1 rounded-full border border-gray-200 bg-gray-50 px-4 py-2.5 text-[16px] text-gray-900 placeholder:text-gray-400 outline-none focus:border-pink-400 focus:ring-2 focus:ring-pink-100"
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && !e.shiftKey) {
