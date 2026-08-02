@@ -105,6 +105,7 @@ export default function DipDetail({ params }: { params: Promise<{ id: string }> 
     '💕','🌸','🍀','🩵','🌈','🎀','🍎','🌻','🩷','🦋',
     '🌺','🍓','🌙','⭐','🌊','🦄','🌷','🍉','🧁','💜',
     '🩶','🤍','🌿','🫐','🍋','🌼','🦢','🐚','🎠','🪷','🌅',
+    '🍒','🧞','🌋','🍇',
   ]
   const [showGameBuilder, setShowGameBuilder] = useState(false)
   const [showBookend, setShowBookend] = useState(false)
