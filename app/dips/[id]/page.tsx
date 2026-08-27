@@ -47,6 +47,8 @@ type Dip = {
   game_locked: boolean | null
   wrap_value: number | null
   archived: boolean | null
+  wrap_id: string | null
+  live_notified: boolean | null
 }
 
 type Spot = {
