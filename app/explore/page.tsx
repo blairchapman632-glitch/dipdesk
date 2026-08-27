@@ -464,11 +464,22 @@ async function loadActiveDips() {
       const { data } = await supabase
         .from('dips')
         .select('id, wrap_id, total_spots, price_per_spot, stage, facebook_group')
-        .not('stage', 'in', '("drawn")')
+        .in('stage', ['interest', 'queue', 'live'])
         .eq('archived', false)
       const dips = (data as any[]) || []
       setAllActiveDips(dips)
-      allActiveDipsRef.current = dips.map((d: any) => d.wrap_id).filter(Boolean)
+      const dipWrapIds = dips.map((d: any) => d.wrap_id).filter(Boolean)
+      allActiveDipsRef.current = dipWrapIds
+
+      const dipSet = new Set(dipWrapIds)
+      setLatestWraps((prev) => {
+        if (prev.length === 0) return prev
+        return [...prev].sort((a, b) => {
+          const aDip = dipSet.has(a.id) ? 1 : 0
+          const bDip = dipSet.has(b.id) ? 1 : 0
+          return bDip - aDip
+        })
+      })
     }
     loadActiveDips()
     async function loadExploreData() {
@@ -570,12 +581,13 @@ function scoreWrap(wrap: Wrap): number {
   const likes = likeCounts[wrap.id] || 0
   const wishlists = wishlistCounts[wrap.id] || 0
   const isForSale = wrap.for_sale ? 5 : 0
+  const isDipping = allActiveDipsRef.current.includes(wrap.id) ? 1000 : 0
   const ageMs = Date.now() - new Date(wrap.created_at).getTime()
   const ageDays = ageMs / (1000 * 60 * 60 * 24)
   const recency = Math.max(0, 10 - (ageDays / 3))
   const purchasePrice = (wrap as any).purchase_price || 0
   const priceScore = Math.min(10, purchasePrice / 300)
-  return (likes * 3) + (wishlists * 2) + isForSale + priceScore + recency
+  return isDipping + (likes * 3) + (wishlists * 2) + isForSale + priceScore + recency
 }
 
 const rankedWraps = [...wraps].sort((a, b) => scoreWrap(b) - scoreWrap(a))
@@ -1254,11 +1266,15 @@ setTimeout(() => setToastMessage(''), 2000)
                         🪓 For Sale
                       </div>
                     )}
-                    {!wrap.for_sale && activeDipWrapIds.has(wrap.id) && (
-                      <div className="absolute left-2 top-2 rounded-lg bg-purple-500/90 px-2 py-1 text-[10px] font-semibold text-white shadow pointer-events-none">
-                        🎲 Dipping
-                      </div>
-                    )}
+                    {activeDipWrapIds.has(wrap.id) && (() => {
+                      const wrapDip = allActiveDips.find((d) => d.wrap_id === wrap.id)
+                      const groupName = wrapDip?.facebook_group
+                      return (
+                        <div className="absolute inset-x-0 top-0 bg-purple-600/95 px-2 py-1.5 text-center text-xs font-bold text-white shadow pointer-events-none">
+                          🎲 {groupName ? `Dipping on ${groupName}` : 'Being Dipped'}
+                        </div>
+                      )
+                    })()}
 
                     
                   </div>

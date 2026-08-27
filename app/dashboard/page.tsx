@@ -126,7 +126,7 @@ type NotificationRow = {
   recipient_user_id: string
   actor_user_id: string | null
   wrap_id: string | null
-  type: 'like' | 'wishlist' | 'for_sale' | 'comment' | 'dibs'
+  type: 'like' | 'wishlist' | 'for_sale' | 'comment' | 'dibs' | 'dip_live'
   created_at: string
   read_at: string | null
 }
@@ -136,7 +136,7 @@ type NotificationItem = {
   actor_user_id: string | null
   created_at: string
   read_at: string | null
-  type: 'like' | 'wishlist' | 'for_sale' | 'comment' | 'dibs'
+  type: 'like' | 'wishlist' | 'for_sale' | 'comment' | 'dibs' | 'dip_live'
   actor_name: string
   actor_avatar: string | null
   wrap: Wrap | null
@@ -814,6 +814,11 @@ function handleNotificationClick(notification: NotificationItem) {
 
   if ((notification.type === 'like' || notification.type === 'wishlist') && notification.wrap) {
     openViewWrapModal(notification.wrap, true)
+    return
+  }
+
+  if (notification.type === 'dip_live') {
+    router.push('/explore')
     return
   }
 
@@ -2137,6 +2142,8 @@ function exportReportCsv() {
                     ? `${notification.actor_name} commented on your WDYWT post`
                     : notification.type === 'dibs'
                     ? `🎯 You have dibs on ${wrapName}`
+                    : notification.type === 'dip_live'
+                    ? `🎲 ${wrapName} from your wishlist is being dipped!`
                     : `${wrapName} from your wishlist is now for sale`
 
                 const meta =

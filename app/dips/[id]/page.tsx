@@ -368,6 +368,41 @@ const { data: likerData } = await supabase
       alert('Error: ' + error.message)
       return
     }
+
+    if (nextStage === 'live' && !(dip as any).live_notified && dip.wrap_id) {
+      const { data: wishlisters } = await supabase
+        .from('wishlists')
+        .select('user_id')
+        .eq('wrap_id', dip.wrap_id)
+
+      const recipientIds = [...new Set((wishlisters || []).map((w: any) => w.user_id))]
+        .filter((uid) => uid && uid !== currentUserId)
+
+      if (recipientIds.length > 0) {
+        const notifRows = recipientIds.map((uid) => ({
+          recipient_user_id: uid,
+          actor_user_id: currentUserId,
+          wrap_id: dip.wrap_id,
+          type: 'dip_live',
+          read_at: null,
+        }))
+        await supabase.from('notifications').insert(notifRows)
+
+        fetch('/api/push', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            user_ids: recipientIds,
+            title: `🎲 A wishlisted wrap is being dipped!`,
+            body: `${dip.brand || ''} ${dip.wrap_name || ''}`.trim(),
+            url: '/explore',
+          }),
+        }).catch(() => {})
+      }
+
+      await supabase.from('dips').update({ live_notified: true }).eq('id', id)
+    }
+
     await loadDip()
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
