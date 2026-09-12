@@ -26,6 +26,7 @@ type Wrap = {
   colour: string | null
   dibs_user_id: string | null
   dibs_users?: DibsUser[]
+  dibs_names?: string[]
   purchase_date: string | null
   purchase_price: number | null
   purchase_currency: CurrencyCode | null
@@ -91,6 +92,8 @@ type WrapFormState = {
   material: string
   colour: string
   dibs_users: DibsUser[]
+  dibs_names: string[]
+  dibs_name_input: string
   dibs_search: string
 purchase_date: string
   purchase_price: string
@@ -155,7 +158,9 @@ const EMPTY_WRAP_FORM: WrapFormState = {
   size: '',
   material: '',
   colour: '',
-  dibs_users: [],
+    dibs_users: [],
+  dibs_names: [],
+  dibs_name_input: '',
   dibs_search: '',
 purchase_date: new Date().toISOString().slice(0, 10),
   purchase_price: '',
@@ -1068,8 +1073,10 @@ setColourSuggestions([])
   brand: wrap.brand || '',
   size: (wrap as any).size || '',
   material: (wrap as any).material || '',
-  colour: (wrap as any).colour || '',
+   colour: (wrap as any).colour || '',
   dibs_users: [],
+  dibs_names: (wrap as any).dibs_names || [],
+  dibs_name_input: '',
   dibs_search: '',
 purchase_date: wrap.purchase_date || '',
   purchase_price:
@@ -1420,6 +1427,7 @@ const wrapPayload = {
   material: wrapForm.material.trim() || null,
   colour: wrapForm.colour.trim() || null,
   dibs_user_id: null,
+  dibs_names: wrapForm.dibs_names,
   purchase_date: wrapForm.purchase_date || null,
   purchase_price: wrapForm.purchase_price
     ? Number(wrapForm.purchase_price)
@@ -2840,10 +2848,40 @@ function exportReportCsv() {
       </div>
     )}
 
+    {wrapForm.dibs_names.length > 0 && (
+      <div className="mb-2 flex flex-wrap gap-2">
+        {wrapForm.dibs_names.map((name, index) => (
+          <div key={`${name}-${index}`} className="flex items-center gap-1.5 rounded-full bg-gray-100 border border-gray-200 px-3 py-1">
+            <span className="text-xs font-semibold text-gray-700">{name}</span>
+            <button
+              type="button"
+              onClick={() =>
+                updateWrapForm('dibs_names', wrapForm.dibs_names.filter((_, i) => i !== index))
+              }
+              className="text-gray-400 hover:text-red-500 text-xs leading-none"
+            >
+              ×
+            </button>
+          </div>
+        ))}
+      </div>
+    )}
+
     <input
       value={wrapForm.dibs_search}
       onChange={(event) => updateWrapForm('dibs_search', event.target.value)}
-      placeholder="Search for a user..."
+      onKeyDown={(event) => {
+        if (event.key === 'Enter') {
+          event.preventDefault()
+          const name = wrapForm.dibs_search.trim()
+          if (name && !wrapForm.dibs_names.includes(name)) {
+            updateWrapForm('dibs_names', [...wrapForm.dibs_names, name])
+          }
+          updateWrapForm('dibs_search', '')
+          setDibsSearchResults([])
+        }
+      }}
+      placeholder="Search a user, or type a name + Enter"
       className="w-full rounded-xl border px-3 py-2 text-base text-gray-900 placeholder:text-gray-400 outline-none focus:border-pink-500 xl:text-sm"
     />
 
@@ -2886,6 +2924,8 @@ function exportReportCsv() {
     <p className="mt-1 text-xs text-gray-500">
       First right to buy if listed for sale. They'll get a notification.
     </p>
+
+
   </div>
 
   <div>
