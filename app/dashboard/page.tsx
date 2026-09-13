@@ -542,7 +542,7 @@ if (userProfile) {
   supabase
     .from('wraps')
     .select(
-'id, name, brand, description, size, material, colour, wrap_type, purchase_date, purchase_price, purchase_currency, purchased_from, purchase_country, status, on_loan_to, sold_to, sold_price, sold_currency, sold_date, is_favourite, for_sale, for_sale_price, for_sale_currency, for_sale_price_is_pm, created_at, wrap_images(id, image_url, is_primary, sort_order)'
+'id, name, brand, description, size, material, colour, wrap_type, dibs_names, purchase_date, purchase_price, purchase_currency, purchased_from, purchase_country, status, on_loan_to, sold_to, sold_price, sold_currency, sold_date, is_favourite, for_sale, for_sale_price, for_sale_currency, for_sale_price_is_pm, created_at, wrap_images(id, image_url, is_primary, sort_order)'
 )
     .eq('user_id', user.id)
     .order('is_favourite', { ascending: false })
@@ -2675,13 +2675,27 @@ function exportReportCsv() {
                   </p>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={closeWrapModal}
-                  className="cursor-pointer rounded-full border px-3 py-1 text-sm text-gray-600"
-                >
-                  Close
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={saveWrap}
+                    disabled={isSavingWrap || isUploadingImages}
+                    className="cursor-pointer rounded-full bg-gradient-to-r from-pink-500 to-rose-500 px-4 py-1.5 text-sm font-semibold text-white shadow-sm disabled:opacity-60"
+                  >
+                    {isUploadingImages
+                      ? 'Waiting...'
+                      : isSavingWrap
+                      ? 'Saving...'
+                      : 'Save'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={closeWrapModal}
+                    className="cursor-pointer rounded-full border px-3 py-1 text-sm text-gray-600"
+                  >
+                    Close
+                  </button>
+                </div>
               </div>
 
               <div className="grid gap-5 md:grid-cols-2">
@@ -2922,7 +2936,7 @@ function exportReportCsv() {
     )}
 
     <p className="mt-1 text-xs text-gray-500">
-      First right to buy if listed for sale. They'll get a notification.
+      Users will get a notification when listed for sale or dipped.
     </p>
 
 
