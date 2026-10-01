@@ -4,6 +4,7 @@ import AppLayout from '@/app/components/AppLayout'
 import { supabase } from '@/lib/supabase'
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { getCoverImage, sortWrapImages } from '@/lib/wrapCover'
 
 type WrapImage = {
   id: string
@@ -59,13 +60,7 @@ const WISHLIST_WRAPS_KEY = 'dipdesk_wishlist_wraps'
 const WISHLIST_PROFILES_KEY = 'dipdesk_wishlist_profiles'
 const WISHLIST_NOTES_KEY = 'dipdesk_wishlist_notes'
 function getPrimaryImage(wrap?: Wrap) {
-  if (!wrap?.wrap_images?.length) return WRAP_PLACEHOLDER
-
-  const primary =
-    wrap.wrap_images.find((image) => image.is_primary) ||
-    [...wrap.wrap_images].sort((a, b) => a.sort_order - b.sort_order)[0]
-
-  return primary?.image_url || WRAP_PLACEHOLDER
+  return getCoverImage(wrap?.wrap_images)?.image_url || WRAP_PLACEHOLDER
 }
 
 function getDisplayName(profile?: Profile) {
@@ -194,6 +189,7 @@ export default function Page() {
         `)
         .eq('user_id', loggedInUserId)
         .order('created_at', { ascending: false })
+        .order('sort_order', { referencedTable: 'wraps.wrap_images' })
 
       if (wishlistError) {
         console.error(wishlistError)
@@ -317,14 +313,7 @@ export default function Page() {
   }
 
   async function openViewWrapModal(wrap: Wrap) {
-    const sortedImages = [...(wrap.wrap_images || [])].sort(
-      (a, b) => a.sort_order - b.sort_order
-    )
-
-    const primaryImage =
-      sortedImages.find((image) => image.is_primary)?.image_url ||
-      sortedImages[0]?.image_url ||
-      getPrimaryImage(wrap)
+    const primaryImage = getPrimaryImage(wrap)
 
         setSelectedWrap(wrap)
     setSelectedWrapNotes(wishlistNotesMap[wrap.id] || '')
@@ -572,9 +561,7 @@ export default function Page() {
         </section>
 
         {isViewWrapModalOpen && selectedWrap && (() => {
-          const sortedImages = [...(selectedWrap.wrap_images || [])].sort(
-            (a, b) => a.sort_order - b.sort_order
-          )
+          const sortedImages = sortWrapImages(selectedWrap.wrap_images)
 
           return (
             <div

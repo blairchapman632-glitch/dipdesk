@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import AppLayout from '@/app/components/AppLayout'
+import { getCoverImage, sortWrapImages } from '@/lib/wrapCover'
 
 type WrapImage = {
   id: string
@@ -79,9 +80,7 @@ function formatCurrency(value: number | null | undefined, currency: 'AUD' | 'USD
 }
 
 function getPrimaryImage(wrap?: Wrap) {
-  if (!wrap?.wrap_images?.length) return WRAP_PLACEHOLDER
-  const primary = wrap.wrap_images.find((image) => image.is_primary) || [...wrap.wrap_images].sort((a, b) => a.sort_order - b.sort_order)[0]
-  return primary?.image_url || WRAP_PLACEHOLDER
+  return getCoverImage(wrap?.wrap_images)?.image_url || WRAP_PLACEHOLDER
 }
 
 function timeAgo(dateString: string) {
@@ -173,7 +172,7 @@ export default function UserCollectionPage() {
 
       const [{ data: profileData }, { data: wrapData }] = await Promise.all([
         supabase.from('profiles').select('id, full_name, username, avatar_url').eq('id', userId).single(),
-        supabase.from('wraps').select('id, name, brand, size, material, colour, purchase_date, purchased_from, status, on_loan_to, sold_to, sold_price, sold_currency, sold_date, is_favourite, for_sale, for_sale_price, for_sale_currency, for_sale_price_is_pm, wrap_images(id, image_url, is_primary, sort_order)').eq('user_id', userId).order('is_favourite', { ascending: false }).order('purchase_date', { ascending: false }),
+        supabase.from('wraps').select('id, name, brand, size, material, colour, purchase_date, purchased_from, status, on_loan_to, sold_to, sold_price, sold_currency, sold_date, is_favourite, for_sale, for_sale_price, for_sale_currency, for_sale_price_is_pm, wrap_images(id, image_url, is_primary, sort_order)').eq('user_id', userId).order('is_favourite', { ascending: false }).order('purchase_date', { ascending: false }).order('sort_order', { referencedTable: 'wrap_images' }),
       ])
 
       let nextIsFollowing = false
@@ -288,8 +287,7 @@ const { data: dipData } = await supabase
   }
 
   async function openViewWrapModal(wrap: Wrap) {
-    const sortedImages = [...(wrap.wrap_images || [])].sort((a, b) => a.sort_order - b.sort_order)
-    const primaryImage = sortedImages.find(i => i.is_primary)?.image_url || sortedImages[0]?.image_url || getPrimaryImage(wrap)
+    const primaryImage = getPrimaryImage(wrap)
     setSelectedWrap(wrap)
     setSelectedViewImage(primaryImage)
     setIsViewWrapModalOpen(true)
@@ -635,7 +633,7 @@ const { data: dipData } = await supabase
 
         {/* Wrap modal */}
         {isViewWrapModalOpen && selectedWrap && (() => {
-          const sortedImages = [...(selectedWrap.wrap_images || [])].sort((a, b) => a.sort_order - b.sort_order)
+          const sortedImages = sortWrapImages(selectedWrap.wrap_images)
           return (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={closeViewWrapModal}>
               <div className="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl" onClick={e => e.stopPropagation()}>

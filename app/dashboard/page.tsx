@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import imageCompression from 'browser-image-compression'
 import AppLayout from '@/app/components/AppLayout'
+import { getCoverImage, sortWrapImages } from '@/lib/wrapCover'
 
 type CurrencyCode = 'AUD' | 'USD' | 'EUR'
 
@@ -75,6 +76,8 @@ type WrapFormImage = {
   status: 'uploaded' | 'uploading' | 'error'
   storage_path: string | null
   file_name: string | null
+  // Saved photo URL this image replaced; its file is deleted only after save succeeds
+  replaced_url: string | null
 }
 type ReportRow = {
   id: string
@@ -220,13 +223,7 @@ function getDipProgress(dip: Dip) {
 }
 
 function getPrimaryImage(wrap?: Wrap) {
-  if (!wrap?.wrap_images?.length) return WRAP_PLACEHOLDER
-
-  const primary =
-    wrap.wrap_images.find((image) => image.is_primary) ||
-    [...wrap.wrap_images].sort((a, b) => a.sort_order - b.sort_order)[0]
-
-  const url = primary?.image_url || ''
+  const url = getCoverImage(wrap?.wrap_images)?.image_url || ''
 
   if (!url) return WRAP_PLACEHOLDER
 
@@ -240,6 +237,24 @@ function getPrimaryImage(wrap?: Wrap) {
   if (!pathAfterBucket.includes('/')) return WRAP_PLACEHOLDER
 
   return `${url}?width=400&quality=60`
+}
+
+// The first photo is always the cover, and positions run 0, 1, 2... with no gaps
+function renumberFormImages(images: WrapFormImage[]): WrapFormImage[] {
+  return images.map((image, index) => ({
+    ...image,
+    sort_order: index,
+    is_primary: index === 0,
+  }))
+}
+
+function getWrapImageStoragePath(url: string) {
+  const bucketMarker = '/wrap-images/'
+  const bucketIndex = url.indexOf(bucketMarker)
+  if (bucketIndex === -1) return null
+
+  const path = url.slice(bucketIndex + bucketMarker.length).split('?')[0]
+  return path ? decodeURIComponent(path) : null
 }
 function formatTimeAgo(dateString: string) {
   const now = new Date().getTime()
@@ -546,7 +561,8 @@ if (userProfile) {
 )
     .eq('user_id', user.id)
     .order('is_favourite', { ascending: false })
-    .order('purchase_price', { ascending: false }),
+    .order('purchase_price', { ascending: false })
+    .order('sort_order', { referencedTable: 'wrap_images' }),
 
   supabase
   .from('wraps')
@@ -554,6 +570,7 @@ if (userProfile) {
 'id, name, brand, description, colour, purchase_date, purchased_from, purchase_country, status, on_loan_to, sold_to, sold_price, sold_currency, sold_date, is_favourite, for_sale, for_sale_price, for_sale_currency, for_sale_price_is_pm, created_at, user_id, wrap_images(id, image_url, is_primary, sort_order)'
 )
   .order('created_at', { ascending: false })
+  .order('sort_order', { referencedTable: 'wrap_images' })
   .limit(20)
   ,
   supabase
@@ -630,6 +647,7 @@ if (!notificationError && notificationData) {
         'id, user_id, name, brand, description, colour, purchase_date, purchase_price, purchase_currency, purchased_from, purchase_country, status, on_loan_to, sold_to, sold_price, sold_currency, sold_date, is_favourite, for_sale, for_sale_price, for_sale_currency, for_sale_price_is_pm, created_at, wrap_images(id, image_url, is_primary, sort_order)'
       )
       .in('id', wrapIds)
+      .order('sort_order', { referencedTable: 'wrap_images' })
 
     wrapMap = ((notificationWrapData as unknown as Wrap[]) || []).reduce<Record<string, Wrap>>(
       (accumulator, wrap) => {
@@ -751,14 +769,8 @@ if (!notificationError && notificationData) {
   }
 }, [router])
 async function openViewWrapModal(wrap: Wrap, readOnly = false) {
-  const sortedImages = [...(wrap.wrap_images || [])].sort(
-    (a, b) => a.sort_order - b.sort_order
-  )
-
   const primaryImage =
-    sortedImages.find((image) => image.is_primary)?.image_url ||
-    sortedImages[0]?.image_url ||
-    getPrimaryImage(wrap)
+    getCoverImage(wrap.wrap_images)?.image_url || WRAP_PLACEHOLDER
 
   setSelectedWrap(wrap)
   setSelectedViewImage(primaryImage)
@@ -1064,9 +1076,7 @@ useEffect(() => {
 setMaterialSuggestions([])
 setSizeSuggestions([])
 setColourSuggestions([])
-   const sortedImages = [...(wrap.wrap_images || [])].sort(
-  (a, b) => a.sort_order - b.sort_order
-)
+   const sortedImages = sortWrapImages(wrap.wrap_images)
     setWrapForm({
   id: wrap.id,
   name: wrap.name || '',
@@ -1086,15 +1096,18 @@ purchase_date: wrap.purchase_date || '',
   purchase_currency: wrap.purchase_currency || 'AUD',
   purchased_from: wrap.purchased_from || '',
   purchase_country: wrap.purchase_country || '',
-  images: sortedImages.map((image, index) => ({
-    id: image.id,
-    image_url: image.image_url,
-    is_primary: image.is_primary || index === 0,
-    sort_order: image.sort_order,
-    status: 'uploaded',
-    storage_path: null,
-    file_name: null,
-  })),
+  images: renumberFormImages(
+    sortedImages.map((image) => ({
+      id: image.id,
+      image_url: image.image_url,
+      is_primary: false,
+      sort_order: image.sort_order,
+      status: 'uploaded',
+      storage_path: null,
+      file_name: null,
+      replaced_url: null,
+    }))
+  ),
   on_loan_to: wrap.on_loan_to || '',
   sold_to: wrap.sold_to || '',
   sold_price:
@@ -1166,32 +1179,28 @@ purchase_date: wrap.purchase_date || '',
 }
 
   function setCoverPhoto(imageId: string) {
-  setWrapForm((previous) => ({
-    ...previous,
-    images: previous.images.map((image) => ({
-      ...image,
-      is_primary: image.id === imageId,
-    })),
-  }))
-}
-
-function removeWrapImage(imageId: string) {
+  // Move the chosen photo to the front; the rest keep their order behind it
   setWrapForm((previous) => {
-    const remainingImages = previous.images.filter((image) => image.id !== imageId)
-
-    const hasPrimary = remainingImages.some((image) => image.is_primary)
-
-    const nextImages = remainingImages.map((image, index) => ({
-      ...image,
-      is_primary: hasPrimary ? image.is_primary : index === 0,
-      sort_order: index,
-    }))
+    const chosen = previous.images.find((image) => image.id === imageId)
+    if (!chosen) return previous
 
     return {
       ...previous,
-      images: nextImages,
+      images: renumberFormImages([
+        chosen,
+        ...previous.images.filter((image) => image.id !== imageId),
+      ]),
     }
   })
+}
+
+function removeWrapImage(imageId: string) {
+  setWrapForm((previous) => ({
+    ...previous,
+    images: renumberFormImages(
+      previous.images.filter((image) => image.id !== imageId)
+    ),
+  }))
 }
 
 async function uploadWrapImages(files: FileList | File[]) {
@@ -1229,28 +1238,20 @@ async function uploadWrapImages(files: FileList | File[]) {
 
   setIsUploadingImages(true)
 
-  const existingImageCount = wrapForm.images.length
-
   const tempImages: WrapFormImage[] = validFiles.map((file, index) => ({
     id: `temp-${Date.now()}-${index}-${file.name}`,
     image_url: URL.createObjectURL(file),
-    is_primary: existingImageCount === 0 && index === 0,
-    sort_order: existingImageCount + index,
+    is_primary: false,
+    sort_order: 0,
     status: 'uploading',
     storage_path: null,
     file_name: file.name,
+    replaced_url: null,
   }))
 
   setWrapForm((previous) => ({
     ...previous,
-    images: [...previous.images, ...tempImages].map((image, index) => ({
-      ...image,
-      is_primary:
-        previous.images.length === 0 && index === 0
-          ? true
-          : image.is_primary,
-      sort_order: index,
-    })),
+    images: renumberFormImages([...previous.images, ...tempImages]),
   }))
 
   for (let index = 0; index < validFiles.length; index++) {
@@ -1318,8 +1319,6 @@ async function replaceWrapImage(imageId: string, incomingFile: File) {
   const existingImage = wrapForm.images.find((image) => image.id === imageId)
   if (!existingImage) return
 
-    const previousStoragePath = existingImage.storage_path
-  const previousImageUrl = existingImage.image_url
   let file = incomingFile
 
   setIsUploadingImages(true)
@@ -1356,20 +1355,23 @@ async function replaceWrapImage(imageId: string, incomingFile: File) {
     .upload(fileName, file)
 
   if (error) {
+    // Put the original photo back so it is still saved with the wrap
     setWrapForm((previous) => ({
       ...previous,
       images: previous.images.map((image) =>
         image.id === imageId
           ? {
               ...image,
-              image_url: previousImageUrl,
-              status: 'error',
+              image_url: existingImage.image_url,
+              status: existingImage.status,
+              storage_path: existingImage.storage_path,
               file_name: existingImage.file_name,
             }
           : image
       ),
     }))
     setIsUploadingImages(false)
+    window.alert('That photo could not be uploaded. Your original photo has been kept.')
     return
   }
 
@@ -1377,15 +1379,23 @@ async function replaceWrapImage(imageId: string, incomingFile: File) {
     .from('wrap-images')
     .getPublicUrl(fileName)
 
-  if (previousStoragePath) {
+  // A photo uploaded in this session was never saved, so it can go now.
+  // A saved photo is only deleted after the wrap saves (see saveWrap).
+  if (existingImage.storage_path) {
     const { error: removeOldImageError } = await supabase.storage
       .from('wrap-images')
-      .remove([previousStoragePath])
+      .remove([existingImage.storage_path])
 
     if (removeOldImageError) {
       console.error('old image cleanup error', removeOldImageError)
     }
   }
+
+  const replacedUrl =
+    existingImage.replaced_url ||
+    (existingImage.status === 'uploaded' && !existingImage.storage_path
+      ? existingImage.image_url
+      : null)
 
   setWrapForm((previous) => ({
     ...previous,
@@ -1397,6 +1407,7 @@ async function replaceWrapImage(imageId: string, incomingFile: File) {
             status: 'uploaded',
             storage_path: fileName,
             file_name: file.name,
+            replaced_url: replacedUrl,
           }
         : image
     ),
@@ -1404,6 +1415,116 @@ async function replaceWrapImage(imageId: string, incomingFile: File) {
 
   setIsUploadingImages(false)
 }
+
+  // Update photos already saved, insert new ones, and delete only the ones the user removed.
+  // Deletes run last, so if any step fails the wrap still has its photos.
+  async function saveWrapImages(wrapId: string, images: WrapFormImage[]) {
+    const { data: existingRows, error: existingError } = await supabase
+      .from('wrap_images')
+      .select('id')
+      .eq('wrap_id', wrapId)
+
+    if (existingError) {
+      console.error('wrap_images load error', existingError)
+      return false
+    }
+
+    const existingIds = new Set((existingRows || []).map((row) => String(row.id)))
+    const rows = images.map((image, index) => ({
+      id: String(image.id),
+      wrap_id: wrapId,
+      image_url: image.image_url,
+      sort_order: index,
+      is_primary: index === 0,
+    }))
+    const keptRows = rows.filter((row) => existingIds.has(row.id))
+    const newRows = rows.filter((row) => !existingIds.has(row.id))
+    const keptIds = new Set(keptRows.map((row) => row.id))
+    const removedIds = [...existingIds].filter((id) => !keptIds.has(id))
+
+    // Clear the cover flag first so a wrap never has two covers, even mid-save
+    let clearCoverQuery = supabase
+      .from('wrap_images')
+      .update({ is_primary: false })
+      .eq('wrap_id', wrapId)
+      .eq('is_primary', true)
+
+    if (keptRows[0]?.is_primary) {
+      clearCoverQuery = clearCoverQuery.neq('id', keptRows[0].id)
+    }
+
+    const { error: clearCoverError } = await clearCoverQuery
+
+    if (clearCoverError) {
+      console.error('wrap_images cover clear error', clearCoverError)
+      return false
+    }
+
+    const updateResults = await Promise.all(
+      keptRows.map((row) =>
+        supabase
+          .from('wrap_images')
+          .update({
+            image_url: row.image_url,
+            sort_order: row.sort_order,
+            is_primary: row.is_primary,
+          })
+          .eq('id', row.id)
+      )
+    )
+
+    const updateError = updateResults.find((result) => result.error)?.error
+
+    if (updateError) {
+      console.error('wrap_images update error', updateError)
+      return false
+    }
+
+    if (newRows.length > 0) {
+      const { data: insertedRows, error: insertError } = await supabase
+        .from('wrap_images')
+        .insert(
+          newRows.map((row) => ({
+            wrap_id: row.wrap_id,
+            image_url: row.image_url,
+            sort_order: row.sort_order,
+            is_primary: row.is_primary,
+          }))
+        )
+        .select('id')
+
+      if (insertError) {
+        console.error('wrap_images insert error', insertError)
+        return false
+      }
+
+      // Swap temp ids for real ones, so a retry after a later failure updates these rows
+      const newIdByTempId = new Map(
+        newRows.map((row, index) => [row.id, insertedRows?.[index]?.id as string | undefined])
+      )
+      setWrapForm((previous) => ({
+        ...previous,
+        images: previous.images.map((image) => {
+          const newId = newIdByTempId.get(String(image.id))
+          return newId ? { ...image, id: newId } : image
+        }),
+      }))
+    }
+
+    if (removedIds.length > 0) {
+      const { error: deleteError } = await supabase
+        .from('wrap_images')
+        .delete()
+        .in('id', removedIds)
+
+      if (deleteError) {
+        console.error('wrap_images delete error', deleteError)
+        return false
+      }
+    }
+
+    return true
+  }
 
     async function saveWrap() {
     if (!currentUserId) return
@@ -1491,42 +1612,38 @@ const wrapPayload = {
       }
 
       wrapId = data.id
+      // If the photo save below fails, trying again updates this wrap instead of adding a duplicate
+      setWrapForm((previous) => ({ ...previous, id: data.id }))
     }
 
-       if (wrapId) {
-      const { error: deleteExistingImagesError } = await supabase
-        .from('wrap_images')
-        .delete()
-        .eq('wrap_id', wrapId)
+    if (wrapId) {
+      const savedImages = wrapForm.images.filter(
+        (image) => image.status === 'uploaded'
+      )
 
-      if (deleteExistingImagesError) {
-        console.error('wrap_images delete error', deleteExistingImagesError)
+      const imagesSaved = await saveWrapImages(wrapId, savedImages)
+
+      if (!imagesSaved) {
         setIsSavingWrap(false)
+        window.alert('Your photos could not be saved. Please try again.')
         return
       }
 
-     const savedImages = wrapForm.images.filter(
-  (image) => image.status === 'uploaded'
-)
+      // Now the save has worked, delete the files of saved photos that were replaced
+      const savedUrls = new Set(savedImages.map((image) => image.image_url))
+      const replacedPaths = savedImages
+        .map((image) => image.replaced_url)
+        .filter((url): url is string => !!url && !savedUrls.has(url))
+        .map(getWrapImageStoragePath)
+        .filter((path): path is string => !!path)
 
-const hasPrimary = savedImages.some((image) => image.is_primary)
+      if (replacedPaths.length > 0) {
+        const { error: removeReplacedError } = await supabase.storage
+          .from('wrap-images')
+          .remove(replacedPaths)
 
-const uploadedImages = savedImages.map((image, index) => ({
-  wrap_id: wrapId,
-  image_url: image.image_url,
-  is_primary: hasPrimary ? image.is_primary : index === 0,
-  sort_order: index,
-}))
-
-      if (uploadedImages.length > 0) {
-        const { error: insertImagesError } = await supabase
-          .from('wrap_images')
-          .insert(uploadedImages)
-
-        if (insertImagesError) {
-          console.error('wrap_images insert error', insertImagesError)
-          setIsSavingWrap(false)
-          return
+        if (removeReplacedError) {
+          console.error('replaced image cleanup error', removeReplacedError)
         }
       }
     }
@@ -2216,9 +2333,7 @@ function exportReportCsv() {
           </section>
         </div>
 {isViewWrapModalOpen && selectedWrap && (() => {
-  const sortedImages = [...(selectedWrap.wrap_images || [])].sort(
-    (a, b) => a.sort_order - b.sort_order
-  )
+  const sortedImages = sortWrapImages(selectedWrap.wrap_images)
 
   return (
    <div

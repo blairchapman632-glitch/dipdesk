@@ -4,6 +4,7 @@ import AppLayout from '@/app/components/AppLayout'
 import { supabase } from '@/lib/supabase'
 import React, { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { getCoverImage, sortWrapImages } from '@/lib/wrapCover'
 
 type WrapImage = {
   id: string
@@ -71,11 +72,7 @@ const EXPLORE_PROFILES_KEY = 'dipdesk_explore_profiles'
 const EXPLORE_AVATARS_KEY = 'dipdesk_explore_avatars'
 
 function getPrimaryImage(wrap?: Wrap) {
-  if (!wrap?.wrap_images?.length) return WRAP_PLACEHOLDER
-
-  const primary =
-    wrap.wrap_images.find((image) => image.is_primary) ||
-    [...wrap.wrap_images].sort((a, b) => a.sort_order - b.sort_order)[0]
+  const primary = getCoverImage(wrap?.wrap_images)
 
   return primary?.image_url
   ? `${primary.image_url}?width=400&quality=60`
@@ -142,14 +139,8 @@ export default function Page() {
   }
 
   async function openViewWrapModal(wrap: Wrap) {
-    const sortedImages = [...(wrap.wrap_images || [])].sort(
-      (a, b) => a.sort_order - b.sort_order
-    )
-
     const primaryImage =
-      sortedImages.find((image) => image.is_primary)?.image_url ||
-      sortedImages[0]?.image_url ||
-      getPrimaryImage(wrap)
+      getCoverImage(wrap.wrap_images)?.image_url || WRAP_PLACEHOLDER
 
     setSelectedWrap(wrap)
     setSelectedViewImage(primaryImage)
@@ -496,6 +487,7 @@ async function loadActiveDips() {
           'id, user_id, name, brand, colour, size, material, wrap_type, description, purchase_date, purchased_from, purchase_country, status, on_loan_to, sold_to, sold_price, sold_currency, sold_date, is_favourite, for_sale, for_sale_price, for_sale_currency, for_sale_price_is_pm, created_at, wrap_images(id, image_url, is_primary, sort_order)'
         )
         .order('created_at', { ascending: false })
+        .order('sort_order', { referencedTable: 'wrap_images' })
 
       if (wrapError) {
         console.error(wrapError)
@@ -632,7 +624,7 @@ if (currentUserId) {
   if (followingIds.length > 0) {
     const [{ data: followingProfiles }, { data: followingWrapData }, { data: followingCounts }] = await Promise.all([
       supabase.from('profiles').select('id, full_name, username, avatar_url').in('id', followingIds),
-      supabase.from('wraps').select('id, user_id, wrap_images(id, image_url, is_primary, sort_order)').in('user_id', followingIds).eq('status', 'active').order('created_at', { ascending: false }),
+      supabase.from('wraps').select('id, user_id, wrap_images(id, image_url, is_primary, sort_order)').in('user_id', followingIds).eq('status', 'active').order('created_at', { ascending: false }).order('sort_order', { referencedTable: 'wrap_images' }),
       supabase.from('wraps').select('user_id').in('user_id', followingIds),
     ])
 
@@ -773,6 +765,7 @@ return () => {
             )
             .in('user_id', matchedUserIds)
             .order('created_at', { ascending: false })
+            .order('sort_order', { referencedTable: 'wrap_images' })
 
           const searchUserWraps = (searchUserWrapData as Wrap[]) || []
 
@@ -810,6 +803,7 @@ matchedUsers = matchedProfiles.map((profile) => {
         )
         .or(`name.ilike.%${term}%,brand.ilike.%${term}%,colour.ilike.%${term}%,description.ilike.%${term}%`)
         .order('created_at', { ascending: false })
+        .order('sort_order', { referencedTable: 'wrap_images' })
 
       if (wrapError) {
         console.error(wrapError)
@@ -1302,9 +1296,7 @@ setTimeout(() => setToastMessage(''), 2000)
           )}
         </section>
                 {isViewWrapModalOpen && selectedWrap && (() => {
-          const sortedImages = [...(selectedWrap.wrap_images || [])].sort(
-            (a, b) => a.sort_order - b.sort_order
-          )
+          const sortedImages = sortWrapImages(selectedWrap.wrap_images)
 
           return (
             <div
