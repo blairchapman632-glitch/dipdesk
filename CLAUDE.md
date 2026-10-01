@@ -1,3 +1,5 @@
+@AGENTS.md
+
 # WrapApp (dipdesk) — Claude Code instructions
 
 ## Start of every session
