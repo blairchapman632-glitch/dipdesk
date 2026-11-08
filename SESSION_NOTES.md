@@ -1,5 +1,25 @@
 # Session Notes
 
+## 2026-11-08 — Google Sheets: narrower scope + security fixes
+**Changed**
+- Why: users saw Google's "unverified app / sensitive info" warning because we asked for the `spreadsheets` scope.
+- Scope: Sheets connect now asks only for `drive.file` (`app/api/auth/google/route.ts`).
+- Paste-your-own-sheet-link inputs removed from the dip page (queue/live card and Settings). The app only uses sheets it creates. The Guide tab sync card's Open ↗ is now a bigger, darker button. Settings shows a read-only "Open Sheet ↗". Live post text is unchanged.
+- Sync (`app/api/sheets/sync/route.ts`): every Google call is checked, and failures return a readable message instead of fake success. If the existing sheet gives 403/404 (or has no "Unicorn" tab), it makes a fresh app-owned sheet, shares it view-only, saves the link and carries on. A Google 401 sends the page back to the Connect button.
+- Security, sync: the user now comes from their Supabase access token (Authorization header), not the request body. Only the dip owner (`dips.user_id`) or a super_admin can sync; others get 403.
+- Security, connect: Connect is now a button that POSTs the access token. The server sets a signed, 10-minute, httpOnly state cookie and returns the Google URL. The callback rejects a mismatched state, saves tokens only to the verified user, and clears the cookie. New helper: `lib/googleOAuthState.ts` (signed with GOOGLE_CLIENT_SECRET).
+- The callback no longer wipes an existing refresh token if Google doesn't send a new one.
+
+**To do / untested**
+- Not tested in the browser yet (type check passes). Test list: connect, cancel on Google, create sheet, open links (Guide + Settings, logged-out view), re-sync, live post link, old pasted link → new sheet, delete sheet / revoke access → errors show, another user's sync → 403.
+- Blair: remove the `spreadsheets` scope from the Google Cloud Console OAuth consent screen too.
+
+**Notes**
+- Users who connected earlier keep their old tokens (which still include `spreadsheets`). Nothing breaks; they move to the new scope when they reconnect.
+- Dips with an old pasted link get a new sheet on next sync. Live posts already published keep the old link.
+- No database changes.
+- The state cookie isn't marked "secure" on localhost so dev works over http.
+
 ## 2026-10-01 — Cover photo fix
 **Changed**
 - Bug: wrap covers flipped between two photos. Cause: opening the edit modal marked photo 1 as cover on top of the real cover, so saving stored two covers, and pages picked whichever came back first from Supabase.

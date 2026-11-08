@@ -93,7 +93,6 @@ export default function DipDetail({ params }: { params: Promise<{ id: string }> 
   const [addCustomPrice, setAddCustomPrice] = useState('')
 
   // Settings
-  const [googleSheetLink, setGoogleSheetLink] = useState('')
   const [savingSettings, setSavingSettings] = useState(false)
   const [likesInput, setLikesInput] = useState('')
   const [winningNumber, setWinningNumber] = useState('')
@@ -131,6 +130,7 @@ export default function DipDetail({ params }: { params: Promise<{ id: string }> 
   const [googleConnected, setGoogleConnected] = useState(false)
   const [syncing, setSyncing] = useState(false)
   const [syncMessage, setSyncMessage] = useState('')
+  const [connectingGoogle, setConnectingGoogle] = useState(false)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
 useEffect(() => {
     supabase.auth.getUser().then(async ({ data: { user } }) => {
@@ -150,27 +150,66 @@ useEffect(() => {
     })
   }, [])
 
+  async function getAccessToken(): Promise<string | null> {
+    const { data } = await supabase.auth.getSession()
+    return data.session?.access_token ?? null
+  }
+
+  async function connectGoogle() {
+    setConnectingGoogle(true)
+    setSyncMessage('')
+    try {
+      const token = await getAccessToken()
+      if (!token) { setSyncMessage('Please log in again.'); return }
+      const res = await fetch('/api/auth/google', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ dipId: id }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (res.ok && data.url) {
+        window.location.href = data.url
+        return
+      }
+      setSyncMessage(data.message || 'Could not start Google connect — try again.')
+    } catch {
+      setSyncMessage('Could not start Google connect — try again.')
+    } finally {
+      setConnectingGoogle(false)
+    }
+  }
+
   async function syncToSheets() {
-    if (!currentUserId) return
     setSyncing(true)
     setSyncMessage('')
-    const res = await fetch('/api/sheets/sync', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ dipId: id, userId: currentUserId }),
-    })
-    const data = await res.json()
-    if (data.error === 'not_connected') {
-      setGoogleConnected(false)
-      setSyncMessage('Connect Google Sheets first')
-    } else if (data.success) {
-      setSyncMessage('Sheet updated ✓')
-      await loadDip()
-    } else {
-      setSyncMessage('Sync failed — try again')
+    let ok = false
+    try {
+      const token = await getAccessToken()
+      if (!token) {
+        setSyncMessage('Please log in again.')
+      } else {
+        const res = await fetch('/api/sheets/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ dipId: id }),
+        })
+        const data = await res.json().catch(() => ({}))
+        if (res.ok && data.success) {
+          ok = true
+          setSyncMessage('Sheet updated ✓')
+        } else {
+          if (data.error === 'not_connected') setGoogleConnected(false)
+          setSyncMessage(data.message || 'Sync failed — try again.')
+        }
+      }
+    } catch {
+      setSyncMessage('Sync failed — check your connection and try again.')
     }
+    // Reload either way: a failed sync may still have created/saved a new sheet link
+    await loadDip()
     setSyncing(false)
-    setTimeout(() => setSyncMessage(''), 3000)
+    // Errors stay visible longer so they can actually be read on a phone
+    setTimeout(() => setSyncMessage(''), ok ? 3000 : 8000)
   }
   async function loadDip() {
     const { data: dipData } = await supabase
@@ -181,7 +220,6 @@ useEffect(() => {
 
     if (!dipData) { setLoading(false); return }
     setDip(dipData)
-    setGoogleSheetLink(dipData.google_sheet_link || '')
     setLikesInput(String(dipData.current_likes || 0))
     setWinningNumber(dipData.winning_number ? String(dipData.winning_number) : '')
     setPaymentMethods(dipData.payment_methods || '')
@@ -414,13 +452,6 @@ const { data: likerData } = await supabase
     if (isNaN(n) || n < 0) return
     await supabase.from('dips').update({ current_likes: n }).eq('id', id)
     await loadDip()
-  }
-
-  async function handleSaveGoogleSheet() {
-    setSavingSettings(true)
-    await supabase.from('dips').update({ google_sheet_link: googleSheetLink || null }).eq('id', id)
-    await loadDip()
-    setSavingSettings(false)
   }
 
   async function handleSavePaymentMethods() {
@@ -1545,40 +1576,6 @@ Managed with WrapApp 🎲 wrapapp.com.au`
                 )}
               </div>
             )}
-            {/* Google sheet — show on queue/live */}
-            {(dip.stage === 'queue' || dip.stage === 'live') && (
-              <div className="rounded-2xl border bg-white p-5 shadow-sm space-y-3">
-                <div className="flex items-center justify-between">
-                  <h3 className="font-bold text-gray-900">Google Sheet Link</h3>
-                  {googleSheetLink && (
-                    <a href={googleSheetLink} target="_blank" rel="noopener noreferrer" className="text-xs text-pink-500 underline">Open ↗</a>
-                  )}
-                </div>
-                {googleSheetLink && (
-                  <div className="rounded-xl bg-green-50 border border-green-200 px-3 py-2">
-                    <p className="text-xs font-semibold text-green-700 truncate">{googleSheetLink}</p>
-                  </div>
-                )}
-                <div className="flex gap-2">
-                  <input
-                    type="url"
-                    value={googleSheetLink}
-                    onChange={(e) => setGoogleSheetLink(e.target.value)}
-                    placeholder="https://docs.google.com/..."
-                    className="flex-1 rounded-xl border px-3 py-2.5 text-sm outline-none focus:border-pink-500 text-gray-900"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleSaveGoogleSheet}
-                    disabled={savingSettings}
-                    className="rounded-xl bg-gradient-to-r from-pink-500 to-rose-500 px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
-                  >
-                    Save
-                  </button>
-                </div>
-                <p className="text-xs text-gray-400">This will appear in your live post automatically.</p>
-              </div>
-            )}
 {/* Archive — show on drawn stage */}
             {dip.stage === 'drawn' && dip.winning_number && !dip.archived && (
               <div className="rounded-2xl border bg-white p-5 shadow-sm space-y-3">
@@ -1629,7 +1626,7 @@ Managed with WrapApp 🎲 wrapapp.com.au`
                 <div>
                   <h3 className="font-bold text-gray-900">Google Sheet</h3>
                   <p className="text-xs text-gray-500 mt-0.5">
-                    {dip.google_sheet_link ? 'Sheet connected — sync to update' : 'Creates and syncs your spot list automatically'}
+                    {dip.google_sheet_link ? 'Sheet connected — sync to update. Link is added to your live post.' : 'Creates and syncs your spot list automatically'}
                   </p>
                 </div>
                 {dip.google_sheet_link && (
@@ -1637,7 +1634,7 @@ Managed with WrapApp 🎲 wrapapp.com.au`
                     href={dip.google_sheet_link}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-xs text-pink-500 underline shrink-0"
+                    className="shrink-0 rounded-lg border border-pink-200 bg-pink-50 px-3 py-2 text-sm font-semibold text-pink-700"
                   >
                     Open ↗
                   </a>
@@ -1654,16 +1651,18 @@ Managed with WrapApp 🎲 wrapapp.com.au`
                   {syncing ? 'Syncing...' : dip.google_sheet_link ? '🔄 Sync Sheet' : '📊 Create & Sync Sheet'}
                 </button>
               ) : (
-                <a
-                  href={`/api/auth/google?state=${id}__${currentUserId}`}
-                  className="block w-full rounded-xl bg-green-500 py-2.5 text-center text-sm font-bold text-white"
+                <button
+                  type="button"
+                  onClick={connectGoogle}
+                  disabled={connectingGoogle || !currentUserId}
+                  className="block w-full rounded-xl bg-green-500 py-2.5 text-center text-sm font-bold text-white disabled:opacity-50"
                 >
-                  Connect Google Sheets
-                </a>
+                  {connectingGoogle ? 'Opening Google...' : 'Connect Google Sheets'}
+                </button>
               )}
 
               {syncMessage && (
-                <p className={`text-xs font-semibold ${syncMessage.includes('✓') ? 'text-green-600' : 'text-red-500'}`}>
+                <p className={`text-sm font-semibold ${syncMessage.includes('✓') ? 'text-green-700' : 'text-red-600'}`}>
                   {syncMessage}
                 </p>
               )}
@@ -2023,26 +2022,18 @@ Managed with WrapApp 🎲 wrapapp.com.au`
 
             <div className="rounded-2xl border bg-white p-5 shadow-sm space-y-3">
               <h2 className="font-bold text-gray-900">Google Sheet</h2>
-              <input
-                type="url"
-                value={googleSheetLink}
-                onChange={(e) => setGoogleSheetLink(e.target.value)}
-                placeholder="https://docs.google.com/..."
-                className="w-full rounded-xl border px-3 py-2.5 text-[16px] outline-none focus:border-pink-500"
-              />
-              <button
-                type="button"
-                onClick={handleSaveGoogleSheet}
-                disabled={savingSettings}
-                className="w-full rounded-xl bg-gradient-to-r from-pink-500 to-rose-500 py-2.5 text-sm font-bold text-white disabled:opacity-50"
-              >
-                {savingSettings ? 'Saving...' : 'Save Google Sheet Link'}
-              </button>
-              {googleSheetLink && (
-  <a href={googleSheetLink} target="_blank" rel="noopener noreferrer" className="block text-center text-xs text-pink-500 underline">
-    Open Sheet ↗
-  </a>
-)}
+              {dip.google_sheet_link ? (
+                <a
+                  href={dip.google_sheet_link}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block w-full rounded-xl border border-pink-200 bg-pink-50 py-2.5 text-center text-sm font-semibold text-pink-700"
+                >
+                  Open Sheet ↗
+                </a>
+              ) : (
+                <p className="text-xs text-gray-500">No sheet yet — use “Create & Sync Sheet” on the Guide tab.</p>
+              )}
             </div>
 
             <div className="rounded-2xl border bg-white p-5 shadow-sm space-y-3">
