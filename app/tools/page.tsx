@@ -100,7 +100,7 @@ const [editName, setEditName] = useState('')
           .eq('status', 'accepted'),
       ])
 const { data: dipHistory } = await supabase
-        .from('dips')
+        .from('my_dips') // own archived dips, every column (owner-only view)
         .select('*')
         .eq('user_id', user.id)
         .eq('archived', true)

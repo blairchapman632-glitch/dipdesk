@@ -244,7 +244,7 @@ function CreateDipInner() {
         facebook_group: 'Chasing Unicorns',
         wrap_value: numericGoal || null, // "Money goal" (column name is legacy)
       }])
-      .select()
+      .select('id') // only the new id is needed (other dip columns are owner-only)
       .single()
 
     setCreating(false)

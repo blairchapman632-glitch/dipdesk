@@ -523,7 +523,8 @@ export default function DipDetail({ params }: { params: Promise<{ id: string }> 
   // Returns the fresh data too, so callers can check counts right after a change
   async function loadDip(): Promise<DipCache | null> {
     const [dipRes, spotRes, likerRes, gameRes] = await Promise.all([
-      supabase.from('dips').select('*').eq('id', id).single(),
+      // Own dip with every column, from the owner-only my_dips view
+      supabase.from('my_dips').select('*').eq('id', id).single(),
       supabase.from('spots').select('*').eq('dip_id', id).order('spot_number', { ascending: true }),
       supabase.from('dip_likers').select('*').eq('dip_id', id).order('created_at', { ascending: true }),
       supabase.from('dip_games').select('*').eq('dip_id', id).maybeSingle(),

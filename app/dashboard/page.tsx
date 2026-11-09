@@ -555,8 +555,9 @@ if (userProfile) {
   { data: wrapData, error: wrapError },
   { data: notificationData, error: notificationError }
 ] = await Promise.all([
+  // Own dips (likes/status are owner-only columns) from the my_dips view
   supabase
-    .from('dips')
+    .from('my_dips')
     .select(
       'id, title, brand, wrap_name, total_spots, price_per_spot, current_likes, likes_required, stage, status, wrap_id, archived'
     )

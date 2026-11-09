@@ -1,5 +1,23 @@
 # Session Notes
 
+## 2026-11-09 — Security: follows RLS, test table, dips column privacy
+**Database (Step A, run)**
+- `follows`: RLS turned on. Anyone can read; you can only insert/delete rows where you are the follower (no update policy — the app never updates follows).
+- `test` table dropped (unused, 0 rows).
+- New owner-only view `my_dips` (`select * from dips where user_id = auth.uid()`), granted to authenticated only.
+
+**Changed (code)**
+- Own dips now read from `my_dips`: dip page load (`app/dips/[id]/page.tsx`), Dashboard My Dips (needs likes/status), Tools Dip History (archived, `*`).
+- Create dip insert returns only `id` (`.select('id')`) instead of every column.
+- Other-user dip reads were already public-columns only (Explore, /user/[id]). The public page uses the server key. All dip updates/deletes filter on `id` only and return nothing.
+
+**To do**
+- Step B (NOT yet run — after this deploy is live): revoke SELECT on dips from anon+authenticated, grant public columns only (id, user_id, title, brand, wrap_name, wrap_id, total_spots, price_per_spot, stage, archived, facebook_group, created_at). Optional: drop the weaker duplicate dip policies "Users can insert own dips" / "Users can update own dips" so the wrap-ownership check always applies. SQL is in chat.
+- Also still pending from earlier: profiles/wraps Step B (if not yet run).
+- After Step B test: follow/unfollow + counts, create a dip and open it, stage changes, save dip details, Dashboard My Dips, Tools Dip History + unarchive, Explore dipping badges/filter, another user's profile "Currently being dipped", public page logged out.
+- Note: an admin opening someone else's dip page now gets "Dip not found" (my_dips only returns your own). Nothing links admins there today.
+- New dips columns later: recreate `my_dips` and update the Step B grant if public.
+
 ## 2026-11-09 — Privacy lockdown (code side): emails + private wrap fields
 **Found**
 - Anyone (even logged out) could call `set_user_active_status` and ban any user. Fixed by SQL Step A (super_admin check).
