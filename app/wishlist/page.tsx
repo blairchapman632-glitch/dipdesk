@@ -19,14 +19,8 @@ type Wrap = {
   name: string
   brand: string | null
   description: string | null
-  purchase_date: string | null
-  purchased_from: string | null
-  purchase_country: string | null
+  // Purchase, loan and sale details are private (not readable for other people's wraps)
   status: 'active' | 'holiday' | 'departed'
-  on_loan_to: string | null
-  sold_to: string | null
-  sold_price: number | null
-  sold_currency: 'AUD' | 'USD' | 'EUR' | null
   sold_date: string | null
   is_favourite: boolean
   for_sale: boolean
@@ -165,14 +159,7 @@ export default function Page() {
             name,
             brand,
             description,
-            purchase_date,
-            purchased_from,
-            purchase_country,
             status,
-            on_loan_to,
-            sold_to,
-            sold_price,
-            sold_currency,
             sold_date,
             is_favourite,
             for_sale,
@@ -734,18 +721,7 @@ export default function Page() {
                         <span className="font-semibold text-gray-900">Status:</span>{' '}
                         {selectedWrap.status}
                       </p>
-                      <p>
-                        <span className="font-semibold text-gray-900">Purchase Date:</span>{' '}
-                        {selectedWrap.purchase_date || '—'}
-                      </p>
-                      <p>
-                        <span className="font-semibold text-gray-900">Purchased From:</span>{' '}
-                        {selectedWrap.purchased_from || '—'}
-                      </p>
-                      <p>
-                        <span className="font-semibold text-gray-900">Country:</span>{' '}
-                        {selectedWrap.purchase_country || '—'}
-                      </p>
+                      {/* Purchase details are private to the wrap's owner */}
                     </div>
                   </div>
 
@@ -774,33 +750,12 @@ export default function Page() {
                         </p>
                       )}
 
-                      {selectedWrap.status === 'holiday' && (
+                      {/* Loan and sale details (who / how much) are private to the owner */}
+                      {selectedWrap.status === 'departed' && selectedWrap.sold_date && (
                         <p>
-                          <span className="font-semibold text-gray-900">On Holiday With:</span>{' '}
-                          {selectedWrap.on_loan_to || '—'}
+                          <span className="font-semibold text-gray-900">Sold Date:</span>{' '}
+                          {selectedWrap.sold_date}
                         </p>
-                      )}
-
-                      {selectedWrap.status === 'departed' && (
-                        <>
-                          <p>
-                            <span className="font-semibold text-gray-900">Sold To:</span>{' '}
-                            {selectedWrap.sold_to || '—'}
-                          </p>
-                          <p>
-                            <span className="font-semibold text-gray-900">Sold Date:</span>{' '}
-                            {selectedWrap.sold_date || '—'}
-                          </p>
-                          <p>
-                            <span className="font-semibold text-gray-900">Sold Price:</span>{' '}
-                            {selectedWrap.sold_price !== null
-                              ? formatCurrency(
-                                  selectedWrap.sold_price,
-                                  selectedWrap.sold_currency || 'AUD'
-                                )
-                              : '—'}
-                          </p>
-                        </>
                       )}
                     </div>
                   </div>

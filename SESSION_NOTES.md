@@ -1,5 +1,31 @@
 # Session Notes
 
+## 2026-11-09 — Privacy lockdown (code side): emails + private wrap fields
+**Found**
+- Anyone (even logged out) could call `set_user_active_status` and ban any user. Fixed by SQL Step A (super_admin check).
+- `admin_user_overview` view ran with owner rights and was granted to anon/authenticated, so every email was readable. Replaced by the admin-only function `admin_user_overview()` (Step A). The view is dropped in Step B.
+- Every column of profiles and wraps was readable with the public key (RLS `true` can't hide columns).
+
+**Changed (code)**
+- Admin page uses `rpc('admin_user_overview')`.
+- Own wraps with private fields come from the owner-only view `my_wraps`: Dashboard collection, create-dip wrap tiles, and your own /user/[id] page.
+- Other people's wraps select public columns only: Dashboard notification wraps, Explore (3 queries), other users' /user/[id], Wishlist embed. Other profiles now sort by newest (purchase_date is private). Private fields were removed from those pages' Wrap types.
+- Hidden from other members: Sold To, Sold Price, On loan / On Holiday With, and purchase date/from/country (Explore sheet, Wishlist sheet, Dashboard read-only view from notifications, other profiles). Sold Date stays public. Owners still see everything on their Dashboard and their own profile.
+- Deleted the dead Dashboard community-wraps query (+ its unused profile lookup) and Explore's dead purchase-price ranking.
+- Wrap counts use `select('id', { count, head })` instead of `*`.
+- Checked every write to wraps/profiles (15 writes: avatar ×4, last_active, username sheet, feedback hub ×2, city/country, name, bio, sign-up insert, wrap update/insert/delete). None returns or filters on private columns; only wrap insert returns, and it returns `id`. Sold/loan/dibs all go through the normal wrap save. RLS policies on other tables only read wraps.id / wraps.user_id (stay public). Triggers don't read private columns. No code change was needed for writes.
+
+**Database**
+- Step A (run): set_user_active_status admin check, admin_user_overview() function, my_wraps view, anon revoked on the old view.
+- Step B (NOT yet run — run after this deploy is live): drop admin_user_overview view; revoke SELECT on profiles/wraps from anon+authenticated; grant SELECT on public columns only. SQL is in chat.
+  - profiles public: id, full_name, username, avatar_url, bio, city, country, role, feedback_hub_link, is_private, created_at
+  - wraps public: id, user_id, name, brand, description, colour, size, material, wrap_type, status, is_favourite, for_sale, for_sale_price, for_sale_currency, for_sale_price_is_pm, sold_date, is_private, created_at, updated_at
+
+**To do / untested**
+- After Step B, click through the list in chat (Dashboard, Explore, profiles own+other, Wishlist, Create Dip, Tools, Dip page, Admin as admin + as normal user, Messages, WDYWT, public page logged out, sign-up). "permission denied for column" = a select I missed.
+- A new wraps column later must be added to the Step B grant (if public), and `my_wraps` must be recreated (its `select *` is fixed when the view is made).
+- Still open: `follows` and `test` have RLS off; active dips expose all columns (payment methods, money goal) to anyone.
+
 ## 2026-11-09 — Dip Phase 3 (one-page flow, editing, new create), public pages, token security, auto usernames
 **Changed**
 - Dip page (`app/dips/[id]/page.tsx`) is one page, no tabs: stage bar → sheet card + Random.org reminder → 👉 Next step card → stage content (Likers / spot list + Add Spot / By player view / winner) → 🧰 Tools drawer (Boost, Payment methods, Dip details, Delete) → "← Back a stage".

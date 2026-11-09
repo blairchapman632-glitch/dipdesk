@@ -293,8 +293,6 @@ export default function Dashboard() {
   const [email, setEmail] = useState('')
   const [dips, setDips] = useState<Dip[]>([])
   const [wraps, setWraps] = useState<Wrap[]>([])
-  const [communityWraps, setCommunityWraps] = useState<Wrap[]>([])
-  const [profilesMap, setProfilesMap] = useState<Record<string, { full_name: string | null; username: string | null }>>({})
   const [loading, setLoading] = useState(true)
     const [mobileTab, setMobileTab] = useState<'collection' | 'activity'>('collection')
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
@@ -555,7 +553,6 @@ if (userProfile) {
     const [
   { data: dipData, error: dipError },
   { data: wrapData, error: wrapError },
-  { data: communityWrapData },
   { data: notificationData, error: notificationError }
 ] = await Promise.all([
   supabase
@@ -566,8 +563,9 @@ if (userProfile) {
     .eq('user_id', user.id)
     .order('created_at', { ascending: false }),
 
+  // Own wraps incl. private fields (purchase/sold/loan) come from the owner-only my_wraps view
   supabase
-    .from('wraps')
+    .from('my_wraps')
     .select(
 'id, name, brand, description, size, material, colour, wrap_type, is_private, dibs_names, purchase_date, purchase_price, purchase_currency, purchased_from, purchase_country, status, on_loan_to, sold_to, sold_price, sold_currency, sold_date, is_favourite, for_sale, for_sale_price, for_sale_currency, for_sale_price_is_pm, created_at, wrap_images(id, image_url, is_primary, sort_order)'
 )
@@ -576,15 +574,6 @@ if (userProfile) {
     .order('purchase_price', { ascending: false })
     .order('sort_order', { referencedTable: 'wrap_images' }),
 
-  supabase
-  .from('wraps')
-  .select(
-'id, name, brand, description, colour, purchase_date, purchased_from, purchase_country, status, on_loan_to, sold_to, sold_price, sold_currency, sold_date, is_favourite, for_sale, for_sale_price, for_sale_currency, for_sale_price_is_pm, created_at, user_id, wrap_images(id, image_url, is_primary, sort_order)'
-)
-  .order('created_at', { ascending: false })
-  .order('sort_order', { referencedTable: 'wrap_images' })
-  .limit(20)
-  ,
   supabase
     .from('notifications')
         .select('id, recipient_user_id, actor_user_id, wrap_id, type, created_at, read_at')
@@ -656,31 +645,6 @@ if (userProfile) {
   setWraps(safeWraps)
   localStorage.setItem(DASHBOARD_WRAPS_KEY, JSON.stringify(safeWraps))
 }
-if (communityWrapData) {
-  const wraps = communityWrapData as unknown as Wrap[]
-  setCommunityWraps(wraps)
-
-  const userIds = [...new Set(wraps.map(w => w.user_id))]
-
-  const { data: profileData } = await supabase
-    .from('profiles')
-    .select('id, full_name, username')
-    .in('id', userIds)
-
-  if (profileData) {
-    const map: Record<string, { full_name: string | null; username: string | null }> = {}
-
-    profileData.forEach((p) => {
-      map[p.id] = {
-        full_name: p.full_name,
-        username: p.username,
-      }
-    })
-
-    setProfilesMap(map)
-  }
-}
-
 if (!notificationError && notificationData) {
   const rows = (notificationData as NotificationRow[]) || []
   const actorIds = [...new Set(rows.map((row) => row.actor_user_id).filter(Boolean) as string[])]
@@ -708,7 +672,7 @@ if (!notificationError && notificationData) {
     const { data: notificationWrapData } = await supabase
       .from('wraps')
       .select(
-        'id, user_id, name, brand, description, colour, purchase_date, purchase_price, purchase_currency, purchased_from, purchase_country, status, on_loan_to, sold_to, sold_price, sold_currency, sold_date, is_favourite, for_sale, for_sale_price, for_sale_currency, for_sale_price_is_pm, created_at, wrap_images(id, image_url, is_primary, sort_order)'
+        'id, user_id, name, brand, description, colour, size, material, wrap_type, status, sold_date, is_favourite, for_sale, for_sale_price, for_sale_currency, for_sale_price_is_pm, created_at, wrap_images(id, image_url, is_primary, sort_order)'
       )
       .in('id', wrapIds)
       .order('sort_order', { referencedTable: 'wrap_images' })
@@ -2575,19 +2539,23 @@ function exportReportCsv() {
               <span className="font-semibold text-gray-900">Status:</span>{' '}
               {selectedWrap.status}
             </p>
-            <p>
-              <span className="font-semibold text-gray-900">Purchase Date:</span>{' '}
-              {selectedWrap.purchase_date || '—'}
-            </p>
-            
-            <p>
-              <span className="font-semibold text-gray-900">Purchased From:</span>{' '}
-              {selectedWrap.purchased_from || '—'}
-            </p>
-            <p>
-              <span className="font-semibold text-gray-900">Country:</span>{' '}
-              {selectedWrap.purchase_country || '—'}
-            </p>
+            {/* Purchase details are private: only shown on your own wraps */}
+            {!isReadOnlyWrapView && (
+              <>
+                <p>
+                  <span className="font-semibold text-gray-900">Purchase Date:</span>{' '}
+                  {selectedWrap.purchase_date || '—'}
+                </p>
+                <p>
+                  <span className="font-semibold text-gray-900">Purchased From:</span>{' '}
+                  {selectedWrap.purchased_from || '—'}
+                </p>
+                <p>
+                  <span className="font-semibold text-gray-900">Country:</span>{' '}
+                  {selectedWrap.purchase_country || '—'}
+                </p>
+              </>
+            )}
           </div>
         </div>
 
@@ -2616,7 +2584,8 @@ function exportReportCsv() {
               </p>
             )}
 
-            {selectedWrap.status === 'holiday' && (
+            {/* Loan and sale details are private: only shown on your own wraps (not the read-only view) */}
+            {!isReadOnlyWrapView && selectedWrap.status === 'holiday' && (
               <p>
                 <span className="font-semibold text-gray-900">On Holiday With:</span>{' '}
                 {selectedWrap.on_loan_to || '—'}
@@ -2625,23 +2594,27 @@ function exportReportCsv() {
 
             {selectedWrap.status === 'departed' && (
               <>
-                <p>
-                  <span className="font-semibold text-gray-900">Sold To:</span>{' '}
-                  {selectedWrap.sold_to || '—'}
-                </p>
+                {!isReadOnlyWrapView && (
+                  <p>
+                    <span className="font-semibold text-gray-900">Sold To:</span>{' '}
+                    {selectedWrap.sold_to || '—'}
+                  </p>
+                )}
                 <p>
                   <span className="font-semibold text-gray-900">Sold Date:</span>{' '}
                   {selectedWrap.sold_date || '—'}
                 </p>
-                <p>
-                  <span className="font-semibold text-gray-900">Sold Price:</span>{' '}
-                  {selectedWrap.sold_price !== null
-                    ? formatCurrency(
-                        selectedWrap.sold_price,
-                        selectedWrap.sold_currency || 'AUD'
-                      )
-                    : '—'}
-                </p>
+                {!isReadOnlyWrapView && (
+                  <p>
+                    <span className="font-semibold text-gray-900">Sold Price:</span>{' '}
+                    {selectedWrap.sold_price !== null
+                      ? formatCurrency(
+                          selectedWrap.sold_price,
+                          selectedWrap.sold_currency || 'AUD'
+                        )
+                      : '—'}
+                  </p>
+                )}
               </>
             )}
           </div>

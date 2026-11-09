@@ -67,10 +67,8 @@ export default function AdminPage() {
 
     setIsAdmin(true)
 
-    const { data: adminUsers, error: adminUsersError } = await supabase
-      .from('admin_user_overview')
-      .select('*')
-      .order('last_active_at', { ascending: false })
+    // Admin-only database function (checks super_admin itself; already sorted by last active)
+    const { data: adminUsers, error: adminUsersError } = await supabase.rpc('admin_user_overview')
 
     if (adminUsersError) {
       console.error(adminUsersError)

@@ -21,13 +21,14 @@ type Wrap = {
   size: string | null
   material: string | null
   colour: string | null
-  purchase_date: string | null
-  purchased_from: string | null
+  // Private: only loaded on your own profile (from my_wraps)
+  purchase_date?: string | null
+  purchased_from?: string | null
   status: 'active' | 'holiday' | 'departed'
-  on_loan_to: string | null
-  sold_to: string | null
-  sold_price: number | null
-  sold_currency: 'AUD' | 'USD' | 'EUR' | null
+  on_loan_to?: string | null
+  sold_to?: string | null
+  sold_price?: number | null
+  sold_currency?: 'AUD' | 'USD' | 'EUR' | null
   sold_date: string | null
   is_favourite: boolean
   for_sale: boolean
@@ -172,7 +173,11 @@ export default function UserCollectionPage() {
 
       const [{ data: profileData }, { data: wrapData }] = await Promise.all([
         supabase.from('profiles').select('id, full_name, username, avatar_url').eq('id', userId).single(),
-        supabase.from('wraps').select('id, name, brand, size, material, colour, purchase_date, purchased_from, status, on_loan_to, sold_to, sold_price, sold_currency, sold_date, is_favourite, for_sale, for_sale_price, for_sale_currency, for_sale_price_is_pm, wrap_images(id, image_url, is_primary, sort_order)').eq('user_id', userId).order('is_favourite', { ascending: false }).order('purchase_date', { ascending: false }).order('sort_order', { referencedTable: 'wrap_images' }),
+        // Own profile: all fields from the owner-only my_wraps view.
+        // Other people: public columns only (purchase, loan and sale details are private).
+        loggedInUserId && String(loggedInUserId) === String(userId)
+          ? supabase.from('my_wraps').select('id, name, brand, size, material, colour, purchase_date, purchased_from, status, on_loan_to, sold_to, sold_price, sold_currency, sold_date, is_favourite, for_sale, for_sale_price, for_sale_currency, for_sale_price_is_pm, wrap_images(id, image_url, is_primary, sort_order)').eq('user_id', userId).order('is_favourite', { ascending: false }).order('purchase_date', { ascending: false }).order('sort_order', { referencedTable: 'wrap_images' })
+          : supabase.from('wraps').select('id, name, brand, size, material, colour, status, sold_date, is_favourite, for_sale, for_sale_price, for_sale_currency, for_sale_price_is_pm, wrap_images(id, image_url, is_primary, sort_order)').eq('user_id', userId).order('is_favourite', { ascending: false }).order('created_at', { ascending: false }).order('sort_order', { referencedTable: 'wrap_images' }),
       ])
 
       let nextIsFollowing = false
@@ -186,7 +191,7 @@ export default function UserCollectionPage() {
       const [{ count: followerCount }, { count: followingCount }, { count: wrapCount }, { data: bioData }] = await Promise.all([
         supabase.from('follows').select('*', { count: 'exact', head: true }).eq('following_id', userId).eq('status', 'accepted'),
         supabase.from('follows').select('*', { count: 'exact', head: true }).eq('follower_id', userId).eq('status', 'accepted'),
-        supabase.from('wraps').select('*', { count: 'exact', head: true }).eq('user_id', userId).eq('status', 'active'),
+        supabase.from('wraps').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('status', 'active'),
         supabase.from('profiles').select('bio, city, country').eq('id', userId).single(),
       ])
       const nextStats = { followers: followerCount || 0, following: followingCount || 0, wraps: wrapCount || 0, bio: (bioData as any)?.bio || null, city: (bioData as any)?.city || null, country: (bioData as any)?.country || null }
@@ -717,7 +722,8 @@ const { data: dipData } = await supabase
                     <div className="space-y-2 text-sm text-gray-700">
                       <p><span className="font-semibold text-gray-900">Favourite:</span> {selectedWrap.is_favourite ? 'Yes' : 'No'}</p>
                       {selectedWrap.for_sale && <p><span className="font-semibold text-gray-900">For Sale:</span> {selectedWrap.for_sale_price_is_pm ? 'PM' : selectedWrap.for_sale_price !== null ? formatCurrency(selectedWrap.for_sale_price, selectedWrap.for_sale_currency || 'AUD') : 'Yes'}</p>}
-                      {selectedWrap.status === 'holiday' && <p><span className="font-semibold text-gray-900">On Holiday With:</span> {selectedWrap.on_loan_to || '—'}</p>}
+                      {/* Who has it on loan is private: own profile only */}
+                      {selectedWrap.status === 'holiday' && currentUserId && String(currentUserId) === String(userId) && <p><span className="font-semibold text-gray-900">On Holiday With:</span> {selectedWrap.on_loan_to || '—'}</p>}
                       
                     </div>
                   </div>

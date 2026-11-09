@@ -125,7 +125,7 @@ function CreateDipInner() {
       const [{ data: profile }, { data: wraps }] = await Promise.all([
         supabase.from('profiles').select('feedback_hub_link').eq('id', user.id).single(),
         supabase
-          .from('wraps')
+          .from('my_wraps') // own wraps incl. purchase price (owner-only view)
           .select('id, name, brand, size, material, status, purchase_price, purchase_currency, created_at, wrap_images(id, image_url, is_primary, sort_order)')
           .eq('user_id', user.id)
           .order('created_at', { ascending: false })

@@ -85,17 +85,17 @@ const [editName, setEditName] = useState('')
           .single(),
         supabase
           .from('wraps')
-          .select('*', { count: 'exact', head: true })
+          .select('id', { count: 'exact', head: true })
           .eq('user_id', user.id)
           .in('status', ['active', 'holiday']),
         supabase
           .from('follows')
-          .select('*', { count: 'exact', head: true })
+          .select('id', { count: 'exact', head: true })
           .eq('following_id', user.id)
           .eq('status', 'accepted'),
         supabase
           .from('follows')
-          .select('*', { count: 'exact', head: true })
+          .select('id', { count: 'exact', head: true })
           .eq('follower_id', user.id)
           .eq('status', 'accepted'),
       ])

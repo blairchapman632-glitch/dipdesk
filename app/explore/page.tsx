@@ -19,14 +19,8 @@ type Wrap = {
   name: string
   brand: string | null
   description: string | null
-  purchase_date: string | null
-  purchased_from: string | null
-  purchase_country: string | null
+  // Purchase, loan and sale details are private (not readable for other people's wraps)
   status: 'active' | 'holiday' | 'departed'
-  on_loan_to: string | null
-  sold_to: string | null
-  sold_price: number | null
-  sold_currency: 'AUD' | 'USD' | 'EUR' | null
   sold_date: string | null
   is_favourite: boolean
   for_sale: boolean
@@ -484,7 +478,7 @@ async function loadActiveDips() {
       const { data: wrapData, error: wrapError } = await supabase
         .from('wraps')
                 .select(
-          'id, user_id, name, brand, colour, size, material, wrap_type, description, purchase_date, purchased_from, purchase_country, status, on_loan_to, sold_to, sold_price, sold_currency, sold_date, is_favourite, for_sale, for_sale_price, for_sale_currency, for_sale_price_is_pm, created_at, wrap_images(id, image_url, is_primary, sort_order)'
+          'id, user_id, name, brand, colour, size, material, wrap_type, description, status, sold_date, is_favourite, for_sale, for_sale_price, for_sale_currency, for_sale_price_is_pm, created_at, wrap_images(id, image_url, is_primary, sort_order)'
         )
         .order('created_at', { ascending: false })
         .order('sort_order', { referencedTable: 'wrap_images' })
@@ -577,9 +571,7 @@ function scoreWrap(wrap: Wrap): number {
   const ageMs = Date.now() - new Date(wrap.created_at).getTime()
   const ageDays = ageMs / (1000 * 60 * 60 * 24)
   const recency = Math.max(0, 10 - (ageDays / 3))
-  const purchasePrice = (wrap as any).purchase_price || 0
-  const priceScore = Math.min(10, purchasePrice / 300)
-  return isDipping + (likes * 3) + (wishlists * 2) + isForSale + priceScore + recency
+  return isDipping + (likes * 3) + (wishlists * 2) + isForSale + recency
 }
 
 const rankedWraps = [...wraps].sort((a, b) => scoreWrap(b) - scoreWrap(a))
@@ -761,7 +753,7 @@ return () => {
           const { data: searchUserWrapData } = await supabase
             .from('wraps')
             .select(
-              'id, user_id, name, brand, description, colour, wrap_type, purchase_date, purchased_from, purchase_country, status, on_loan_to, sold_to, sold_price, sold_currency, sold_date, is_favourite, for_sale, for_sale_price, for_sale_currency, for_sale_price_is_pm, created_at, wrap_images(id, image_url, is_primary, sort_order)'
+              'id, user_id, name, brand, description, colour, wrap_type, status, sold_date, is_favourite, for_sale, for_sale_price, for_sale_currency, for_sale_price_is_pm, created_at, wrap_images(id, image_url, is_primary, sort_order)'
             )
             .in('user_id', matchedUserIds)
             .order('created_at', { ascending: false })
@@ -799,7 +791,7 @@ matchedUsers = matchedProfiles.map((profile) => {
       const { data: wrapData, error: wrapError } = await supabase
         .from('wraps')
         .select(
-          'id, user_id, name, brand, description, colour, wrap_type, purchase_date, purchased_from, purchase_country, status, on_loan_to, sold_to, sold_price, sold_currency, sold_date, is_favourite, for_sale, for_sale_price, for_sale_currency, for_sale_price_is_pm, created_at, wrap_images(id, image_url, is_primary, sort_order)'
+          'id, user_id, name, brand, description, colour, wrap_type, status, sold_date, is_favourite, for_sale, for_sale_price, for_sale_currency, for_sale_price_is_pm, created_at, wrap_images(id, image_url, is_primary, sort_order)'
         )
         .or(`name.ilike.%${term}%,brand.ilike.%${term}%,colour.ilike.%${term}%,description.ilike.%${term}%`)
         .order('created_at', { ascending: false })
@@ -1510,33 +1502,12 @@ setTimeout(() => setToastMessage(''), 2000)
                         </p>
                       )}
 
-                      {selectedWrap.status === 'holiday' && (
+                      {/* Loan and sale details (who / how much) are private — not shown to other members */}
+                      {selectedWrap.status === 'departed' && selectedWrap.sold_date && (
                         <p>
-                          <span className="font-semibold text-gray-900">On Holiday With:</span>{' '}
-                          {selectedWrap.on_loan_to || '—'}
+                          <span className="font-semibold text-gray-900">Sold Date:</span>{' '}
+                          {selectedWrap.sold_date}
                         </p>
-                      )}
-
-                      {selectedWrap.status === 'departed' && (
-                        <>
-                          <p>
-                            <span className="font-semibold text-gray-900">Sold To:</span>{' '}
-                            {selectedWrap.sold_to || '—'}
-                          </p>
-                          <p>
-                            <span className="font-semibold text-gray-900">Sold Date:</span>{' '}
-                            {selectedWrap.sold_date || '—'}
-                          </p>
-                          <p>
-                            <span className="font-semibold text-gray-900">Sold Price:</span>{' '}
-                            {selectedWrap.sold_price !== null
-                              ? formatCurrency(
-                                  selectedWrap.sold_price,
-                                  selectedWrap.sold_currency || 'AUD'
-                                )
-                              : '—'}
-                          </p>
-                        </>
                       )}
                     </div>
                   </div>
