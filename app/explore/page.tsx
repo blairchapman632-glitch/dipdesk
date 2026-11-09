@@ -1448,7 +1448,7 @@ setTimeout(() => setToastMessage(''), 2000)
                 {(() => {
                   const dip = activeDips.find(d => d.wrap_id === selectedWrap.id)
                   if (!dip) return null
-                  const stageLabel: Record<string, string> = { interest: 'Interest', queue: 'In Queue', live: 'Live 🔥', payments: 'Collecting Payments', closed: 'Closed' }
+                  const stageLabel: Record<string, string> = { interest: 'Interest', queue: 'In Queue', live: 'Live 🔥', payments: 'Full – collecting payments', closed: 'Ready to draw' }
                   return (
                     <div className="mb-5 rounded-2xl bg-purple-50 border border-purple-200 p-4 space-y-2">
                       <p className="text-sm font-bold text-purple-700">🎲 Currently being dipped{dip.facebook_group ? ` on ${dip.facebook_group}` : ''}!</p>

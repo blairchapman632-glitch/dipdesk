@@ -1,27 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { getUserIdFromRequest } from '@/lib/googleOAuthState'
+import { getGoogleConnection, saveGoogleTokens } from '@/lib/googleConnections'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
+// Tokens come from the server-only google_connections table (not profiles)
 async function getValidAccessToken(userId: string): Promise<string | null> {
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('google_access_token, google_refresh_token, google_token_expiry')
-    .eq('id', userId)
-    .single()
+  const c = await getGoogleConnection(userId)
+  if (!c) return null
 
-  if (!profile) return null
-  const p = profile as any
-
-  if (p.google_access_token && p.google_token_expiry && Date.now() < p.google_token_expiry - 60000) {
-    return p.google_access_token
+  if (c.access_token && c.token_expiry && Date.now() < c.token_expiry - 60000) {
+    return c.access_token
   }
 
-  if (!p.google_refresh_token) return null
+  if (!c.refresh_token) return null
 
   const res = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
@@ -29,18 +25,18 @@ async function getValidAccessToken(userId: string): Promise<string | null> {
     body: new URLSearchParams({
       client_id: process.env.GOOGLE_CLIENT_ID!,
       client_secret: process.env.GOOGLE_CLIENT_SECRET!,
-      refresh_token: p.google_refresh_token,
+      refresh_token: c.refresh_token,
       grant_type: 'refresh_token',
     }),
   })
 
-  const data = await res.json()
+  const data = await res.json().catch(() => ({}))
   if (!data.access_token) return null
 
-  await supabase.from('profiles').update({
-    google_access_token: data.access_token,
-    google_token_expiry: Date.now() + data.expires_in * 1000,
-  } as any).eq('id', userId)
+  await saveGoogleTokens(userId, {
+    access_token: data.access_token,
+    token_expiry: Date.now() + (data.expires_in || 3600) * 1000,
+  })
 
   return data.access_token
 }

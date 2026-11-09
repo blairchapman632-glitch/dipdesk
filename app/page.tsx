@@ -26,6 +26,16 @@ const [forgotMessage, setForgotMessage] = useState('')
     checkSession()
   }, [router])
 
+  // Links like /?signup=1 (e.g. "Join WrapApp" on a public collection page) open sign-up
+  useEffect(() => {
+    try {
+      if (new URLSearchParams(window.location.search).get('signup') === '1') {
+        scrollToAuth(true)
+      }
+    } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   const handleSignUp = async () => {
     if (!fullName.trim()) {
       setMessage('Please enter your name to continue.')

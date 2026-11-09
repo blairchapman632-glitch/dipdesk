@@ -1,11 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
 import { GOOGLE_STATE_COOKIE, verifyStateCookie } from '@/lib/googleOAuthState'
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
+import { saveGoogleTokens } from '@/lib/googleConnections'
 
 function redirectAndClear(url: string) {
   const res = NextResponse.redirect(url)
@@ -54,14 +49,16 @@ export async function GET(request: NextRequest) {
     return redirectAndClear(backTo('error'))
   }
 
-  const update: Record<string, unknown> = {
-    google_access_token: tokenData.access_token,
-    google_token_expiry: tokenData.expires_in ? Date.now() + tokenData.expires_in * 1000 : null,
+  // Tokens go in the server-only google_connections table (never on profiles).
+  // An existing refresh token is kept if Google didn't send a new one.
+  const { error: saveError } = await saveGoogleTokens(verified.u, {
+    access_token: tokenData.access_token,
+    token_expiry: tokenData.expires_in ? Date.now() + tokenData.expires_in * 1000 : null,
+    refresh_token: tokenData.refresh_token || null,
+  })
+  if (saveError) {
+    return redirectAndClear(backTo('error'))
   }
-  // Don't wipe an existing refresh token if Google didn't send a new one
-  if (tokenData.refresh_token) update.google_refresh_token = tokenData.refresh_token
-
-  await supabase.from('profiles').update(update as any).eq('id', verified.u)
 
   return redirectAndClear(backTo('connected'))
 }

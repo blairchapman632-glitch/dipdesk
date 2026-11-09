@@ -2,6 +2,7 @@
 
 import AppLayout from '@/app/components/AppLayout'
 import { useRouter } from 'next/navigation'
+import UsernameSheet from '@/app/components/UsernameSheet'
 import { supabase } from '@/lib/supabase'
 import { useEffect, useState } from 'react'
 import imageCompression from 'browser-image-compression'
@@ -35,6 +36,11 @@ const [showNameEdit, setShowNameEdit] = useState(false)
 const [savingName, setSavingName] = useState(false)
 const [editName, setEditName] = useState('')
 
+  // Public page (short link + privacy)
+  const [username, setUsername] = useState('')
+  const [isPrivateProfile, setIsPrivateProfile] = useState(false)
+  const [showPublicEdit, setShowPublicEdit] = useState(false)
+
   const [isAdmin, setIsAdmin] = useState(() => {
     if (typeof window === 'undefined') return false
     try {
@@ -55,6 +61,8 @@ const [editName, setEditName] = useState('')
         setBio(p.bio || '')
         setCity(p.city || '')
         setCountry(p.country || '')
+        setUsername(p.username || '')
+        setIsPrivateProfile(!!p.is_private)
         setCurrentUserId(p.id || null)
         setIsAdmin(p.role === 'super_admin')
       } catch {}
@@ -72,7 +80,7 @@ const [editName, setEditName] = useState('')
       ] = await Promise.all([
         supabase
           .from('profiles')
-          .select('id, full_name, username, avatar_url, bio, feedback_hub_link, city, country, role')
+          .select('id, full_name, username, is_private, avatar_url, bio, feedback_hub_link, city, country, role')
           .eq('id', user.id)
           .single(),
         supabase
@@ -105,6 +113,8 @@ const { data: dipHistory } = await supabase
         setFullName(data.full_name || data.username || '')
         setCity(data.city || '')
         setCountry(data.country || '')
+        setUsername(data.username || '')
+        setIsPrivateProfile(!!data.is_private)
         setIsAdmin(data.role === 'super_admin')
         localStorage.setItem(DASHBOARD_PROFILE_KEY, JSON.stringify({ ...data, id: user.id }))
       }
@@ -278,6 +288,17 @@ const { data: dipHistory } = await supabase
         <div className="rounded-2xl border bg-white shadow-sm overflow-hidden">
           <button
             type="button"
+            onClick={() => setShowPublicEdit(true)}
+            className="w-full flex min-h-[52px] items-center gap-3 px-4 py-3.5 text-left text-sm font-semibold text-gray-700 hover:bg-gray-50 border-b"
+          >
+            <span className="text-lg">🌐</span> My public page
+            <span className="ml-auto text-xs text-gray-400 truncate max-w-[160px]">
+              {isPrivateProfile ? '🔒 Private' : username ? `wrapapp.com.au/${username}` : 'Set your link'}
+            </span>
+          </button>
+
+          <button
+            type="button"
             onClick={() => setShowFeedbackHubEdit(true)}
             className="w-full flex items-center gap-3 px-4 py-3.5 text-left text-sm font-semibold text-gray-700 hover:bg-gray-50 border-b"
           >
@@ -327,6 +348,15 @@ const { data: dipHistory } = await supabase
             <span className="text-lg">🚪</span> Logout
           </button>
         </div>
+{/* Start a Dip */}
+        <button
+          type="button"
+          onClick={() => router.push('/create-dip')}
+          className="min-h-[52px] w-full rounded-2xl bg-gradient-to-r from-pink-500 to-rose-500 px-4 text-base font-bold text-white shadow-sm"
+        >
+          🎲 Start a Dip
+        </button>
+
 {/* Dip History */}
         <div className="rounded-2xl border bg-white shadow-sm overflow-hidden">
           <div className="px-4 py-3 border-b">
@@ -458,6 +488,14 @@ const { data: dipHistory } = await supabase
             </button>
           </div>
         </div>
+      )}
+{/* Public page settings — username (short link) + private profile */}
+      {showPublicEdit && currentUserId && (
+        <UsernameSheet
+          userId={currentUserId}
+          onClose={() => setShowPublicEdit(false)}
+          onSaved={({ username: u, isPrivate }) => { setUsername(u || ''); setIsPrivateProfile(isPrivate) }}
+        />
       )}
 {/* Feedback Hub modal */}
       {showFeedbackHubEdit && (

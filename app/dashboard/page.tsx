@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import imageCompression from 'browser-image-compression'
 import AppLayout from '@/app/components/AppLayout'
 import { getCoverImage, sortWrapImages } from '@/lib/wrapCover'
+import { getDipStageLabel, isDipLiveOrLater } from '@/lib/dipStages'
 
 type CurrencyCode = 'AUD' | 'USD' | 'EUR'
 
@@ -66,6 +67,8 @@ type Dip = {
   status: string | null
   wrap_id: string | null
   archived: boolean | null
+  filled_spots?: number
+  liked_count?: number
 }
 
 type WrapFormImage = {
@@ -116,6 +119,7 @@ purchase_date: string
   for_sale_price_is_pm: boolean
   status: 'active' | 'holiday' | 'departed'
   wrap_type: string
+  is_private: boolean
 }
 type DibsUser = {
   id: string
@@ -183,6 +187,7 @@ purchase_date: new Date().toISOString().slice(0, 10),
   for_sale_price_is_pm: false,
   status: 'active',
   wrap_type: '',
+  is_private: false,
 }
 
 const WRAP_PLACEHOLDER =
@@ -208,12 +213,19 @@ function formatCurrency(
 }
 
 function getStageLabel(stage: string | null, status: string | null) {
-  return stage || status || 'Draft'
+  return getDipStageLabel(stage || status)
 }
 
+// Before Live: likes progress. From Live onward: spots filled.
 function getDipProgress(dip: Dip) {
+  if (isDipLiveOrLater(dip.stage || dip.status)) {
+    if (!dip.total_spots) return 0
+    return Math.min(100, Math.round(((dip.filled_spots || 0) / dip.total_spots) * 100))
+  }
+
+  // Likes = liker names not marked unliked (counted from dip_likers)
   const likesRequired = dip.likes_required || 0
-  const currentLikes = dip.current_likes || 0
+  const currentLikes = dip.liked_count || 0
 
   if (likesRequired > 0) {
     return Math.min(100, Math.round((currentLikes / likesRequired) * 100))
@@ -557,7 +569,7 @@ if (userProfile) {
   supabase
     .from('wraps')
     .select(
-'id, name, brand, description, size, material, colour, wrap_type, dibs_names, purchase_date, purchase_price, purchase_currency, purchased_from, purchase_country, status, on_loan_to, sold_to, sold_price, sold_currency, sold_date, is_favourite, for_sale, for_sale_price, for_sale_currency, for_sale_price_is_pm, created_at, wrap_images(id, image_url, is_primary, sort_order)'
+'id, name, brand, description, size, material, colour, wrap_type, is_private, dibs_names, purchase_date, purchase_price, purchase_currency, purchased_from, purchase_country, status, on_loan_to, sold_to, sold_price, sold_currency, sold_date, is_favourite, for_sale, for_sale_price, for_sale_currency, for_sale_price_is_pm, created_at, wrap_images(id, image_url, is_primary, sort_order)'
 )
     .eq('user_id', user.id)
     .order('is_favourite', { ascending: false })
@@ -582,9 +594,61 @@ if (userProfile) {
 ])
 
     if (!dipError && dipData) {
+      // Keep last known counts so cards don't flash to 0% while recounting
+      const prevFilled: Record<string, number> = {}
+      const prevLiked: Record<string, number> = {}
+      try {
+        for (const d of JSON.parse(localStorage.getItem(DASHBOARD_DIPS_KEY) || '[]') as Dip[]) {
+          if (typeof d.filled_spots === 'number') prevFilled[String(d.id)] = d.filled_spots
+          if (typeof d.liked_count === 'number') prevLiked[String(d.id)] = d.liked_count
+        }
+      } catch {}
+      const dipsWithPrev = (dipData as Dip[]).map((d) => ({
+        ...d,
+        ...(prevFilled[String(d.id)] !== undefined ? { filled_spots: prevFilled[String(d.id)] } : {}),
+        ...(prevLiked[String(d.id)] !== undefined ? { liked_count: prevLiked[String(d.id)] } : {}),
+      }))
       localStorage.removeItem(DASHBOARD_DIPS_KEY)
-      setDips(dipData)
-      localStorage.setItem(DASHBOARD_DIPS_KEY, JSON.stringify(dipData))
+      setDips(dipsWithPrev)
+      localStorage.setItem(DASHBOARD_DIPS_KEY, JSON.stringify(dipsWithPrev))
+
+      // Progress bar counts: spots filled (Live onward) and liked names (before Live)
+      const activeDips = (dipData as Dip[]).filter((d) => !d.archived)
+      const liveDipIds = activeDips.filter((d) => isDipLiveOrLater(d.stage || d.status)).map((d) => d.id)
+      const preLiveDipIds = activeDips.filter((d) => !isDipLiveOrLater(d.stage || d.status)).map((d) => d.id)
+
+      if (liveDipIds.length > 0 || preLiveDipIds.length > 0) {
+        void Promise.all([
+          liveDipIds.length > 0
+            ? supabase.from('spots').select('dip_id, player_name').in('dip_id', liveDipIds)
+            : Promise.resolve({ data: [], error: null }),
+          preLiveDipIds.length > 0
+            ? supabase.from('dip_likers').select('dip_id, unliked').in('dip_id', preLiveDipIds)
+            : Promise.resolve({ data: [], error: null }),
+        ]).then(([spotRes, likerRes]) => {
+          const filled: Record<string, number> = { ...prevFilled }
+          const liked: Record<string, number> = { ...prevLiked }
+          if (!spotRes.error && spotRes.data) {
+            for (const id of liveDipIds) filled[String(id)] = 0
+            for (const s of spotRes.data as { dip_id: string; player_name: string | null }[]) {
+              if (s.player_name) filled[String(s.dip_id)] = (filled[String(s.dip_id)] || 0) + 1
+            }
+          }
+          if (!likerRes.error && likerRes.data) {
+            for (const id of preLiveDipIds) liked[String(id)] = 0
+            for (const l of likerRes.data as { dip_id: string; unliked: boolean | null }[]) {
+              if (!l.unliked) liked[String(l.dip_id)] = (liked[String(l.dip_id)] || 0) + 1
+            }
+          }
+          const withCounts = (dipData as Dip[]).map((d) => ({
+            ...d,
+            ...(filled[String(d.id)] !== undefined ? { filled_spots: filled[String(d.id)] } : {}),
+            ...(liked[String(d.id)] !== undefined ? { liked_count: liked[String(d.id)] } : {}),
+          }))
+          setDips(withCounts)
+          localStorage.setItem(DASHBOARD_DIPS_KEY, JSON.stringify(withCounts))
+        })
+      }
     }
 
     if (!wrapError && wrapData) {
@@ -1129,6 +1193,7 @@ purchase_date: wrap.purchase_date || '',
 
   status: wrap.status,
   wrap_type: (wrap as any).wrap_type || '',
+  is_private: !!(wrap as any).is_private,
 })
 
     supabase
@@ -1583,6 +1648,8 @@ const wrapPayload = {
 
   is_favourite: wrapForm.is_favourite,
   wrap_type: wrapForm.wrap_type || null,
+  // Hidden from the logged-out public collection page
+  is_private: wrapForm.is_private,
 }
 
     let wrapId = wrapForm.id
@@ -2213,6 +2280,21 @@ function exportReportCsv() {
             </div>
 
                        <div className="space-y-2 xl:space-y-3">
+              {/* My Dips — own section, separate from notifications */}
+              <div className="rounded-2xl border border-purple-200 bg-purple-50/60 p-3 space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <h3 className="text-base font-bold text-gray-900">🎲 My Dips</h3>
+                  <button
+                    type="button"
+                    onClick={() => router.push('/create-dip')}
+                    className="min-h-[44px] shrink-0 rounded-xl bg-gradient-to-r from-pink-500 to-rose-500 px-3 text-sm font-bold text-white"
+                  >
+                    🎲 Start a Dip
+                  </button>
+                </div>
+                {dips.filter(d => !d.archived).length === 0 && (
+                  <p className="text-sm text-gray-500">No active dips. Tap Start a Dip, or use “+ Dip” on a wrap in your collection.</p>
+                )}
               {dips.filter(d => !d.archived).map((dip) => {
                 const linkedWrap = dip.wrap_id ? wrapsById[dip.wrap_id] : undefined
                 const imageUrl = getPrimaryImage(linkedWrap)
@@ -2223,16 +2305,19 @@ function exportReportCsv() {
                     key={dip.id}
                     type="button"
                     onClick={() => router.push(`/dips/${dip.id}`)}
-                    className="w-full cursor-pointer rounded-2xl border-2 border-purple-200 bg-purple-50 p-3 text-left shadow-sm transition hover:shadow-md"
+                    className="w-full cursor-pointer rounded-2xl border border-purple-200 bg-white p-3 text-left shadow-sm transition hover:shadow-md"
                   >
                     <div className="flex items-center justify-between gap-3 pointer-events-none">
-                      <img
-                        src={imageUrl}
-                        alt={dip.title}
-                        className="h-12 w-12 shrink-0 rounded-xl object-cover object-[center_30%]"
-                      />
+                      {linkedWrap ? (
+                        <img
+                          src={imageUrl}
+                          alt={dip.title}
+                          className="h-12 w-12 shrink-0 rounded-xl object-cover object-[center_30%]"
+                        />
+                      ) : (
+                        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-purple-100 text-xl">🎲</div>
+                      )}
                       <div className="min-w-0 flex-1">
-                        <p className="mb-1 text-xs font-bold text-purple-500 uppercase tracking-wide">🎲 My Dip</p>
                         <div className="flex items-start justify-between gap-2">
                           <h3 className="truncate text-sm font-bold text-gray-900">{dip.title}</h3>
                           <span className="rounded-full bg-pink-50 px-2 py-0.5 text-[10px] font-semibold text-pink-600">
@@ -2250,7 +2335,11 @@ function exportReportCsv() {
                   </button>
                 )
               })}
+              </div>
 
+              {notifications.length > 0 && (
+                <h3 className="pt-2 text-base font-bold text-gray-900">🔔 Updates</h3>
+              )}
               {notifications.map((notification) => {
                 const wrap = notification.wrap
                 const wrapName = wrap?.name || 'Wrap'
@@ -3402,6 +3491,17 @@ Record own currency for accurate reporting
     </label>
   </div>
 </div>
+
+{/* Hide this wrap from the logged-out public collection page */}
+<label className="flex min-h-[44px] items-center gap-2 text-sm font-medium text-gray-700">
+  <input
+    type="checkbox"
+    className="h-5 w-5"
+    checked={wrapForm.is_private}
+    onChange={(event) => updateWrapForm('is_private', event.target.checked)}
+  />
+  🔒 Hide from my public page
+</label>
 
 {wrapForm.for_sale && (
   <div className="space-y-3">

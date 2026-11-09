@@ -2,18 +2,38 @@
 
 import AppLayout from '@/app/components/AppLayout'
 import { supabase } from '@/lib/supabase'
+import { getCoverImage } from '@/lib/wrapCover'
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Suspense } from 'react'
 
-type Step = 'calculator' | 'setup' | 'confirm' | 'posts'
+type Step = 'wrap' | 'price' | 'details'
 
-const WRAP_EMOJIS = [
-  '💕','🌸','🍀','🩵','🌈','🎀','🍎','🌻','🩷','🦋',
-  '🌺','🍓','🌙','⭐','🌊','🦄','🌷','🍉','🧁','💜',
-  '🩶','🤍','🌿','🫐','🍋','🌼','🦢','🐚','🎠','🪷','🌅',
-  '🍒','🧞','🌋','🍇',
-]
+type CollectionWrap = {
+  id: string
+  name: string
+  brand: string | null
+  size: string | null
+  material: string | null
+  status: string | null
+  purchase_price: number | string | null
+  purchase_currency: string | null
+  wrap_images?: { id: string; image_url: string; is_primary?: boolean | null; sort_order: number }[]
+}
+
+const CREATE_WRAPS_KEY = 'dipdesk_create_dip_wraps'
+const DASHBOARD_WRAPS_KEY = 'dipdesk_dashboard_wraps'
+const RANDOM_ORG_THRESHOLD = 2000
+const CALC_CURRENCIES = ['AUD', 'USD', 'EUR', 'GBP', 'NZD', 'CAD', 'CHF', 'JPY', 'SEK', 'NOK', 'DKK', 'SGD', 'HKD']
+
+// Tap-to-show explainers
+const INFO: Record<string, string> = {
+  moneyGoal: 'How much you want to get back for the wrap, in USD. WrapApp adds a 20% buffer and $20 shipping, then suggests how many spots to sell.',
+  ls: 'Liker Specials (LS) are bundle prices for people who liked your interest post. LS 1 = 1 spot, LS 2 = 2 spots for one price, and so on up to LS 5. Likers can claim them in the first 24hrs of the live post.',
+  bookend: 'Bookend spots are the first and last numbers (spot 1 and the last spot). They’re priced a little lower than a main spot, each.',
+  stih: 'Enter the wrap size (e.g. Size 6). For ring slings, enter the STIH length instead.',
+  condition: 'EUC = excellent used condition. VVGUC = very very good used condition. VGUC = very good used condition. GUC = good used condition.',
+}
 
 function CreateDipInner() {
   const router = useRouter()
@@ -25,14 +45,39 @@ function CreateDipInner() {
   const wrapPriceFromUrl = searchParams.get('wrapPrice') || ''
   const wrapCurrencyFromUrl = searchParams.get('wrapCurrency') || 'AUD'
 
-  const [step, setStep] = useState<Step>('calculator')
+  const [step, setStep] = useState<Step>(wrapNameFromUrl ? 'price' : 'wrap')
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState('')
+  const [openInfo, setOpenInfo] = useState<string | null>(null)
 
-  // Wrap details
+  // Wrap
+  const [wrapId, setWrapId] = useState(wrapIdFromUrl)
   const [wrapName, setWrapName] = useState(wrapNameFromUrl)
   const [brand, setBrand] = useState(brandFromUrl)
-  const [wrapValue, setWrapValue] = useState('')
+  const [purchasePrice, setPurchasePrice] = useState(wrapPriceFromUrl)
+  const [purchaseCurrency, setPurchaseCurrency] = useState(wrapCurrencyFromUrl)
+  const [manualWrap, setManualWrap] = useState(false)
+  const [showPicker, setShowPicker] = useState(!wrapNameFromUrl)
+  const [collection, setCollection] = useState<CollectionWrap[]>([])
+
+  // Price
+  const [moneyGoal, setMoneyGoal] = useState('')
+  const [ticketPrice, setTicketPrice] = useState('30')
+  const [totalDips, setTotalDips] = useState('')
+  const [lsOverrides, setLsOverrides] = useState<Record<number, string>>({})
+  const [bePriceOverride, setBePriceOverride] = useState('')
+  const [showAdjust, setShowAdjust] = useState(false)
+
+  // Currency calculator (collapsed)
+  const [showConvert, setShowConvert] = useState(false)
+  const [calcAmount, setCalcAmount] = useState('')
+  const [calcFrom, setCalcFrom] = useState('USD')
+  const [calcTo, setCalcTo] = useState('AUD')
+  const [calcResult, setCalcResult] = useState<number | null>(null)
+  const [calcRate, setCalcRate] = useState<number | null>(null)
+  const [calcLoading, setCalcLoading] = useState(false)
+
+  // Details (sensible defaults)
   const [condition, setCondition] = useState('EUC')
   const [size, setSize] = useState('')
   const [blend, setBlend] = useState('')
@@ -41,32 +86,8 @@ function CreateDipInner() {
   const [smokeFree, setSmokeFree] = useState(true)
   const [petFree, setPetFree] = useState(true)
   const [feedbackHubLink, setFeedbackHubLink] = useState('')
-  const [facebookGroup, setFacebookGroup] = useState('')
 
-  // Calculator
-  const [ticketPrice, setTicketPrice] = useState('30')
-  const [totalDips, setTotalDips] = useState('')
-  const [lsOverrides, setLsOverrides] = useState<Record<number, string>>({})
-  const [bePriceOverride, setBePriceOverride] = useState('')
-
-  // Game
-  const [overrideGameSlots, setOverrideGameSlots] = useState(false)
-  const [customGameSlots, setCustomGameSlots] = useState('')
-  const [selectedEmojis, setSelectedEmojis] = useState<string[]>([])
-  const [gamePriceOverrides, setGamePriceOverrides] = useState<Record<number, string>>({})
-
-  // Currency calculator
-  const [calcAmount, setCalcAmount] = useState('')
-  const [calcFrom, setCalcFrom] = useState('USD')
-  const [calcTo, setCalcTo] = useState('AUD')
-  const [calcResult, setCalcResult] = useState<number | null>(null)
-  const [calcRate, setCalcRate] = useState<number | null>(null)
-  const [calcLoading, setCalcLoading] = useState(false)
-  const CALC_CURRENCIES = ['AUD', 'USD', 'EUR', 'GBP', 'NZD', 'CAD', 'CHF', 'JPY', 'SEK', 'NOK', 'DKK', 'SGD', 'HKD']
-
-  // UI
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
-  const [copied, setCopied] = useState<string | null>(null)
 
   async function handleConvert() {
     if (!calcAmount || !calcFrom || !calcTo || calcFrom === calcTo) return
@@ -81,32 +102,81 @@ function CreateDipInner() {
     setCalcLoading(false)
   }
 
+  // Store the collection; when arriving from a wrap, also fill its size/blend (once)
+  function applyCollection(list: CollectionWrap[]) {
+    setCollection(list)
+    if (!wrapIdFromUrl) return
+    const w = list.find(c => String(c.id) === String(wrapIdFromUrl))
+    if (!w) return
+    setSize(prev => prev || w.size || '')
+    setBlend(prev => prev || w.material || '')
+  }
+
+  // Collection tiles: cached first (own cache, else the Dashboard's), refreshed in the background
   useEffect(() => {
+    try {
+      const cached = localStorage.getItem(CREATE_WRAPS_KEY) || localStorage.getItem(DASHBOARD_WRAPS_KEY)
+      if (cached) applyCollection(JSON.parse(cached))
+    } catch {}
+
     supabase.auth.getUser().then(async ({ data: { user } }) => {
       if (!user) return
       setCurrentUserId(user.id)
-      const { data } = await supabase
-        .from('profiles')
-        .select('feedback_hub_link')
-        .eq('id', user.id)
-        .single()
-      if (data && (data as any).feedback_hub_link) {
-        setFeedbackHubLink((data as any).feedback_hub_link)
+      const [{ data: profile }, { data: wraps }] = await Promise.all([
+        supabase.from('profiles').select('feedback_hub_link').eq('id', user.id).single(),
+        supabase
+          .from('wraps')
+          .select('id, name, brand, size, material, status, purchase_price, purchase_currency, created_at, wrap_images(id, image_url, is_primary, sort_order)')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false })
+          .order('sort_order', { referencedTable: 'wrap_images' }),
+      ])
+      const hub = (profile as any)?.feedback_hub_link
+      if (hub) setFeedbackHubLink(prev => prev || hub)
+      if (wraps) {
+        applyCollection(wraps as CollectionWrap[])
+        try { localStorage.setItem(CREATE_WRAPS_KEY, JSON.stringify(wraps)) } catch {}
       }
     })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  const availableWraps = collection.filter(w => w.status !== 'departed')
+
+  function pickWrap(w: CollectionWrap) {
+    setWrapId(w.id)
+    setWrapName(w.name || '')
+    setBrand(w.brand || '')
+    setSize(w.size || '')
+    setBlend(w.material || '')
+    setPurchasePrice(w.purchase_price ? String(w.purchase_price) : '')
+    setPurchaseCurrency(w.purchase_currency || 'AUD')
+    setManualWrap(false)
+    setShowPicker(false)
+  }
+
+  function startManualWrap() {
+    setWrapId('')
+    setWrapName('')
+    setBrand('')
+    setSize('')
+    setBlend('')
+    setPurchasePrice('')
+    setManualWrap(true)
+    setShowPicker(false)
+  }
+
   // Core calculations
-  const numericValue = Number(wrapValue) || 0
+  const numericGoal = Number(moneyGoal) || 0
   const numericTicket = Number(ticketPrice) || 30
-  const targetAmount = Math.round(numericValue * 1.20 + 20)
-  const calculatedDips = numericValue > 0 ? Math.round(targetAmount / numericTicket) : 0
+  const targetAmount = Math.round(numericGoal * 1.20 + 20)
+  const calculatedDips = numericGoal > 0 ? Math.max(1, Math.round(targetAmount / numericTicket)) : 0
   const resolvedDips = Number(totalDips) > 0 ? Number(totalDips) : calculatedDips
   const likesRequired = Math.round(resolvedDips * 0.33)
   const totalValue = resolvedDips * numericTicket
-  const isOver2000 = totalValue > 2000
+  const isOver2000 = totalValue > RANDOM_ORG_THRESHOLD
+  const estimatedReturn = Math.max(0, totalValue - Math.round(numericGoal * 0.20) - 20)
 
-  // Pricing
   const mainPrice = numericTicket
   const bePriceCalculated = Math.round(numericTicket * 0.734)
   const bePrice = bePriceOverride !== '' ? Number(bePriceOverride) : bePriceCalculated
@@ -127,133 +197,13 @@ function CreateDipInner() {
     price: lsOverrides[i] !== undefined ? Number(lsOverrides[i]) : tier.price,
   }))
 
-  // Game slots
-  const calculatedGameSlots = Math.max(1, Math.round(resolvedDips / 6.67))
-  const resolvedGameSlots = overrideGameSlots && Number(customGameSlots) > 0 ? Number(customGameSlots) : calculatedGameSlots
-
-  const suggestedGamePrices = useMemo(() => [
-    { label: 'Standard', price: numericTicket },
-    { label: 'L1', price: Math.round(numericTicket * 0.9) },
-    { label: 'Bookend +$2', price: Math.round(numericTicket * 0.734) + 2 },
-    { label: 'Bookend', price: Math.round(numericTicket * 0.734) },
-    { label: 'Bookend -$2', price: Math.max(0, Math.round(numericTicket * 0.734) - 2) },
-    { label: 'Free', price: 0 },
-  ], [numericTicket])
-
-  const resolvedGamePrices = suggestedGamePrices.map((g, i) => ({
-    ...g,
-    price: gamePriceOverrides[i] !== undefined ? Number(gamePriceOverrides[i]) : g.price,
-  }))
-
-  const avgGamePrice = Math.round(
-    resolvedGamePrices.slice(0, resolvedGameSlots).reduce((sum, g) => sum + g.price, 0) / Math.max(1, resolvedGameSlots)
-  )
-
-  // Strings
-  const householdDisclosure = `${smokeFree ? 'Smoke free' : 'Not smoke free'} / ${petFree ? 'Pet free' : 'Not pet free'}`
-
-  const gameSection = selectedEmojis.length > 0
-    ? `\n🎮 Game Tickets (${resolvedGameSlots} slots — pick an emoji, price revealed when all sold!):\n${selectedEmojis.map((e) => e).join(' ')}\nAverage game price: $${avgGamePrice} USD\n`
-    : ''
-
-  const interestPostText = `#newinterestpost
-Interest Post
-
-Likes needed: ${likesRequired} (33% of ${resolvedDips} dips)
-
-${brand} ${wrapName}
-Size: ${size || '[add size]'}
-Blend: ${blend || '[add blend]'}
-Condition: ${condition}
-
-${resolvedDips} dips @ $${mainPrice} USD each = $${totalValue} USD total${isOver2000 ? ' + $4.95 draw fee' : ''}
-
-Liker Specials:
-- 1 spot = $${lsTiers[0].price}
-- 2 spots = $${lsTiers[1].price}
-- 3 spots = $${lsTiers[2].price}
-- 4 spots = $${lsTiers[3].price}
-- 5 spots = $${lsTiers[4].price}
-
-Bookend spots (1 & ${resolvedDips}): $${bePrice} each
-${gameSection}
-Shipping from ${shippingFrom}
-$${shippingCredit} USD shipping credit included
-
-${householdDisclosure}
-
-Feedback Hub: ${feedbackHubLink || '[add your Feedback Hub link]'}
-
-Comment "next" with your number/s or "random" to enter when live! 🎉`
-
-  const inQueuePostText = `#newinqueue
-
-${brand} ${wrapName} is in the queue and will be going live soon! 🦄
-
-Keep an eye out for the live post — comment "next" with your numbers to claim your spots!
-
-${householdDisclosure}
-Shipping from ${shippingFrom} | $${shippingCredit} USD shipping credit included`
-
-  const livePostText = `#newlivepost
-
-🎉 WE ARE LIVE! 🎉
-
-${brand} ${wrapName}
-Size: ${size || '[add size]'}
-Blend: ${blend || '[add blend]'}
-Condition: ${condition}
-
-${resolvedDips} dips @ $${mainPrice} USD each
-
-Liker Specials (claim in first 24 hrs!):
-- 1 spot = $${lsTiers[0].price}
-- 2 spots = $${lsTiers[1].price}
-- 3 spots = $${lsTiers[2].price}
-- 4 spots = $${lsTiers[3].price}
-- 5 spots = $${lsTiers[4].price}
-
-Bookend spots (1 & ${resolvedDips}): $${bePrice} each
-${gameSection}
-Comment "next" followed by your number/s or "random" 🎲
-Each claim must be a NEW comment (not a reply!)
-
-Spot list: [add Google Sheet link]
-
-Shipping from ${shippingFrom} | $${shippingCredit} USD credit included
-${householdDisclosure}
-Feedback Hub: ${feedbackHubLink || '[add your Feedback Hub link]'}
-
-Post SCREENSHOTS of payments in comments once paid! 📸`
-
-  const paymentPostText = `#fullandcollectingpayments
-
-💸 Payments are now open! 💸
-
-${brand} ${wrapName} is 80%+ full — time to pay for your spots!
-
-Please send payment via PayPal Friends & Family (NO COMMENTS, GIFTED only)
-Post a screenshot of your payment in the comments 📸
-
-International fees apply if sending outside your country.
-
-Thank you everyone — so close! 🦄`
-
-  const closedPostText = `🎉 FULL AND CLOSED! 🎉
-
-${brand} ${wrapName} is SOLD OUT! 🦄
-
-If you still owe payment, please pay ASAP — unpaid spots will be reallocated after 24 hours.
-
-Tagging everyone who needs to pay: [tag unpaid players]
-
-Thank you all so much! Drawing soon! 🎲`
+  const wrapStepDone = wrapName.trim().length > 0
+  const priceStepDone = resolvedDips >= 1
 
   async function handleCreate() {
-    if (!currentUserId) return
-    if (!wrapName.trim()) { setError('Enter wrap name'); return }
-    if (!wrapValue || numericValue <= 0) { setError('Enter wrap value'); return }
-    if (resolvedDips < 1) { setError('Number of dips must be at least 1'); return }
+    if (!currentUserId) { setError('Please log in again.'); return }
+    if (!wrapName.trim()) { setError('Enter the wrap name'); setStep('details'); return }
+    if (resolvedDips < 1) { setError('Set your money goal or number of spots'); setStep('price'); return }
 
     setCreating(true)
     setError('')
@@ -262,16 +212,16 @@ Thank you all so much! Drawing soon! 🎲`
       .from('dips')
       .insert([{
         user_id: currentUserId,
-        wrap_id: wrapIdFromUrl || null,
+        wrap_id: wrapId || null,
         title: `${brand} ${wrapName}`.trim(),
         brand: brand || null,
-        wrap_name: wrapName,
+        wrap_name: wrapName.trim(),
         total_spots: resolvedDips,
         price_per_spot: mainPrice,
         total_value: totalValue,
         likes_required: likesRequired,
         current_likes: 0,
-        payment_trigger_percent: 80,
+        payment_trigger_percent: 100,
         payment_window_hours: 24,
         shipping_timeframe_days: 3,
         is_ready_for_draw: false,
@@ -291,8 +241,8 @@ Thank you all so much! Drawing soon! 🎲`
         smoke_free: smokeFree,
         pet_free: petFree,
         feedback_hub_link: feedbackHubLink || null,
-        facebook_group: facebookGroup || null,
-        wrap_value: numericValue || null,
+        facebook_group: 'Chasing Unicorns',
+        wrap_value: numericGoal || null, // "Money goal" (column name is legacy)
       }])
       .select()
       .single()
@@ -304,7 +254,7 @@ Thank you all so much! Drawing soon! 🎲`
       return
     }
 
-    if (feedbackHubLink && currentUserId) {
+    if (feedbackHubLink) {
       await supabase
         .from('profiles')
         .update({ feedback_hub_link: feedbackHubLink } as any)
@@ -314,547 +264,418 @@ Thank you all so much! Drawing soon! 🎲`
     router.push(`/dips/${data.id}`)
   }
 
-  function copyText(text: string, key: string) {
-    navigator.clipboard.writeText(text).then(() => {
-      setCopied(key)
-      setTimeout(() => setCopied(null), 2000)
-    })
-  }
+  // ⓘ button + explainer text
+  const infoButton = (key: string, label: string) => (
+    <button
+      type="button"
+      onClick={() => setOpenInfo(openInfo === key ? null : key)}
+      aria-expanded={openInfo === key}
+      aria-label={`What is ${label}?`}
+      className="-my-2 inline-flex min-h-[44px] min-w-[44px] items-center justify-center text-base text-pink-600"
+    >
+      ⓘ
+    </button>
+  )
+  const infoText = (key: string) =>
+    openInfo === key ? (
+      <p className="rounded-xl bg-pink-50 px-3 py-2 text-sm text-pink-900">{INFO[key]}</p>
+    ) : null
 
-  function toggleEmoji(emoji: string) {
-    if (selectedEmojis.includes(emoji)) {
-      setSelectedEmojis(prev => prev.filter(e => e !== emoji))
-    } else if (selectedEmojis.length < resolvedGameSlots) {
-      setSelectedEmojis(prev => [...prev, emoji])
-    }
-  }
+  const inputClass = 'min-h-[44px] w-full rounded-xl border px-3 py-2.5 text-[16px] outline-none focus:border-pink-500'
+  const randomOrgReminder = isOver2000 ? (
+    <div className="rounded-xl bg-amber-50 border border-amber-300 px-4 py-3 text-sm font-semibold text-amber-900">
+      ⚠️ Over $2000 — the draw must use Random.org (+$4.95) and a Google Sheet is required.
+    </div>
+  ) : null
 
-  const steps: { key: Step; label: string }[] = [
-    { key: 'calculator', label: 'Calculator' },
-    { key: 'setup', label: 'Wrap Details' },
-    { key: 'confirm', label: 'Create' },
+  const steps: { key: Step; label: string; enabled: boolean }[] = [
+    { key: 'wrap', label: 'Wrap', enabled: true },
+    { key: 'price', label: 'Price', enabled: wrapStepDone },
+    { key: 'details', label: 'Details', enabled: wrapStepDone && priceStepDone },
   ]
 
   return (
     <AppLayout>
-      <div className="max-w-2xl mx-auto space-y-6 pb-10">
+      <div className="max-w-2xl mx-auto space-y-5 pb-28">
 
         <div className="flex items-center gap-3">
-          <button type="button" onClick={() => router.back()} className="rounded-xl border px-3 py-2 text-sm text-gray-600 hover:bg-gray-50">← Back</button>
-          <h1 className="text-xl font-bold text-gray-900">Create Dip</h1>
+          <button type="button" onClick={() => router.back()} className="min-h-[44px] rounded-xl border px-3 text-sm text-gray-600 hover:bg-gray-50">← Back</button>
+          <h1 className="text-xl font-bold text-gray-900">🎲 Start a Dip</h1>
         </div>
 
-        <div className="flex gap-1">
+        <div className="grid grid-cols-3 gap-1">
           {steps.map((s, i) => (
             <button
               key={s.key}
               type="button"
-              onClick={() => setStep(s.key)}
-              className={`flex-1 rounded-xl py-2 text-xs font-semibold transition ${step === s.key ? 'bg-gradient-to-r from-pink-500 to-rose-500 text-white' : 'bg-gray-100 text-gray-500'}`}
+              onClick={() => s.enabled && setStep(s.key)}
+              disabled={!s.enabled}
+              className={`min-h-[44px] rounded-xl text-sm font-semibold transition ${
+                step === s.key ? 'bg-gradient-to-r from-pink-500 to-rose-500 text-white' : 'bg-gray-100 text-gray-600 disabled:text-gray-400'
+              }`}
             >
               {i + 1}. {s.label}
             </button>
           ))}
         </div>
 
-        {/* STEP 1 — CALCULATOR */}
-        {step === 'calculator' && (
+        {/* STEP 1 — WRAP */}
+        {step === 'wrap' && (
           <div className="space-y-4">
-
-            {/* Inputs */}
-            <div className="rounded-2xl bg-gradient-to-r from-pink-50 to-rose-50 border border-pink-100 p-4 flex gap-3 items-start">
-                <span className="text-2xl">🎲</span>
-                <div>
-                  <p className="text-sm font-bold text-pink-700 mb-0.5">What is a Dip?</p>
-                  <p className="text-xs text-pink-600 leading-relaxed">A dip is a random number draw used in wrap Facebook groups to sell wraps fairly. WrapApp helps you manage your dip — track spots, run the draw, and share results. Payments and posts still happen through your Facebook group.</p>
-                </div>
+            {wrapName && !showPicker && !manualWrap ? (
+              <div className="rounded-2xl border-2 border-pink-200 bg-white p-4 shadow-sm">
+                <p className="text-xs font-bold uppercase tracking-wide text-pink-600">Dipping</p>
+                <p className="text-lg font-bold text-gray-900">{`${brand} ${wrapName}`.trim()}</p>
+                <button
+                  type="button"
+                  onClick={() => setShowPicker(true)}
+                  className="mt-1 min-h-[44px] text-sm font-semibold text-pink-700 underline"
+                >
+                  Choose a different wrap
+                </button>
               </div>
+            ) : manualWrap ? (
+              <div className="rounded-2xl border bg-white p-4 shadow-sm space-y-3">
+                <h2 className="font-bold text-gray-900">Wrap not in your collection</h2>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">Wrap name</label>
+                  <input value={wrapName} onChange={(e) => setWrapName(e.target.value)} placeholder="e.g. Shore Thang" className={inputClass} autoFocus />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">Brand <span className="font-normal text-gray-400">— optional</span></label>
+                  <input value={brand} onChange={(e) => setBrand(e.target.value)} placeholder="e.g. Luna Cocoon" className={inputClass} />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => { setManualWrap(false); setShowPicker(true) }}
+                  className="min-h-[44px] text-sm font-semibold text-pink-700 underline"
+                >
+                  Pick from my collection instead
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <h2 className="font-bold text-gray-900">Which wrap are you dipping?</h2>
+                {availableWraps.length === 0 ? (
+                  <p className="text-sm text-gray-500">No wraps in your collection yet.</p>
+                ) : (
+                  <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                    {availableWraps.map(w => {
+                      const img = getCoverImage(w.wrap_images)?.image_url
+                      const selected = String(w.id) === String(wrapId)
+                      return (
+                        <button
+                          key={w.id}
+                          type="button"
+                          onClick={() => pickWrap(w)}
+                          className={`overflow-hidden rounded-xl border-2 bg-white text-left ${selected ? 'border-pink-500' : 'border-transparent shadow-sm'}`}
+                        >
+                          {img ? (
+                            <img src={img} alt={w.name} loading="lazy" className="aspect-square w-full object-cover object-[center_30%]" />
+                          ) : (
+                            <div className="flex aspect-square w-full items-center justify-center bg-pink-50 text-2xl">🧣</div>
+                          )}
+                          <div className="p-1.5">
+                            <p className="line-clamp-2 text-xs font-semibold text-gray-900">{w.name}</p>
+                            {w.brand && <p className="line-clamp-1 text-[11px] text-gray-500">{w.brand}</p>}
+                          </div>
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+                <button
+                  type="button"
+                  onClick={startManualWrap}
+                  className="min-h-[48px] w-full rounded-xl border-2 border-dashed border-gray-300 bg-white text-sm font-semibold text-gray-700"
+                >
+                  ✏️ Not in my collection — type a name
+                </button>
+              </div>
+            )}
 
-            <div className="rounded-2xl border bg-white p-5 shadow-sm space-y-4">
+            <button
+              type="button"
+              onClick={() => setStep('price')}
+              disabled={!wrapStepDone}
+              className="min-h-[52px] w-full rounded-2xl bg-gradient-to-r from-pink-500 to-rose-500 text-base font-bold text-white disabled:opacity-40"
+            >
+              Next: Price →
+            </button>
+          </div>
+        )}
+
+        {/* STEP 2 — PRICE */}
+        {step === 'price' && (
+          <div className="space-y-4">
+            <div className="rounded-2xl border bg-white p-4 shadow-sm space-y-3">
               <div>
-                <h2 className="font-bold text-gray-900">💱 Currency Calculator</h2>
-                <p className="text-xs text-gray-500 mt-1">Live rates — helpful for international buyers.</p>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-gray-700">From</label>
-                  <select
-                    value={calcFrom}
-                    onChange={(e) => { setCalcFrom(e.target.value); setCalcResult(null) }}
-                    className="w-full rounded-xl border px-3 py-2.5 text-base outline-none focus:border-pink-500"
-                  >
-                    {CALC_CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
-                  </select>
+                <div className="flex items-center gap-1">
+                  <label htmlFor="moneyGoal" className="text-base font-bold text-gray-900">Money goal (USD)</label>
+                  {infoButton('moneyGoal', 'Money goal')}
                 </div>
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-gray-700">To</label>
-                  <select
-                    value={calcTo}
-                    onChange={(e) => { setCalcTo(e.target.value); setCalcResult(null) }}
-                    className="w-full rounded-xl border px-3 py-2.5 text-base outline-none focus:border-pink-500"
-                  >
-                    {CALC_CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">Amount</label>
+                {infoText('moneyGoal')}
+                {purchasePrice && (
+                  <p className="mb-2 mt-1 text-sm text-gray-600">📌 You paid {purchaseCurrency} ${purchasePrice} for this wrap.</p>
+                )}
                 <input
+                  id="moneyGoal"
                   type="number"
-                  value={calcAmount}
-                  onChange={(e) => { setCalcAmount(e.target.value); setCalcResult(null) }}
-                  placeholder="e.g. 30"
-                  className="w-full rounded-xl border px-3 py-2.5 text-base outline-none focus:border-pink-500"
+                  inputMode="decimal"
+                  value={moneyGoal}
+                  onChange={(e) => setMoneyGoal(e.target.value)}
+                  placeholder="e.g. 800"
+                  className={inputClass}
                 />
               </div>
+
+              {resolvedDips > 0 && (
+                <div className="rounded-xl bg-pink-50 p-3 space-y-1">
+                  <p className="text-base font-bold text-gray-900">
+                    Suggested: {resolvedDips} spots × ${mainPrice} = ${totalValue} USD
+                  </p>
+                  <p className="text-sm text-gray-700">Likes target: {likesRequired}</p>
+                  {numericGoal > 0 && <p className="text-sm text-gray-700">Estimated return: <span className="font-semibold text-green-700">${estimatedReturn} USD</span></p>}
+                </div>
+              )}
+
+              {randomOrgReminder}
 
               <button
                 type="button"
-                onClick={handleConvert}
-                disabled={calcLoading || !calcAmount}
-                className="w-full rounded-xl bg-gradient-to-r from-pink-500 to-rose-500 py-2.5 text-sm font-bold text-white disabled:opacity-40"
+                onClick={() => setShowAdjust(v => !v)}
+                aria-expanded={showAdjust}
+                className="flex min-h-[48px] w-full items-center justify-between rounded-xl border px-3 text-sm font-semibold text-gray-800"
               >
-                {calcLoading ? 'Converting...' : 'Convert'}
+                Adjust prices
+                <span className="text-gray-400">{showAdjust ? '▴' : '▾'}</span>
               </button>
 
-              {calcResult !== null && calcRate !== null && (
-                <div className="rounded-xl bg-pink-50 p-4 text-center">
-                  <p className="text-2xl font-bold text-pink-700">
-                    {new Intl.NumberFormat('en-AU', { style: 'currency', currency: calcTo, maximumFractionDigits: 2 }).format(calcResult)}
-                  </p>
-                  <p className="text-xs text-gray-400 mt-1">
-                    1 {calcFrom} = {calcRate.toFixed(4)} {calcTo}
-                  </p>
-                </div>
-              )}
-            </div>
-
-            <div className="rounded-2xl border bg-white p-5 shadow-sm space-y-4">
-              <h2 className="font-bold text-gray-900">Dip Calculator</h2>
-              <p className="text-xs text-gray-500">Enter your wrap value and ticket price to get suggested pricing.</p>
-
-              <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">Money Goal (USD)</label>
-                {wrapPriceFromUrl && (
-                  <div className="mb-2 rounded-xl bg-pink-50 px-3 py-2 text-xs text-pink-700 font-medium">
-                    📌 Your purchase price was {wrapCurrencyFromUrl} ${wrapPriceFromUrl} — use this as a reference for your goal.
+              {showAdjust && (
+                <div className="space-y-4">
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-700">Main ticket price (USD)</label>
+                    <input type="number" inputMode="decimal" value={ticketPrice} onChange={(e) => setTicketPrice(e.target.value)} placeholder="30" className={inputClass} />
+                    <p className="mt-1 text-xs text-gray-500">Changing this recalculates the LS and bookend prices.</p>
                   </div>
-                )}
-                <input
-                  type="number"
-                  value={wrapValue}
-                  onChange={(e) => setWrapValue(e.target.value)}
-                  placeholder="e.g. 800"
-                  className="w-full rounded-xl border px-3 py-2.5 text-base outline-none focus:border-pink-500"
-                />
-                <p className="mt-1 text-xs text-gray-400">How much do you want to recover? We'll add a 20% buffer and $20 shipping to calculate your dips.</p>
-              </div>
 
-              <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">Main Ticket Price (USD)</label>
-                <input
-                  type="number"
-                  value={ticketPrice}
-                  onChange={(e) => setTicketPrice(e.target.value)}
-                  placeholder="30"
-                  className="w-full rounded-xl border px-3 py-2.5 text-base outline-none focus:border-pink-500"
-                />
-                <p className="mt-1 text-xs text-gray-400">Adjusting this recalculates all LS tiers, bookend, and total value automatically.</p>
-              </div>
-
-              {numericValue > 0 && (
-                <div className="rounded-xl bg-pink-50 p-4 space-y-2 text-sm">
-                  <div className="flex justify-between border-t pt-2">
-                    <span className="text-gray-900">Likes needed</span>
-                    <span className="font-bold text-gray-900">{likesRequired}</span>
-                  </div>
-                  <div className="flex items-center justify-between border-t pt-2 gap-3">
-                    <span className="text-gray-600 font-semibold text-sm">Number of Dips</span>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-sm font-medium text-gray-700">Number of spots</span>
                     <div className="flex items-center gap-2">
                       <button
                         type="button"
-                        onClick={() => setTotalDips(String(Math.max(1, (Number(totalDips) || calculatedDips) - 1)))}
-                        className="h-9 w-9 rounded-xl border bg-white text-lg font-bold text-gray-700 flex items-center justify-center hover:bg-gray-50"
+                        onClick={() => setTotalDips(String(Math.max(1, (Number(totalDips) || calculatedDips || 1) - 1)))}
+                        className="h-11 w-11 rounded-xl border bg-white text-lg font-bold text-gray-700"
+                        aria-label="Fewer spots"
                       >
                         −
                       </button>
-                      <span className="w-12 text-center text-base font-bold text-gray-900">
-                        {totalDips !== '' ? totalDips : calculatedDips}
-                      </span>
+                      <span className="w-12 text-center text-base font-bold text-gray-900">{resolvedDips}</span>
                       <button
                         type="button"
-                        onClick={() => setTotalDips(String((Number(totalDips) || calculatedDips) + 1))}
-                        className="h-9 w-9 rounded-xl border bg-white text-lg font-bold text-gray-700 flex items-center justify-center hover:bg-gray-50"
+                        onClick={() => setTotalDips(String((Number(totalDips) || calculatedDips || 0) + 1))}
+                        className="h-11 w-11 rounded-xl border bg-white text-lg font-bold text-gray-700"
+                        aria-label="More spots"
                       >
                         +
                       </button>
                     </div>
                   </div>
 
-                  <div className="flex justify-between border-t pt-2">
-                    <span className="text-gray-600 font-semibold">Estimated Return</span>
-                    <span className="font-bold text-green-600">${Math.max(0, totalValue - Math.round(numericValue * 0.20) - 20)} USD</span>
-                  </div>
-                  <p className="text-xs text-gray-400">Adjust number of dips to change your return</p>
-                  {isOver2000 && (
-                    <div className="rounded-lg bg-amber-100 px-3 py-2 text-xs font-semibold text-amber-800 mt-2">
-                      ⚠️ Value over $2000 — Random.org paid draw (+$4.95) and Google Sheet mandatory
+                  <div className="rounded-xl bg-gray-50 p-3 space-y-2">
+                    <div className="flex items-center gap-1">
+                      <p className="text-sm font-semibold text-gray-700">Liker Specials (LS)</p>
+                      {infoButton('ls', 'Liker Specials')}
                     </div>
-                  )}
-                </div>
-              )}
-
-              
-            </div>
-
-            {/* Pricing breakdown */}
-            {numericValue > 0 && (
-              <div className="rounded-2xl border bg-white p-5 shadow-sm space-y-3">
-                <h3 className="font-bold text-gray-900">Suggested Pricing</h3>
-                <p className="text-xs text-gray-500">Suggestions only — use whatever prices you like.</p>
-
-                <div className="rounded-xl bg-gray-50 p-3 space-y-2">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-2">Liker Specials (LS)</p>
-                  {lsTiers.map((tier, i) => (
-                    <div key={tier.spots} className="flex items-center justify-between gap-3 text-sm">
-                      <span className="text-gray-600 w-16 shrink-0">{tier.spots} spot{tier.spots > 1 ? 's' : ''}</span>
-                      <div className="flex items-center gap-1 ml-auto">
-                        <span className="text-gray-400 text-xs">$</span>
-                        <input
-                          type="number"
-                          value={lsOverrides[i] !== undefined ? lsOverrides[i] : tier.price}
-                          onChange={(e) => setLsOverrides(prev => ({ ...prev, [i]: e.target.value }))}
-                          className="w-20 rounded-lg border px-2 py-1 text-sm font-semibold text-center outline-none focus:border-pink-500 bg-white"
-                        />
-                        <span className="text-gray-400 text-xs">USD</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="rounded-xl bg-gray-50 p-3 space-y-2">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-2">Standard</p>
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-900">Main (per spot)</span>
-                    <span className="font-semibold text-gray-900">${mainPrice} USD</span>
-                  </div>
-                  <div className="flex items-center justify-between gap-3 text-sm">
-                    <div className="shrink-0">
-                      <span className="text-gray-600">Bookend (spots 1 & {resolvedDips})</span>
-                      <p className="text-xs text-gray-400">price is per spot</p>
-                    </div>
-                    <div className="flex items-center gap-1 ml-auto">
-                      <span className="text-gray-400 text-xs">$</span>
-                      <input
-                        type="number"
-                        value={bePriceOverride !== '' ? bePriceOverride : bePriceCalculated}
-                        onChange={(e) => setBePriceOverride(e.target.value)}
-                        className="w-20 rounded-lg border px-2 py-1 text-sm font-semibold text-center outline-none focus:border-pink-500 bg-white"
-                      />
-                      <span className="text-gray-400 text-xs">USD</span>
-                    </div>
-                  </div>
-                </div>
-
-                <p className="text-xs text-gray-400">💡 Prices auto-calculate from ticket price. Edit any price manually if needed.</p>
-              </div>
-            )}
-
-            {/* Game slots — shown in dip management once live */}
-            {false && numericValue > 0 && (
-              <div className="rounded-2xl border bg-white p-5 shadow-sm space-y-4">
-                <div>
-                  <h3 className="font-bold text-gray-900">Game Slots</h3>
-                  <p className="text-xs text-gray-500 mt-1">Players pick an emoji without knowing the price — revealed when all game tickets are sold. Helps close the dip faster.</p>
-                </div>
-
-                <div className="rounded-xl bg-pink-50 p-3 space-y-1 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Suggested game slots</span>
-                    <span className="font-bold">{calculatedGameSlots}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Average game ticket price</span>
-                    <span className="font-bold">${avgGamePrice} USD</span>
-                  </div>
-                </div>
-
-                <div>
-                  <div className="flex items-center gap-2 mb-2">
-                    <input id="overrideGame" type="checkbox" checked={overrideGameSlots} onChange={(e) => setOverrideGameSlots(e.target.checked)} />
-                    <label htmlFor="overrideGame" className="text-sm font-medium text-gray-700">Override number of game slots</label>
-                  </div>
-                  {overrideGameSlots && (
-                    <input
-                      type="number"
-                      value={customGameSlots}
-                      onChange={(e) => setCustomGameSlots(e.target.value)}
-                      placeholder="Enter custom game slots"
-                      className="w-full rounded-xl border px-3 py-2.5 text-base outline-none focus:border-pink-500"
-                    />
-                  )}
-                </div>
-
-                {/* Game price tiers */}
-                <div>
-                  <p className="text-sm font-semibold text-gray-700 mb-1">Game Prices</p>
-                  <p className="text-xs text-gray-400 mb-3">Each slot gets one price — hidden until all are sold. Adjust any price.</p>
-                  <div className="space-y-2">
-                    {suggestedGamePrices.slice(0, resolvedGameSlots).map((g, i) => (
-                      <div key={i} className="flex items-center gap-3">
-                        <span className="text-xs text-gray-500 w-28 shrink-0">{g.label}</span>
-                        <div className="relative flex-1">
-                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
+                    {infoText('ls')}
+                    {lsTiers.map((tier, i) => (
+                      <div key={tier.spots} className="flex items-center justify-between gap-3 text-sm">
+                        <span className="text-gray-700">LS {tier.spots} ({tier.spots} spot{tier.spots > 1 ? 's' : ''})</span>
+                        <div className="flex items-center gap-1">
+                          <span className="text-gray-400">$</span>
                           <input
                             type="number"
-                            value={gamePriceOverrides[i] !== undefined ? gamePriceOverrides[i] : g.price}
-                            onChange={(e) => setGamePriceOverrides(prev => ({ ...prev, [i]: e.target.value }))}
-                            className="w-full rounded-xl border pl-6 pr-3 py-2 text-sm outline-none focus:border-pink-500"
+                            inputMode="decimal"
+                            value={lsOverrides[i] !== undefined ? lsOverrides[i] : tier.price}
+                            onChange={(e) => setLsOverrides(prev => ({ ...prev, [i]: e.target.value }))}
+                            className="min-h-[44px] w-24 rounded-lg border bg-white px-2 text-center text-[16px] font-semibold outline-none focus:border-pink-500"
                           />
                         </div>
-                        <span className="text-xs text-gray-400 shrink-0">USD</span>
                       </div>
                     ))}
                   </div>
-                </div>
 
-                {/* Emoji picker */}
-                <div>
-                  <p className="text-sm font-semibold text-gray-700 mb-1">Choose Game Emojis</p>
-                  <p className="text-xs text-gray-400 mb-3">
-                    Select {resolvedGameSlots} emojis — one per game slot ({selectedEmojis.length}/{resolvedGameSlots} selected)
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    {WRAP_EMOJIS.map((emoji) => {
-                      const isSelected = selectedEmojis.includes(emoji)
-                      const isFull = selectedEmojis.length >= resolvedGameSlots && !isSelected
-                      return (
-                        <button
-                          key={emoji}
-                          type="button"
-                          onClick={() => toggleEmoji(emoji)}
-                          disabled={isFull}
-                          className={`h-10 w-10 rounded-xl text-xl transition border ${
-                            isSelected
-                              ? 'bg-pink-100 border-pink-400 scale-110 shadow-sm'
-                              : isFull
-                              ? 'bg-gray-50 border-gray-100 opacity-30'
-                              : 'bg-gray-50 border-gray-200 hover:border-pink-300'
-                          }`}
-                        >
-                          {emoji}
-                        </button>
-                      )
-                    })}
-                  </div>
-
-                  {selectedEmojis.length > 0 && (
-                    <div className="mt-4 rounded-xl bg-gray-50 p-3">
-                      <p className="text-xs font-semibold text-gray-500 mb-2">Your game ({selectedEmojis.length} slots):</p>
-                      <div className="flex flex-wrap gap-3">
-                        {selectedEmojis.map((emoji, i) => {
-                          const price = gamePriceOverrides[i] !== undefined
-                            ? Number(gamePriceOverrides[i])
-                            : suggestedGamePrices[i]?.price ?? 0
-                          const label = suggestedGamePrices[i]?.label ?? ''
-                          return (
-                            <div key={i} className="flex flex-col items-center gap-0.5 rounded-xl bg-white border p-2 min-w-[52px] text-center">
-                              <span className="text-2xl">{emoji}</span>
-                              <span className="text-[10px] font-semibold text-gray-700">${price}</span>
-                              <span className="text-[9px] text-gray-400">{label}</span>
-                            </div>
-                          )
-                        })}
-                      </div>
+                  <div className="rounded-xl bg-gray-50 p-3 space-y-2">
+                    <div className="flex items-center gap-1">
+                      <p className="text-sm font-semibold text-gray-700">Bookend (spots 1 & {resolvedDips || 'last'}), each</p>
+                      {infoButton('bookend', 'Bookend')}
                     </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            <button
-              type="button"
-              onClick={() => setStep('setup')}
-              disabled={!wrapValue || resolvedDips < 1}
-              className="w-full rounded-2xl bg-gradient-to-r from-pink-500 to-rose-500 py-3.5 text-sm font-bold text-white disabled:opacity-40"
-            >
-              Next: Wrap Details →
-            </button>
-          </div>
-        )}
-
-        {/* STEP 2 — WRAP DETAILS */}
-        {step === 'setup' && (
-          <div className="space-y-4">
-            <div className="rounded-2xl border bg-white p-5 shadow-sm space-y-4">
-              <h2 className="font-bold text-gray-900">Wrap Details</h2>
-              <p className="text-xs text-gray-500">These details will be used to generate your Facebook posts.</p>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div className="col-span-2">
-                  <label className="mb-1 block text-sm font-medium text-gray-700">Wrap Name</label>
-                  <input value={wrapName} onChange={(e) => setWrapName(e.target.value)} placeholder="e.g. Shore Thang" className="w-full rounded-xl border px-3 py-2.5 text-base outline-none focus:border-pink-500" />
-                </div>
-                <div className="col-span-2">
-                  <label className="mb-1 block text-sm font-medium text-gray-700">Brand</label>
-                  <input value={brand} onChange={(e) => setBrand(e.target.value)} placeholder="e.g. Luna Cocoon" className="w-full rounded-xl border px-3 py-2.5 text-base outline-none focus:border-pink-500" />
-                </div>
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-gray-700">Size / STIH</label>
-                  <input value={size} onChange={(e) => setSize(e.target.value)} placeholder="e.g. Size 6" className="w-full rounded-xl border px-3 py-2.5 text-base outline-none focus:border-pink-500" />
-                </div>
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-gray-700">Blend</label>
-                  <input value={blend} onChange={(e) => setBlend(e.target.value)} placeholder="e.g. 100% cotton" className="w-full rounded-xl border px-3 py-2.5 text-base outline-none focus:border-pink-500" />
-                </div>
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-gray-700">Condition</label>
-                  <select value={condition} onChange={(e) => setCondition(e.target.value)} className="w-full rounded-xl border px-3 py-2.5 text-base outline-none focus:border-pink-500">
-                    <option value="VVGUC">VVGUC</option>
-                    <option value="EUC">EUC</option>
-                    <option value="VGUC">VGUC</option>
-                    <option value="GUC">GUC</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-gray-700">Shipping Credit (USD)</label>
-                  <input type="number" value={shippingCredit} onChange={(e) => setShippingCredit(e.target.value)} className="w-full rounded-xl border px-3 py-2.5 text-base outline-none focus:border-pink-500" />
-                </div>
-                <div className="col-span-2">
-                  <label className="mb-1 block text-sm font-medium text-gray-700">Shipping From</label>
-                  <input value={shippingFrom} onChange={(e) => setShippingFrom(e.target.value)} placeholder="e.g. Australia" className="w-full rounded-xl border px-3 py-2.5 text-base outline-none focus:border-pink-500" />
-                </div>
-                <div className="col-span-2">
-                  <label className="mb-1 block text-sm font-medium text-gray-700">Facebook Group Name</label>
-                  <input value={facebookGroup} onChange={(e) => setFacebookGroup(e.target.value)} placeholder="e.g. Chasing Unicorns" className="w-full rounded-xl border px-3 py-2.5 text-base outline-none focus:border-pink-500" />
-                  <p className="mt-1 text-xs text-gray-400">The Facebook group where you're running this dip.</p>
-                </div>
-                <div className="col-span-2">
-                  <label className="mb-1 block text-sm font-medium text-gray-700">Babywearing Feedback Hub Link</label>
-                  <input value={feedbackHubLink} onChange={(e) => setFeedbackHubLink(e.target.value)} placeholder="https://..." className="w-full rounded-xl border px-3 py-2.5 text-base outline-none focus:border-pink-500" />
-                  <p className="mt-1 text-xs text-gray-400">Required by most group rules. Saved to your profile for future dips.</p>
-                </div>
-              </div>
-
-              <div className="flex gap-4">
-                <div className="flex items-center gap-2">
-                  <input id="smoke" type="checkbox" checked={smokeFree} onChange={(e) => setSmokeFree(e.target.checked)} />
-                  <label htmlFor="smoke" className="text-sm font-medium text-gray-700">Smoke free</label>
-                </div>
-                <div className="flex items-center gap-2">
-                  <input id="pet" type="checkbox" checked={petFree} onChange={(e) => setPetFree(e.target.checked)} />
-                  <label htmlFor="pet" className="text-sm font-medium text-gray-700">Pet free</label>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex gap-3">
-              <button type="button" onClick={() => setStep('calculator')} className="flex-1 rounded-2xl border py-3.5 text-sm font-semibold text-gray-700">← Back</button>
-              <button type="button" onClick={() => setStep('confirm')} disabled={!wrapName.trim()} className="flex-1 rounded-2xl bg-gradient-to-r from-pink-500 to-rose-500 py-3.5 text-sm font-bold text-white disabled:opacity-40">Next: Confirm →</button>
-            </div>
-          </div>
-        )}
-
-        {/* STEP 3 — FACEBOOK POSTS — moved to dip management */}
-        {false && step === 'posts' && (
-          <div className="space-y-4">
-            <div className="rounded-2xl border bg-white p-4 shadow-sm space-y-4">
-              <p className="text-xs text-gray-500">Copy each post at the right time in your dip cycle.</p>
-
-              {[
-                { key: 'interest', stage: '1. Interest Post', when: 'Post first to gauge interest and collect likes', text: interestPostText, tip: '30% likes needed within 48hrs, 50% within 72hrs, 100% within 7 days' },
-                { key: 'queue', stage: '2. In Queue Post', when: 'Post after CU admin approves your interest post', text: inQueuePostText, tip: 'Tag Chasing Unicorn Admins page when requesting to go live' },
-                { key: 'live', stage: '3. Live Post', when: 'Post when dip goes live — add Google Sheet link first', text: livePostText, tip: 'Likers should claim within first 24 hours as a courtesy' },
-                { key: 'payment', stage: '4. Payment Post', when: 'Post when dip reaches 80% full', text: paymentPostText, tip: 'Tag all players who need to pay. They have 24 hours.' },
-                { key: 'closed', stage: '5. Closed Post', when: 'Post when all spots are filled', text: closedPostText, tip: 'Tag the CU Admins page to request your draw' },
-              ].map((post) => (
-                <div key={post.key} className="border-b last:border-0 pb-4 last:pb-0">
-                  <div className="flex items-start justify-between gap-2 mb-2">
-                    <div>
-                      <p className="text-sm font-bold text-gray-900">{post.stage}</p>
-                      <p className="text-xs text-gray-500">{post.when}</p>
+                    {infoText('bookend')}
+                    <div className="flex items-center justify-end gap-1">
+                      <span className="text-gray-400">$</span>
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        value={bePriceOverride !== '' ? bePriceOverride : bePriceCalculated}
+                        onChange={(e) => setBePriceOverride(e.target.value)}
+                        className="min-h-[44px] w-24 rounded-lg border bg-white px-2 text-center text-[16px] font-semibold outline-none focus:border-pink-500"
+                      />
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => copyText(post.text, post.key)}
-                      className={`shrink-0 rounded-xl px-3 py-1.5 text-xs font-semibold transition ${copied === post.key ? 'bg-green-500 text-white' : 'bg-pink-500 text-white'}`}
-                    >
-                      {copied === post.key ? '✓ Copied!' : 'Copy'}
-                    </button>
                   </div>
-                  <div className="rounded-xl bg-gray-50 px-3 py-2 text-xs text-gray-600 whitespace-pre-wrap max-h-28 overflow-y-auto">
-                    {post.text}
-                  </div>
-                  <p className="mt-1 text-xs text-amber-600">💡 {post.tip}</p>
-                </div>
-              ))}
-            </div>
-
-            <div className="rounded-2xl border bg-white p-4 shadow-sm">
-              <h3 className="text-sm font-bold text-gray-900 mb-2">CU Hashtags</h3>
-              <div className="flex flex-wrap gap-2">
-                {['#newinterestpost', '#newinqueue', '#newlivepost', '#fullandcollectingpayments'].map((tag) => (
-                  <button
-                    key={tag}
-                    type="button"
-                    onClick={() => copyText(tag, tag)}
-                    className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${copied === tag ? 'bg-green-500 text-white border-green-500' : 'border-gray-200 text-gray-600 hover:border-pink-300'}`}
-                  >
-                    {copied === tag ? '✓ Copied!' : tag}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="flex gap-3">
-              <button type="button" onClick={() => setStep('setup')} className="flex-1 rounded-2xl border py-3.5 text-sm font-semibold text-gray-700">← Back</button>
-              <button type="button" onClick={() => setStep('confirm')} className="flex-1 rounded-2xl bg-gradient-to-r from-pink-500 to-rose-500 py-3.5 text-sm font-bold text-white">Next: Create Dip →</button>
-            </div>
-          </div>
-        )}
-
-        {/* STEP 4 — CONFIRM */}
-        {step === 'confirm' && (
-          <div className="space-y-4">
-            <div className="rounded-2xl border bg-white p-5 shadow-sm space-y-3">
-              <h2 className="font-bold text-gray-900">Confirm & Create</h2>
-              <p className="text-xs text-gray-500">Review before creating.</p>
-
-              <div className="space-y-2 text-sm">
-                {[
-                  ['Wrap', `${brand} ${wrapName}`],
-                  ['Condition', condition],
-                  ['Wrap value', `$${numericValue} USD`],
-                  ['Total dips', resolvedDips],
-                  ['Main ticket price', `$${mainPrice} USD`],
-                  ['Total value', `$${totalValue} USD`],
-                  ['Likes needed', likesRequired],
-                  ['LS prices', resolvedLsTiers.map(t => `$${t.price}`).join(' / ')],
-                  ['Bookend price', `$${bePrice} USD`],
-                  ['Shipping credit', `$${shippingCredit} USD`],
-                  ['Household', householdDisclosure],
-                ].map(([label, value]) => (
-                  <div key={String(label)} className="flex justify-between py-1 border-b last:border-0">
-                    <span className="text-gray-500">{label}</span>
-                    <span className="font-semibold text-gray-900 text-right max-w-[60%]">{value}</span>
-                  </div>
-                ))}
-              </div>
-
-              {isOver2000 && (
-                <div className="rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 text-xs text-amber-800">
-                  ⚠️ Value over $2000 — add $4.95 for Random.org paid draw. Google Sheet mandatory.
                 </div>
               )}
 
-              {error && <p className="rounded-xl bg-red-50 px-4 py-2 text-sm text-red-600">{error}</p>}
+              <button
+                type="button"
+                onClick={() => setShowConvert(v => !v)}
+                aria-expanded={showConvert}
+                className="flex min-h-[48px] w-full items-center justify-between rounded-xl border px-3 text-sm font-semibold text-gray-800"
+              >
+                💱 Convert currency
+                <span className="text-gray-400">{showConvert ? '▴' : '▾'}</span>
+              </button>
+
+              {showConvert && (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-gray-700">From</label>
+                      <select value={calcFrom} onChange={(e) => { setCalcFrom(e.target.value); setCalcResult(null) }} className={inputClass}>
+                        {CALC_CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-gray-700">To</label>
+                      <select value={calcTo} onChange={(e) => { setCalcTo(e.target.value); setCalcResult(null) }} className={inputClass}>
+                        {CALC_CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    value={calcAmount}
+                    onChange={(e) => { setCalcAmount(e.target.value); setCalcResult(null) }}
+                    placeholder="Amount, e.g. 30"
+                    className={inputClass}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleConvert}
+                    disabled={calcLoading || !calcAmount}
+                    className="min-h-[44px] w-full rounded-xl border-2 border-pink-300 text-sm font-bold text-pink-700 disabled:opacity-40"
+                  >
+                    {calcLoading ? 'Converting...' : 'Convert'}
+                  </button>
+                  {calcResult !== null && calcRate !== null && (
+                    <div className="rounded-xl bg-pink-50 p-3 text-center">
+                      <p className="text-2xl font-bold text-pink-700">
+                        {new Intl.NumberFormat('en-AU', { style: 'currency', currency: calcTo, maximumFractionDigits: 2 }).format(calcResult)}
+                      </p>
+                      <p className="mt-1 text-xs text-gray-500">1 {calcFrom} = {calcRate.toFixed(4)} {calcTo}</p>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="flex gap-3">
-              <button type="button" onClick={() => setStep('setup')} className="flex-1 rounded-2xl border py-3.5 text-sm font-semibold text-gray-700">← Back</button>
-              <button type="button" onClick={handleCreate} disabled={creating} className="flex-1 rounded-2xl bg-gradient-to-r from-pink-500 to-rose-500 py-3.5 text-sm font-bold text-white disabled:opacity-50">
+              <button type="button" onClick={() => setStep('wrap')} className="min-h-[52px] flex-1 rounded-2xl border text-sm font-semibold text-gray-700">← Back</button>
+              <button
+                type="button"
+                onClick={() => setStep('details')}
+                disabled={!priceStepDone}
+                className="min-h-[52px] flex-[2] rounded-2xl bg-gradient-to-r from-pink-500 to-rose-500 text-base font-bold text-white disabled:opacity-40"
+              >
+                Next: Details →
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* STEP 3 — DETAILS */}
+        {step === 'details' && (
+          <div className="space-y-4">
+            <div className="rounded-2xl border bg-white p-4 shadow-sm space-y-3">
+              <p className="text-sm text-gray-600">Only the wrap name is required — everything else is optional and used in your posts.</p>
+
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700">Wrap name <span className="text-rose-600">*</span></label>
+                <input value={wrapName} onChange={(e) => setWrapName(e.target.value)} placeholder="e.g. Shore Thang" className={inputClass} />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700">Brand</label>
+                <input value={brand} onChange={(e) => setBrand(e.target.value)} placeholder="e.g. Luna Cocoon" className={inputClass} />
+              </div>
+              <div>
+                <div className="flex items-center gap-1">
+                  <label className="text-sm font-medium text-gray-700">Size / STIH</label>
+                  {infoButton('stih', 'Size / STIH')}
+                </div>
+                {infoText('stih')}
+                <input value={size} onChange={(e) => setSize(e.target.value)} placeholder="e.g. Size 6" className={inputClass} />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700">Blend</label>
+                <input value={blend} onChange={(e) => setBlend(e.target.value)} placeholder="e.g. 100% cotton" className={inputClass} />
+              </div>
+              <div>
+                <div className="flex items-center gap-1">
+                  <label className="text-sm font-medium text-gray-700">Condition</label>
+                  {infoButton('condition', 'the condition codes')}
+                </div>
+                {infoText('condition')}
+                <select value={condition} onChange={(e) => setCondition(e.target.value)} className={inputClass}>
+                  <option value="EUC">EUC — excellent</option>
+                  <option value="VVGUC">VVGUC — very very good</option>
+                  <option value="VGUC">VGUC — very good</option>
+                  <option value="GUC">GUC — good</option>
+                </select>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">Shipping credit (USD)</label>
+                  <input type="number" inputMode="decimal" value={shippingCredit} onChange={(e) => setShippingCredit(e.target.value)} className={inputClass} />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">Shipping from</label>
+                  <input value={shippingFrom} onChange={(e) => setShippingFrom(e.target.value)} placeholder="e.g. Australia" className={inputClass} />
+                </div>
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700">Babywearing Feedback Hub link</label>
+                <input value={feedbackHubLink} onChange={(e) => setFeedbackHubLink(e.target.value)} placeholder="https://..." className={inputClass} />
+                <p className="mt-1 text-xs text-gray-500">Required by CU rules. Saved to your profile for future dips.</p>
+              </div>
+              <div className="flex flex-wrap gap-x-6">
+                <label className="flex min-h-[44px] items-center gap-2 text-sm font-medium text-gray-700">
+                  <input type="checkbox" checked={smokeFree} onChange={(e) => setSmokeFree(e.target.checked)} className="h-5 w-5" />
+                  Smoke free
+                </label>
+                <label className="flex min-h-[44px] items-center gap-2 text-sm font-medium text-gray-700">
+                  <input type="checkbox" checked={petFree} onChange={(e) => setPetFree(e.target.checked)} className="h-5 w-5" />
+                  Pet free
+                </label>
+              </div>
+            </div>
+
+            <div className="rounded-2xl bg-pink-50 p-3 text-sm text-gray-800">
+              <p className="font-bold">{`${brand} ${wrapName}`.trim() || 'Your wrap'}</p>
+              <p>{resolvedDips} spots × ${mainPrice} · Likes target {likesRequired}{numericGoal > 0 ? ` · Money goal $${numericGoal}` : ''}</p>
+            </div>
+
+            {randomOrgReminder}
+
+            {error && <p className="rounded-xl bg-red-50 px-4 py-2 text-sm text-red-600">{error}</p>}
+
+            <div className="flex gap-3">
+              <button type="button" onClick={() => setStep('price')} className="min-h-[52px] flex-1 rounded-2xl border text-sm font-semibold text-gray-700">← Back</button>
+              <button
+                type="button"
+                onClick={handleCreate}
+                disabled={creating || !wrapName.trim()}
+                className="min-h-[52px] flex-[2] rounded-2xl bg-gradient-to-r from-pink-500 to-rose-500 text-base font-bold text-white disabled:opacity-50"
+              >
                 {creating ? 'Creating...' : '🎉 Create Dip'}
               </button>
             </div>
