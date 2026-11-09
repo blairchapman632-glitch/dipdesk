@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase'
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import AppLayout from '@/app/components/AppLayout'
+import { askConfirm } from '@/app/components/Toast'
 
 type AdminUserRow = {
   id: string
@@ -143,7 +144,7 @@ export default function AdminPage() {
                 onChange={(e) => setBroadcastMessage(e.target.value)}
                 placeholder="Broadcast message to all users..."
                 rows={2}
-                className="w-full rounded-xl border px-3 py-2 text-sm text-gray-900 outline-none focus:border-pink-500 sm:w-72"
+                className="w-full rounded-xl border px-3 py-2 text-[16px] text-gray-900 outline-none focus:border-pink-500 sm:w-72"
               />
               {broadcastResult && (
                 <p className="text-xs font-semibold text-green-600">{broadcastResult}</p>
@@ -155,7 +156,7 @@ export default function AdminPage() {
                 disabled={isBroadcasting || !broadcastMessage.trim()}
                 onClick={async () => {
                   if (!broadcastMessage.trim()) return
-                  const confirmed = window.confirm(`Send this message to all ${users.filter(u => u.email !== 'blairchapman632@gmail.com').length} users?`)
+                  const confirmed = await askConfirm({ title: `Send this message to all ${users.filter(u => u.email !== 'blairchapman632@gmail.com').length} users?`, confirmLabel: 'Send', danger: false })
                   if (!confirmed) return
                   setIsBroadcasting(true)
                   setBroadcastResult(null)
@@ -296,11 +297,11 @@ export default function AdminPage() {
                           <button
                             type="button"
                             disabled={isBusy}
-                            onClick={() => {
-  const confirmed = window.confirm(
+                            onClick={async () => {
+  const confirmed = await askConfirm(
     user.is_active
-      ? 'Are you sure you want to deactivate this user?'
-      : 'Are you sure you want to reactivate this user?'
+      ? { title: 'Deactivate this user?', message: 'They won’t be able to log in.', confirmLabel: 'Deactivate' }
+      : { title: 'Reactivate this user?', confirmLabel: 'Reactivate', danger: false }
   )
 
   if (!confirmed) return

@@ -5,6 +5,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import imageCompression from 'browser-image-compression'
 import AppLayout from '@/app/components/AppLayout'
+import { askConfirm, showToast } from '@/app/components/Toast'
+import { useLockBodyScroll } from '@/app/components/useLockBodyScroll'
+import { fullSheetOverlay, fullSheetPanel, SheetTopBar } from '@/app/components/Sheet'
 import { getCoverImage, sortWrapImages } from '@/lib/wrapCover'
 import { getDipStageLabel, isDipLiveOrLater } from '@/lib/dipStages'
 
@@ -156,6 +159,8 @@ const DASHBOARD_DIPS_KEY = 'dipdesk_dashboard_dips'
 const DASHBOARD_WRAPS_KEY = 'dipdesk_dashboard_wraps'
 const DASHBOARD_NOTIFICATIONS_KEY = 'dipdesk_dashboard_notifications'
 const DASHBOARD_PROFILE_KEY = 'dipdesk_dashboard_profile'
+// Followers / following counts for the profile header (cached for instant display)
+const DASHBOARD_FOLLOW_COUNTS_KEY = 'dipdesk_dashboard_follow_counts'
 const DASHBOARD_ACTOR_AVATARS_KEY = 'dipdesk_dashboard_actor_avatars'
 
 const EMPTY_WRAP_FORM: WrapFormState = {
@@ -211,6 +216,10 @@ function formatCurrency(
     maximumFractionDigits: 0,
   }).format(value)
 }
+
+// One primary (pink gradient) and one secondary (outline) button style for this page
+const BTN_PRIMARY = 'inline-flex min-h-[40px] items-center justify-center rounded-xl bg-gradient-to-r from-pink-500 to-rose-500 px-4 text-sm font-semibold text-white shadow-sm hover:opacity-90'
+const BTN_SECONDARY = 'inline-flex min-h-[40px] items-center justify-center rounded-xl border border-gray-200 bg-white px-4 text-sm font-semibold text-gray-800 hover:bg-gray-50'
 
 function getStageLabel(stage: string | null, status: string | null) {
   return getDipStageLabel(stage || status)
@@ -297,7 +306,8 @@ export default function Dashboard() {
     const [mobileTab, setMobileTab] = useState<'collection' | 'activity'>('collection')
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [isAdmin, setIsAdmin] = useState(false)
-const [profile, setProfile] = useState<{ full_name: string | null; username: string | null; avatar_url: string | null } | null>(null)
+const [profile, setProfile] = useState<{ full_name: string | null; username: string | null; avatar_url: string | null; bio?: string | null; city?: string | null; country?: string | null } | null>(null)
+const [followCounts, setFollowCounts] = useState<{ followers: number; following: number } | null>(null)
 const [isUploadingAvatar, setIsUploadingAvatar] = useState(false)
   const [isWrapModalOpen, setIsWrapModalOpen] = useState(false)
 const [isViewWrapModalOpen, setIsViewWrapModalOpen] = useState(false)
@@ -310,6 +320,8 @@ const [reportStatusFilter, setReportStatusFilter] = useState<
 const [selectedWrap, setSelectedWrap] = useState<Wrap | null>(null)
 const [selectedViewImage, setSelectedViewImage] = useState<string | null>(null)
 const [isImagePreviewOpen, setIsImagePreviewOpen] = useState(false)
+// Lock the page behind any open sheet/modal
+useLockBodyScroll(isWrapModalOpen || isViewWrapModalOpen || isReportModalOpen || isImagePreviewOpen)
 const [isReadOnlyWrapView, setIsReadOnlyWrapView] = useState(false)
 const [isSavingWrap, setIsSavingWrap] = useState(false)
 const [isUploadingImages, setIsUploadingImages] = useState(false)
@@ -529,7 +541,8 @@ const unreadNotificationCount = useMemo(() => {
 
     setCurrentUserId(user.id)
     
-    await supabase
+    // Fire-and-forget: no need to wait for this before loading the page
+    void supabase
   .from('profiles')
   .update({ last_active_at: new Date().toISOString() })
   .eq('id', user.id)
@@ -537,24 +550,31 @@ const unreadNotificationCount = useMemo(() => {
 const userEmail = user.email || ''
 setEmail(userEmail)
 localStorage.setItem(DASHBOARD_EMAIL_KEY, userEmail)
-const { data: userProfile } = await supabase
-  .from('profiles')
-  .select('full_name, username, avatar_url, role')
-  .eq('id', user.id)
-  .single()
-
-if (userProfile) {
-  setProfile(userProfile)
-  setIsAdmin((userProfile as any).role === 'super_admin')
-  localStorage.setItem(DASHBOARD_PROFILE_KEY, JSON.stringify({ ...userProfile, id: user.id }))
-}
-
-
+    // Everything loads in parallel (profile + header counts included — no waterfall)
     const [
+  { data: userProfile },
+  { count: followerCount },
+  { count: followingCount },
   { data: dipData, error: dipError },
   { data: wrapData, error: wrapError },
   { data: notificationData, error: notificationError }
 ] = await Promise.all([
+  supabase
+    .from('profiles')
+    .select('full_name, username, avatar_url, role, bio, city, country')
+    .eq('id', user.id)
+    .single(),
+  supabase
+    .from('follows')
+    .select('id', { count: 'exact', head: true })
+    .eq('following_id', user.id)
+    .eq('status', 'accepted'),
+  supabase
+    .from('follows')
+    .select('id', { count: 'exact', head: true })
+    .eq('follower_id', user.id)
+    .eq('status', 'accepted'),
+
   // Own dips (likes/status are owner-only columns) from the my_dips view
   supabase
     .from('my_dips')
@@ -582,6 +602,20 @@ if (userProfile) {
     .order('created_at', { ascending: false })
     .limit(20)
 ])
+
+if (userProfile) {
+  setProfile(userProfile as any)
+  setIsAdmin((userProfile as any).role === 'super_admin')
+  // Merge so fields cached by other pages (e.g. Tools) aren't dropped
+  let prevCached: Record<string, unknown> = {}
+  try { prevCached = JSON.parse(localStorage.getItem(DASHBOARD_PROFILE_KEY) || '{}') } catch {}
+  localStorage.setItem(DASHBOARD_PROFILE_KEY, JSON.stringify({ ...prevCached, ...userProfile, id: user.id }))
+}
+
+// Profile header counts (cached for instant display next time)
+const nextFollow = { followers: followerCount || 0, following: followingCount || 0 }
+setFollowCounts(nextFollow)
+try { localStorage.setItem(DASHBOARD_FOLLOW_COUNTS_KEY, JSON.stringify(nextFollow)) } catch {}
 
     if (!dipError && dipData) {
       // Keep last known counts so cards don't flash to 0% while recounting
@@ -772,6 +806,10 @@ if (!notificationError && notificationData) {
         setIsAdmin(p.role === 'super_admin')
       } catch {}
     }
+    try {
+      const cachedFollow = localStorage.getItem(DASHBOARD_FOLLOW_COUNTS_KEY)
+      if (cachedFollow) setFollowCounts(JSON.parse(cachedFollow))
+    } catch {}
 
     const cachedActorAvatars = localStorage.getItem(DASHBOARD_ACTOR_AVATARS_KEY)
     if (cachedActorAvatars) {
@@ -969,7 +1007,7 @@ async function markAllNotificationsRead() {
 async function clearAllNotifications() {
   if (!currentUserId) return
 
-  const confirmed = window.confirm('Delete all notifications permanently?')
+  const confirmed = await askConfirm({ title: 'Delete all notifications?', message: 'This can’t be undone.', confirmLabel: 'Delete all' })
   if (!confirmed) return
 
   setIsClearingNotifications(true)
@@ -1189,18 +1227,14 @@ purchase_date: wrap.purchase_date || '',
     setIsWrapModalOpen(true)
   }
 
-  function closeWrapModal() {
+  async function closeWrapModal() {
   if (isUploadingImages) {
-    const confirmed = window.confirm(
-      'Images are still uploading. Are you sure you want to close?'
-    )
+    const confirmed = await askConfirm({ title: 'Photos are still uploading', message: 'Close anyway?', confirmLabel: 'Close', danger: false })
     if (!confirmed) return
   }
 
   if (isSavingWrap) {
-    const confirmed = window.confirm(
-      'This wrap is still saving. Are you sure you want to close?'
-    )
+    const confirmed = await askConfirm({ title: 'This wrap is still saving', message: 'Close anyway?', confirmLabel: 'Close', danger: false })
     if (!confirmed) return
   }
 
@@ -1243,7 +1277,7 @@ async function uploadWrapImages(files: FileList | File[]) {
   const limitedFiles = incomingFiles.slice(0, availableSlots)
 
   if (limitedFiles.length === 0) {
-    window.alert(`You can upload a maximum of ${MAX_WRAP_IMAGES} images.`)
+    showToast(`You can upload a maximum of ${MAX_WRAP_IMAGES} photos.`)
     return
   }
 
@@ -1252,12 +1286,12 @@ async function uploadWrapImages(files: FileList | File[]) {
     const isValidSize = file.size <= MAX_IMAGE_SIZE_MB * 1024 * 1024
 
     if (!isValidType) {
-      window.alert(`${file.name} is not a supported image type.`)
+      showToast(`${file.name} isn’t a supported image type.`)
       return false
     }
 
     if (!isValidSize) {
-      window.alert(`${file.name} is larger than ${MAX_IMAGE_SIZE_MB}MB.`)
+      showToast(`${file.name} is larger than ${MAX_IMAGE_SIZE_MB}MB.`)
       return false
     }
 
@@ -1401,7 +1435,7 @@ async function replaceWrapImage(imageId: string, incomingFile: File) {
       ),
     }))
     setIsUploadingImages(false)
-    window.alert('That photo could not be uploaded. Your original photo has been kept.')
+    showToast('That photo couldn’t be uploaded — your original photo was kept.')
     return
   }
 
@@ -1561,7 +1595,7 @@ async function replaceWrapImage(imageId: string, incomingFile: File) {
     if (!wrapForm.name.trim()) return
     if (isUploadingImages) return
     if (wrapForm.images.filter(i => i.status === 'uploaded').length === 0) {
-      window.alert('Please add at least one photo before saving.')
+      showToast('Add at least one photo before saving.')
       return
     }
 
@@ -1657,7 +1691,7 @@ const wrapPayload = {
 
       if (!imagesSaved) {
         setIsSavingWrap(false)
-        window.alert('Your photos could not be saved. Please try again.')
+        showToast('Your photos couldn’t be saved — please try again.')
         return
       }
 
@@ -1758,10 +1792,10 @@ const wrapPayload = {
     closeWrapModal()
   }
 
-  function markWrapAsDeparted() {
+  async function markWrapAsDeparted() {
     if (!wrapForm.id) return
 
-    const confirmed = window.confirm('Move this wrap to Departed Wraps?')
+    const confirmed = await askConfirm({ title: 'Move this wrap to Departed Wraps?', confirmLabel: 'Move', danger: false })
     if (!confirmed) return
 
     setWrapForm((previous) => ({
@@ -1773,7 +1807,7 @@ const wrapPayload = {
 
   async function deleteWrap() {
     if (!wrapForm.id) return
-    const confirmed = window.confirm('Delete this wrap permanently?')
+    const confirmed = await askConfirm({ title: 'Delete this wrap?', message: 'This can’t be undone.', confirmLabel: 'Delete wrap' })
     if (!confirmed) return
 
     setIsSavingWrap(true)
@@ -1810,10 +1844,10 @@ const wrapPayload = {
 
   try {
     await navigator.clipboard.writeText(text)
-    window.alert('Report table copied')
+    showToast('Report table copied')
   } catch (error) {
     console.error(error)
-    window.alert('Could not copy report table')
+    showToast('Couldn’t copy the report table')
   }
 }
 function exportReportCsv() {
@@ -1854,6 +1888,29 @@ function exportReportCsv() {
   document.body.removeChild(link)
   URL.revokeObjectURL(url)
 }
+  // Share my collection: short /username link when set, else /user/<id>.
+  // Phones use the native share sheet when available; otherwise copy + toast.
+  async function shareMyCollection() {
+    const url = profile?.username
+      ? `https://wrapapp.com.au/${profile.username}`
+      : `https://wrapapp.com.au/user/${currentUserId}`
+    const isPhone = window.matchMedia('(max-width: 767px)').matches || /iphone|ipad|ipod|android/i.test(navigator.userAgent)
+    if (isPhone && typeof navigator.share === 'function') {
+      try {
+        await navigator.share({ title: 'My wrap collection', url })
+        return
+      } catch (error) {
+        if ((error as Error)?.name === 'AbortError') return // they closed the share sheet
+      }
+    }
+    try {
+      await navigator.clipboard.writeText(url)
+      showToast('Link copied')
+    } catch {
+      showToast(url)
+    }
+  }
+
   function createDipFromWrap() {
     const params = new URLSearchParams()
 
@@ -1879,8 +1936,75 @@ function exportReportCsv() {
 
   return (
         <AppLayout>
-      <div className="space-y-6 bg-white min-h-screen">
-        
+      {/* Centred with a max width (wider than Explore because Home has the Activity column on desktop) */}
+      <div className="mx-auto max-w-6xl space-y-6 bg-white min-h-screen">
+
+        {/* Profile header (Instagram-style). Cached profile + counts show instantly. */}
+        {(() => {
+          const displayName = profile?.full_name || profile?.username || 'My collection'
+          const initials = displayName.trim().split(/\s+/).slice(0, 2).map(w => w[0]?.toUpperCase() || '').join('')
+          const wrapCount = wraps.filter(w => w.status !== 'departed').length
+          const location = [profile?.city, profile?.country].filter(Boolean).join(', ')
+          const stat = (value: number | null | undefined, label: string) => (
+            <div className="text-center md:flex md:items-baseline md:gap-1 md:text-left">
+              <p className="text-base font-bold text-gray-900 md:text-lg">{value ?? '–'}</p>
+              <p className="text-xs text-gray-500 md:text-sm">{label}</p>
+            </div>
+          )
+          return (
+            <section className="px-1 pt-1 md:px-2">
+              <div className="flex items-center gap-4 md:gap-10">
+                {profile?.avatar_url ? (
+                  <img
+                    src={profile.avatar_url}
+                    alt={displayName}
+                    className="h-20 w-20 shrink-0 rounded-full object-cover ring-2 ring-pink-100 md:h-32 md:w-32"
+                  />
+                ) : (
+                  <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-pink-500 to-rose-500 text-2xl font-bold text-white md:h-32 md:w-32 md:text-4xl">
+                    {initials || '?'}
+                  </div>
+                )}
+                <div className="min-w-0 flex-1 space-y-2 md:space-y-3">
+                  <div className="md:flex md:items-baseline md:gap-3">
+                    <h1 className="truncate text-lg font-bold text-gray-900 md:text-2xl">{displayName}</h1>
+                    {profile?.username && <p className="truncate text-sm text-gray-500">@{profile.username}</p>}
+                  </div>
+                  <div className="grid grid-cols-3 gap-1 md:flex md:gap-8">
+                    {stat(wrapCount, wrapCount === 1 ? 'Wrap' : 'Wraps')}
+                    {stat(followCounts?.followers, 'Followers')}
+                    {stat(followCounts?.following, 'Following')}
+                  </div>
+                </div>
+              </div>
+
+              {(profile?.bio || location) && (
+                <div className="mt-3 space-y-0.5 md:ml-[10.5rem] md:mt-0">
+                  {profile?.bio && <p className="whitespace-pre-wrap break-words text-sm text-gray-800">{profile.bio}</p>}
+                  {location && <p className="text-sm text-gray-500">📍 {location}</p>}
+                </div>
+              )}
+
+              <div className="mt-3 grid grid-cols-[1fr_1fr_auto] gap-2 md:ml-[10.5rem] md:max-w-md">
+                <button type="button" onClick={() => router.push('/tools')} className={`${BTN_SECONDARY} min-h-[44px]`}>
+                  Edit profile
+                </button>
+                <button type="button" onClick={() => void shareMyCollection()} className={`${BTN_SECONDARY} min-h-[44px]`}>
+                  Share
+                </button>
+                <button
+                  type="button"
+                  onClick={() => router.push('/tools')}
+                  aria-label="Settings"
+                  className={`${BTN_SECONDARY} min-h-[44px] min-w-[44px] px-0 text-lg`}
+                >
+                  ⚙
+                </button>
+              </div>
+            </section>
+          )
+        })()}
+
         <div className="xl:hidden">
           <div className="grid grid-cols-2 rounded-xl border bg-white p-1 shadow-sm">
             <button
@@ -1932,31 +2056,18 @@ function exportReportCsv() {
   <h2 className="text-xl font-bold text-gray-900">
     Your Collection
   </h2>
-  <div className="flex items-center gap-2">
-    <button
-      type="button"
-      onClick={async () => {
-        const url = `https://wrapapp.com.au/user/${currentUserId}`
-        await navigator.clipboard.writeText(url)
-        alert('Collection link copied! Share it anywhere 💕')
-      }}
-      className="shrink-0 cursor-pointer rounded-full border border-pink-300 px-4 py-2 text-sm font-semibold text-pink-600 shadow-sm hover:bg-pink-50"
-    >
-      Share 🔗
-    </button>
-    <button
-      type="button"
-      onClick={openNewWrapModal}
-      className="shrink-0 cursor-pointer rounded-full bg-gradient-to-r from-pink-500 to-rose-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:opacity-90"
-    >
-      + Add Wrap
-    </button>
-  </div>
+  <button
+    type="button"
+    onClick={openNewWrapModal}
+    className={`${BTN_PRIMARY} shrink-0`}
+  >
+    + Add Wrap
+  </button>
 </div>
 
 <div className="mb-4 space-y-2 px-1">
   
-  <div className="flex gap-1.5 justify-between">
+  <div className="no-scrollbar -mx-1 flex gap-2 overflow-x-auto px-1 pb-0.5">
     {[
       { label: collectionFilterBrand ? 'Brand ✓' : 'Brand', key: 'brand', active: !!collectionFilterBrand },
       { label: (collectionSizeMin || collectionSizeMax) ? 'Length ✓' : 'Length', key: 'length', active: !!(collectionSizeMin || collectionSizeMax) },
@@ -1974,11 +2085,27 @@ function exportReportCsv() {
           setShowCollectionBlendFilter(key === 'blend' ? !showCollectionBlendFilter : false)
           setShowCollectionTypeFilter(key === 'type' ? !showCollectionTypeFilter : false)
         }}
-        className={`flex-1 rounded-full border px-1.5 py-1 text-xs font-semibold transition ${active ? 'border-pink-500 bg-pink-50 text-pink-700' : 'border-gray-200 bg-white text-gray-600'}`}
+        className={`min-h-[36px] shrink-0 whitespace-nowrap rounded-full border px-3.5 text-sm font-semibold transition ${active ? 'border-pink-500 bg-pink-50 text-pink-700' : 'border-gray-200 bg-white text-gray-600'}`}
       >
         {label}
       </button>
     ))}
+    {(collectionFilterBrand || collectionSizeMin || collectionSizeMax || collectionFilterColour || collectionFilterBlend.length > 0 || collectionFilterType.length > 0) && (
+      <button
+        type="button"
+        onClick={() => {
+          setCollectionFilterBrand('')
+          setCollectionSizeMin('')
+          setCollectionSizeMax('')
+          setCollectionFilterColour('')
+          setCollectionFilterBlend([])
+          setCollectionFilterType([])
+        }}
+        className="min-h-[36px] shrink-0 whitespace-nowrap rounded-full border border-red-200 bg-white px-3.5 text-sm font-semibold text-red-500"
+      >
+        Clear
+      </button>
+    )}
   </div>
 
   {showCollectionBrandFilter && (
@@ -1987,35 +2114,19 @@ function exportReportCsv() {
       value={collectionFilterBrand}
       onChange={(e) => setCollectionFilterBrand(e.target.value)}
       placeholder="Filter by brand..."
-      className="w-full rounded-xl border px-3 py-2 text-base text-gray-900 outline-none focus:border-pink-500"
+      className="w-full rounded-xl border px-3 py-2 text-[16px] text-gray-900 outline-none focus:border-pink-500"
     />
   )}
 
   {showCollectionLengthFilter && (
     <div className="flex items-center gap-2">
-      <input type="number" step="0.1" value={collectionSizeMin} onChange={(e) => setCollectionSizeMin(e.target.value)} placeholder="Min m" className="w-24 rounded-xl border px-3 py-2 text-base outline-none focus:border-pink-300" />
+      <input type="number" step="0.1" value={collectionSizeMin} onChange={(e) => setCollectionSizeMin(e.target.value)} placeholder="Min m" className="w-24 rounded-xl border px-3 py-2 text-[16px] outline-none focus:border-pink-300" />
       <span className="text-xs text-gray-400">to</span>
-      <input type="number" step="0.1" value={collectionSizeMax} onChange={(e) => setCollectionSizeMax(e.target.value)} placeholder="Max m" className="w-24 rounded-xl border px-3 py-2 text-base outline-none focus:border-pink-300" />
+      <input type="number" step="0.1" value={collectionSizeMax} onChange={(e) => setCollectionSizeMax(e.target.value)} placeholder="Max m" className="w-24 rounded-xl border px-3 py-2 text-[16px] outline-none focus:border-pink-300" />
       <span className="text-xs text-gray-400">meters</span>
     </div>
   )}
 
-  {(collectionFilterBrand || collectionSizeMin || collectionSizeMax || collectionFilterColour || collectionFilterBlend.length > 0 || collectionFilterType.length > 0) && (
-    <button
-      type="button"
-      onClick={() => {
-        setCollectionFilterBrand('')
-        setCollectionSizeMin('')
-        setCollectionSizeMax('')
-        setCollectionFilterColour('')
-        setCollectionFilterBlend([])
-        setCollectionFilterType([])
-      }}
-      className="rounded-full border border-red-200 px-3 py-1 text-xs font-semibold text-red-500"
-    >
-      Clear filters
-    </button>
-  )}
 
   {showCollectionBlendFilter && (
     <div className="flex flex-wrap gap-1.5">
@@ -2391,13 +2502,14 @@ function exportReportCsv() {
 
   return (
    <div
-    className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+    className={fullSheetOverlay}
     onClick={closeViewWrapModal}
   >
     <div
-      className="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl"
+      className={fullSheetPanel('md:max-w-4xl')}
       onClick={(e) => e.stopPropagation()}
     >
+      <SheetTopBar onClose={closeViewWrapModal} title={selectedWrap.name} />
             <div className="mb-6 flex items-start justify-between gap-4">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
@@ -2643,12 +2755,12 @@ function exportReportCsv() {
   )
 })()}
         {isImagePreviewOpen && selectedWrap && (
-          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4">
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-0 pt-[env(safe-area-inset-top)] md:p-4">
             <div className="relative w-full max-w-6xl">
               <button
                 type="button"
                 onClick={() => setIsImagePreviewOpen(false)}
-                className="absolute right-0 top-0 z-10 rounded-full bg-white/90 px-4 py-2 text-sm font-semibold text-gray-800 shadow"
+                className="absolute right-2 top-2 z-10 min-h-[44px] rounded-full bg-white/90 px-4 text-sm font-semibold text-gray-800 shadow md:right-0 md:top-0"
               >
                 Close
               </button>
@@ -2664,14 +2776,14 @@ function exportReportCsv() {
 
         {isReportModalOpen && (
           <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+            className={fullSheetOverlay}
             onClick={closeReportModal}
           >
             <div
-              className="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl"
+              className={fullSheetPanel('md:max-w-4xl')}
               onClick={(e) => e.stopPropagation()}
-      
     >
+              <SheetTopBar onClose={closeReportModal} title="Wrap Report" />
               <div className="mb-6 flex items-start justify-between gap-4">
                 <div>
                   <h2 className="text-2xl font-bold text-gray-900">
@@ -2700,7 +2812,7 @@ function exportReportCsv() {
       type="date"
       value={reportDateFrom}
       onChange={(event) => setReportDateFrom(event.target.value)}
-      className="w-full rounded-xl border px-3 py-2 outline-none focus:border-pink-500"
+      className="w-full rounded-xl border px-3 py-2 outline-none focus:border-pink-500 text-[16px]"
     />
   </div>
 
@@ -2712,7 +2824,7 @@ function exportReportCsv() {
       type="date"
       value={reportDateTo}
       onChange={(event) => setReportDateTo(event.target.value)}
-      className="w-full rounded-xl border px-3 py-2 outline-none focus:border-pink-500"
+      className="w-full rounded-xl border px-3 py-2 outline-none focus:border-pink-500 text-[16px]"
     />
   </div>
 
@@ -2727,7 +2839,7 @@ function exportReportCsv() {
           event.target.value as 'all' | 'collection' | 'departed'
         )
       }
-      className="w-full rounded-xl border px-3 py-2 outline-none focus:border-pink-500"
+      className="w-full rounded-xl border px-3 py-2 outline-none focus:border-pink-500 text-[16px]"
     >
       <option value="all">All</option>
       <option value="collection">Collection</option>
@@ -2841,8 +2953,9 @@ function exportReportCsv() {
 
               
         {isWrapModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-            <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl">
+          <div className={fullSheetOverlay}>
+            <div className={fullSheetPanel('md:max-w-3xl')}>
+              <SheetTopBar onClose={() => void closeWrapModal()} title={wrapForm.id ? 'Edit Wrap' : 'Add Wrap'} />
               <div className="mb-6 flex items-start justify-between gap-4">
                 <div>
                   <h2 className="text-2xl font-bold text-gray-900">
@@ -2884,7 +2997,7 @@ function exportReportCsv() {
     <input
       value={wrapForm.name}
       onChange={(event) => updateWrapForm('name', event.target.value)}
-      className="w-full rounded-xl border px-3 py-2 text-base text-gray-900 placeholder:text-gray-400 outline-none focus:border-pink-500 xl:text-sm"
+      className="w-full rounded-xl border px-3 py-2 text-[16px] text-gray-900 placeholder:text-gray-400 outline-none focus:border-pink-500 "
     />
   </div>
 
@@ -2898,7 +3011,7 @@ function exportReportCsv() {
       onFocus={() => setBrandFocused(true)}
       onBlur={() => setTimeout(() => { setBrandFocused(false); setBrandSuggestions([]) }, 200)}
       placeholder="e.g. Didymos, Oscha"
-      className={`w-full rounded-xl border px-3 py-2 text-base text-gray-900 placeholder:text-gray-400 outline-none focus:border-pink-500 xl:text-sm ${!wrapForm.brand ? 'border-orange-300 bg-orange-50' : ''}`}
+      className={`w-full rounded-xl border px-3 py-2 text-[16px] text-gray-900 placeholder:text-gray-400 outline-none focus:border-pink-500 ${!wrapForm.brand ? 'border-orange-300 bg-orange-50' : ''}`}
     />
     {brandSuggestions.length > 0 && (
       <div className="absolute z-10 mt-1 w-full rounded-xl border bg-white shadow-lg">
@@ -2928,7 +3041,7 @@ function exportReportCsv() {
         updateWrapForm('size', cleaned)
       }}
       placeholder="e.g. 4.2"
-      className={`w-full rounded-xl border px-3 py-2 text-base text-gray-900 placeholder:text-gray-400 outline-none focus:border-pink-500 xl:text-sm ${!wrapForm.size ? 'border-orange-300 bg-orange-50' : ''}`}
+      className={`w-full rounded-xl border px-3 py-2 text-[16px] text-gray-900 placeholder:text-gray-400 outline-none focus:border-pink-500 ${!wrapForm.size ? 'border-orange-300 bg-orange-50' : ''}`}
     />
     <p className="mt-1 text-xs text-gray-400">Enter length in metres, e.g. 4.2</p>
   </div>
@@ -2940,7 +3053,7 @@ function exportReportCsv() {
     <select
       value={wrapForm.wrap_type}
       onChange={(event) => updateWrapForm('wrap_type', event.target.value)}
-      className={`w-full rounded-xl border px-3 py-2 text-base text-gray-900 outline-none focus:border-pink-500 xl:text-sm ${!wrapForm.wrap_type ? 'border-orange-300 bg-orange-50' : ''}`}
+      className={`w-full rounded-xl border px-3 py-2 text-[16px] text-gray-900 outline-none focus:border-pink-500 ${!wrapForm.wrap_type ? 'border-orange-300 bg-orange-50' : ''}`}
     >
       <option value="">Select type...</option>
       <option value="Hand Woven">Hand Woven</option>
@@ -2960,7 +3073,7 @@ function exportReportCsv() {
       onFocus={() => setMaterialFocused(true)}
       onBlur={() => setTimeout(() => { setMaterialFocused(false); setMaterialSuggestions([]) }, 200)}
       placeholder="e.g. 100% cotton, linen/cotton"
-      className={`w-full rounded-xl border px-3 py-2 text-base text-gray-900 placeholder:text-gray-400 outline-none focus:border-pink-500 xl:text-sm ${!wrapForm.material ? 'border-orange-300 bg-orange-50' : ''}`}
+      className={`w-full rounded-xl border px-3 py-2 text-[16px] text-gray-900 placeholder:text-gray-400 outline-none focus:border-pink-500 ${!wrapForm.material ? 'border-orange-300 bg-orange-50' : ''}`}
     />
     {materialSuggestions.length > 0 && (
       <div className="absolute z-10 mt-1 w-full rounded-xl border bg-white shadow-lg">
@@ -3074,7 +3187,7 @@ function exportReportCsv() {
         }
       }}
       placeholder="Search a user, or type a name + Enter"
-      className="w-full rounded-xl border px-3 py-2 text-base text-gray-900 placeholder:text-gray-400 outline-none focus:border-pink-500 xl:text-sm"
+      className="w-full rounded-xl border px-3 py-2 text-[16px] text-gray-900 placeholder:text-gray-400 outline-none focus:border-pink-500 "
     />
 
     {dibsSearchLoading && (
@@ -3130,7 +3243,7 @@ function exportReportCsv() {
       onChange={(event) =>
         updateWrapForm('purchase_date', event.target.value)
       }
-      className="w-full rounded-xl border px-3 py-2 text-base text-gray-900 outline-none focus:border-pink-500 xl:text-sm"
+      className="w-full rounded-xl border px-3 py-2 text-[16px] text-gray-900 outline-none focus:border-pink-500 "
     />
   </div>
 
@@ -3144,7 +3257,7 @@ function exportReportCsv() {
         updateWrapForm('purchased_from', event.target.value)
       }
       placeholder="Search user or type a name..."
-      className="w-full rounded-xl border px-3 py-2 text-base text-gray-900 placeholder:text-gray-400 outline-none focus:border-pink-500 xl:text-sm"
+      className="w-full rounded-xl border px-3 py-2 text-[16px] text-gray-900 placeholder:text-gray-400 outline-none focus:border-pink-500 "
     />
 
     {purchasedFromLoading && (
@@ -3184,7 +3297,7 @@ function exportReportCsv() {
       onChange={(event) =>
         updateWrapForm('purchase_price', event.target.value)
       }
-      className="w-full rounded-xl border px-3 py-2 text-base text-gray-900 outline-none focus:border-pink-500 xl:text-sm"
+      className="w-full rounded-xl border px-3 py-2 text-[16px] text-gray-900 outline-none focus:border-pink-500 "
     />
     <p className="mt-1 text-xs text-gray-500">
       Only you can see this. Other users cannot view your purchase price.
@@ -3203,7 +3316,7 @@ function exportReportCsv() {
           event.target.value as CurrencyCode
         )
       }
-      className="w-full rounded-xl border px-3 py-2 text-base text-gray-900 outline-none focus:border-pink-500 xl:text-sm"
+      className="w-full rounded-xl border px-3 py-2 text-[16px] text-gray-900 outline-none focus:border-pink-500 "
     >
       <option value="AUD">AUD</option>
       <option value="USD">USD</option>
@@ -3328,7 +3441,7 @@ Record own currency for accurate reporting
           event.target.value as 'active' | 'holiday' | 'departed'
         )
       }
-      className="w-full rounded-xl border px-3 py-2 text-base text-gray-900 outline-none focus:border-pink-500 xl:text-sm"
+      className="w-full rounded-xl border px-3 py-2 text-[16px] text-gray-900 outline-none focus:border-pink-500 "
     >
       <option value="active">Active</option>
       <option value="holiday">On Holiday</option>
@@ -3347,7 +3460,7 @@ Record own currency for accurate reporting
           updateWrapForm('on_loan_to', event.target.value)
         }
         placeholder="Borrower name"
-        className="w-full rounded-xl border px-3 py-2 text-base text-gray-900 placeholder:text-gray-400 outline-none focus:border-pink-500 xl:text-sm"
+        className="w-full rounded-xl border px-3 py-2 text-[16px] text-gray-900 placeholder:text-gray-400 outline-none focus:border-pink-500 "
       />
     </div>
   )}
@@ -3363,7 +3476,7 @@ Record own currency for accurate reporting
           onChange={(event) =>
             updateWrapForm('sold_to', event.target.value)
           }
-          className="w-full rounded-xl border px-3 py-2 text-base text-gray-900 placeholder:text-gray-400 outline-none focus:border-pink-500 xl:text-sm"
+          className="w-full rounded-xl border px-3 py-2 text-[16px] text-gray-900 placeholder:text-gray-400 outline-none focus:border-pink-500 "
         />
       </div>
 
@@ -3377,7 +3490,7 @@ Record own currency for accurate reporting
           onChange={(event) =>
             updateWrapForm('sold_date', event.target.value)
           }
-          className="w-full rounded-xl border px-3 py-2 text-base text-gray-900 outline-none focus:border-pink-500 xl:text-sm"
+          className="w-full rounded-xl border px-3 py-2 text-[16px] text-gray-900 outline-none focus:border-pink-500 "
         />
       </div>
 
@@ -3392,7 +3505,7 @@ Record own currency for accurate reporting
           onChange={(event) =>
             updateWrapForm('sold_price', event.target.value)
           }
-          className="w-full rounded-xl border px-3 py-2 text-base text-gray-900 outline-none focus:border-pink-500 xl:text-sm"
+          className="w-full rounded-xl border px-3 py-2 text-[16px] text-gray-900 outline-none focus:border-pink-500 "
         />
       </div>
 
@@ -3408,7 +3521,7 @@ Record own currency for accurate reporting
               event.target.value as CurrencyCode
             )
           }
-          className="w-full rounded-xl border px-3 py-2 text-base text-gray-900 outline-none focus:border-pink-500 xl:text-sm"
+          className="w-full rounded-xl border px-3 py-2 text-[16px] text-gray-900 outline-none focus:border-pink-500 "
         >
           <option value="AUD">AUD</option>
           <option value="USD">USD</option>
@@ -3513,7 +3626,7 @@ Record own currency for accurate reporting
             onChange={(event) =>
               updateWrapForm('for_sale_price', event.target.value)
             }
-            className="w-full rounded-xl border px-3 py-2 text-base text-gray-900 outline-none focus:border-pink-500 xl:text-sm"
+            className="w-full rounded-xl border px-3 py-2 text-[16px] text-gray-900 outline-none focus:border-pink-500 "
           />
         </div>
 
@@ -3529,7 +3642,7 @@ Record own currency for accurate reporting
                 event.target.value as CurrencyCode
               )
             }
-            className="w-full rounded-xl border px-3 py-2 text-base text-gray-900 outline-none focus:border-pink-500 xl:text-sm"
+            className="w-full rounded-xl border px-3 py-2 text-[16px] text-gray-900 outline-none focus:border-pink-500 "
           >
             <option value="AUD">AUD</option>
             <option value="USD">USD</option>

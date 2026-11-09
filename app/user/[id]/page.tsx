@@ -5,6 +5,9 @@ import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import AppLayout from '@/app/components/AppLayout'
 import { getCoverImage, sortWrapImages } from '@/lib/wrapCover'
+import { fullSheetOverlay, fullSheetPanel, SheetTopBar } from '@/app/components/Sheet'
+import { useLockBodyScroll } from '@/app/components/useLockBodyScroll'
+import { showToast } from '@/app/components/Toast'
 
 type WrapImage = {
   id: string
@@ -102,7 +105,6 @@ export default function UserCollectionPage() {
   const [loading, setLoading] = useState(true)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [isFollowing, setIsFollowing] = useState(false)
-  const [toastMessage, setToastMessage] = useState('')
   const [profileAvatar, setProfileAvatar] = useState<string | null>(null)
   const [selectedWrap, setSelectedWrap] = useState<Wrap | null>(null)
   const [selectedViewImage, setSelectedViewImage] = useState<string | null>(null)
@@ -121,6 +123,8 @@ export default function UserCollectionPage() {
 
   // WDYWT post modal
   const [selectedPost, setSelectedPost] = useState<WDYWTPost | null>(null)
+  // Lock the page behind any open sheet/modal
+  useLockBodyScroll(isViewWrapModalOpen || isImagePreviewOpen || !!selectedPost)
   const [postComments, setPostComments] = useState<Comment[]>([])
   const [postCommentsLoading, setPostCommentsLoading] = useState(false)
   const [postCommentText, setPostCommentText] = useState('')
@@ -370,6 +374,8 @@ const { data: dipData } = await supabase
 
   return (
     <AppLayout hideHeader={authChecked && !currentUserId}>
+      {/* Same max width as Explore so pages feel consistent */}
+      <div className="mx-auto max-w-[960px]">
       {authChecked && !currentUserId && (
         <div className="mb-4 rounded-2xl bg-gradient-to-r from-pink-500 to-rose-500 px-4 py-3 flex items-center justify-between gap-3">
           <p className="text-sm font-semibold text-white">👋 You're viewing a wrap collection on WrapApp — the home for wrap collectors.</p>
@@ -441,13 +447,12 @@ const { data: dipData } = await supabase
                     if (isFollowing) {
                       await supabase.from('follows').delete().eq('follower_id', currentUserId).eq('following_id', userId)
                       setIsFollowing(false)
-                      setToastMessage(`Unfollowed ${profile?.full_name?.split(' ')[0] || 'user'}`)
+                      showToast(`Unfollowed ${profile?.full_name?.split(' ')[0] || 'user'}`)
                     } else {
                       await supabase.from('follows').insert({ follower_id: currentUserId, following_id: userId, status: 'accepted' })
                       setIsFollowing(true)
-                      setToastMessage(`Following ${profile?.full_name?.split(' ')[0] || 'user'}`)
+                      showToast(`Following ${profile?.full_name?.split(' ')[0] || 'user'}`)
                     }
-                    setTimeout(() => setToastMessage(''), 2000)
                   }}
                   className={`flex-1 xl:flex-none cursor-pointer rounded-xl px-4 py-2 text-sm font-semibold text-white shadow-sm ${isFollowing ? 'bg-gray-600' : 'bg-pink-600 hover:bg-pink-700'}`}
                 >
@@ -539,7 +544,7 @@ const { data: dipData } = await supabase
         {/* WDYWT post modal */}
         {selectedPost && (
           <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center p-0 sm:p-4" onClick={() => setSelectedPost(null)}>
-            <div className="w-full max-w-lg rounded-t-3xl sm:rounded-3xl bg-white shadow-2xl max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="animate-sheet-up w-full max-w-lg rounded-t-3xl sm:rounded-3xl bg-white shadow-2xl max-h-[90dvh] flex flex-col pb-[env(safe-area-inset-bottom)] sm:pb-0" onClick={e => e.stopPropagation()}>
               <div className="flex items-center justify-between px-5 py-4 border-b shrink-0">
                 <h3 className="font-bold text-gray-900">Post</h3>
                 <div className="flex items-center gap-3">
@@ -628,7 +633,7 @@ const { data: dipData } = await supabase
               </div>
               {currentUserId && (
                 <div className="border-t px-4 py-3 flex items-center gap-3 shrink-0">
-                  <input type="text" value={postCommentText} onChange={e => setPostCommentText(e.target.value)} placeholder="Add a comment..." className="flex-1 rounded-full border border-gray-200 px-4 py-2 text-sm outline-none focus:border-pink-300" onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handlePostComment() } }} />
+                  <input type="text" value={postCommentText} onChange={e => setPostCommentText(e.target.value)} placeholder="Add a comment..." className="flex-1 rounded-full border border-gray-200 px-4 py-2 text-[16px] outline-none focus:border-pink-300" onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handlePostComment() } }} />
                   <button type="button" disabled={!postCommentText.trim() || postCommentSending} onClick={handlePostComment} className="rounded-full bg-pink-500 px-4 py-2 text-sm font-semibold text-white disabled:opacity-40">Post</button>
                 </div>
               )}
@@ -640,8 +645,9 @@ const { data: dipData } = await supabase
         {isViewWrapModalOpen && selectedWrap && (() => {
           const sortedImages = sortWrapImages(selectedWrap.wrap_images)
           return (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={closeViewWrapModal}>
-              <div className="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className={fullSheetOverlay} onClick={closeViewWrapModal}>
+              <div className={fullSheetPanel('md:max-w-4xl')} onClick={e => e.stopPropagation()}>
+                <SheetTopBar onClose={closeViewWrapModal} title={selectedWrap.name} />
                 <div className="mb-6 flex items-start justify-between gap-4">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
@@ -740,20 +746,16 @@ const { data: dipData } = await supabase
         })()}
 
         {isImagePreviewOpen && selectedWrap && (
-          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4">
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-0 pt-[env(safe-area-inset-top)] md:p-4">
             <div className="relative w-full max-w-6xl">
-              <button type="button" onClick={() => setIsImagePreviewOpen(false)} className="absolute right-0 top-0 z-10 rounded-full bg-white/90 px-4 py-2 text-sm font-semibold text-gray-800 shadow">Close</button>
+              <button type="button" onClick={() => setIsImagePreviewOpen(false)} className="absolute right-2 top-2 z-10 min-h-[44px] rounded-full bg-white/90 px-4 text-sm font-semibold text-gray-800 shadow md:right-0 md:top-0">Close</button>
               <img src={selectedViewImage || getPrimaryImage(selectedWrap)} alt={selectedWrap.name} className="max-h-[90vh] w-full rounded-2xl bg-black object-contain" />
             </div>
           </div>
         )}
       </div>
+      </div>
 
-      {toastMessage && (
-        <div className="pointer-events-none fixed bottom-24 left-1/2 z-50 -translate-x-1/2">
-          <div className="rounded-2xl border border-white/20 bg-gray-900/90 px-5 py-3 text-sm font-semibold text-white shadow-2xl backdrop-blur">{toastMessage}</div>
-        </div>
-      )}
     </AppLayout>
   )
 }

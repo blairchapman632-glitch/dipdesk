@@ -6,6 +6,7 @@ import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import AppLayout from '@/app/components/AppLayout'
+import { askConfirm } from '@/app/components/Toast'
 
 interface Message {
   id: string
@@ -379,7 +380,7 @@ const sendImage = async (file: File) => {
           <button
             type="button"
             onClick={async () => {
-              const confirmed = window.confirm('Delete this conversation?')
+              const confirmed = await askConfirm({ title: 'Delete this conversation?', message: 'This can’t be undone.', confirmLabel: 'Delete' })
               if (!confirmed) return
 
               await supabase

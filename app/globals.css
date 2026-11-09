@@ -1,8 +1,11 @@
 @import "tailwindcss";
 
+/* WrapApp is light-only: phones in dark mode look the same as light mode
+   (no dark text/background swap, light form controls and scrollbars). */
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  color-scheme: light;
 }
 
 @theme inline {
@@ -12,16 +15,32 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+/* Tailwind v4 makes a plain `border` use currentColor (near-black text colour).
+   Default borders to gray-200; explicit border-* colour classes still win
+   because utilities come after the base layer. */
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-gray-200, currentcolor);
   }
 }
 
 html {
   background-color: #f9fafb;
   overscroll-behavior-y: none;
+  color-scheme: light;
+}
+
+/* Horizontal pill rows: scrollable, no visible scrollbar */
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
 }
 
 body {
@@ -62,6 +81,31 @@ span[onClick] {
 
 .animate-fade-in-up {
   animation: fade-in-up 0.25s ease-out;
+}
+
+/* Sheets slide up on phones */
+@keyframes sheet-up {
+  0% {
+    transform: translateY(24px);
+    opacity: 0.6;
+  }
+  100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* Phones only — desktop keeps the plain centred modal */
+@media (max-width: 767.98px) {
+  .animate-sheet-up {
+    animation: sheet-up 0.22s ease-out;
+  }
+}
+
+@media (min-width: 768px) {
+  .md\:animate-none {
+    animation: none;
+  }
 }
 
 input,

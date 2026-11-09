@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import imageCompression from 'browser-image-compression'
+import { FeedbackHost } from './Toast'
 
 export default function AppLayout({
   children,
@@ -319,7 +320,7 @@ const cachedUnread = localStorage.getItem('dipdesk_unread_count')
                 WrapApp
               </button>
 
-              <nav className="flex items-center gap-2">
+              <nav className="flex items-center gap-1">
                 {navItems.map((item) => {
                   const isActive = pathname === item.href
 
@@ -328,10 +329,11 @@ const cachedUnread = localStorage.getItem('dipdesk_unread_count')
                       key={item.href}
                       type="button"
                       onClick={() => router.push(item.href)}
+                      aria-current={isActive ? 'page' : undefined}
                       className={`relative cursor-pointer rounded-xl px-4 py-2 text-sm font-semibold transition ${
                         isActive
-                          ? 'bg-pink-600 text-white'
-                          : 'border border-gray-200 bg-white text-gray-700 hover:bg-gray-100'
+                          ? 'bg-pink-50 text-pink-600'
+                          : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
                       }`}
                     >
                       {item.label}
@@ -401,23 +403,25 @@ const cachedUnread = localStorage.getItem('dipdesk_unread_count')
             </div>
           )}
 
-          {/* Phone bottom nav */}
-<nav className="fixed inset-x-0 bottom-0 z-50 border-t bg-white md:hidden">
-  <div className="grid grid-cols-5 gap-1 px-2 pt-2" style={{paddingBottom: 'calc(0.5rem + env(safe-area-inset-bottom))'}}>
+          {/* Phone bottom nav — plain icons + labels on white (Instagram-style) */}
+<nav className="fixed inset-x-0 bottom-0 z-50 border-t border-gray-100 bg-white md:hidden">
+  <div className="grid grid-cols-5 px-1" style={{paddingBottom: 'env(safe-area-inset-bottom)'}}>
     {navItems.map((item) => {
       const isActive = pathname === item.href
+      // Active icon draws a little bolder
+      const sw = isActive ? '2.5' : '1.8'
 
       const icon =
         item.label === 'Home' ? (
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill={isActive ? 'currentColor' : 'none'} fillOpacity={isActive ? 0.15 : 0} stroke="currentColor" strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
         ) : item.label === 'Explore' ? (
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
         ) : item.label === 'WDYWT' ? (
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill={isActive ? 'currentColor' : 'none'} fillOpacity={isActive ? 0.15 : 0} stroke="currentColor" strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
         ) : item.label === 'Messages' ? (
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill={isActive ? 'currentColor' : 'none'} fillOpacity={isActive ? 0.15 : 0} stroke="currentColor" strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
         ) : (
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
         )
 
       return (
@@ -425,10 +429,9 @@ const cachedUnread = localStorage.getItem('dipdesk_unread_count')
           key={item.href}
           href={item.href}
           prefetch={true}
-          className={`relative flex min-h-[56px] flex-col items-center justify-center gap-1 rounded-xl px-1 py-2 text-xs font-semibold ${
-            isActive
-              ? 'bg-pink-600 text-white'
-              : 'bg-white text-gray-600 border border-gray-200 active:bg-gray-100'
+          aria-current={isActive ? 'page' : undefined}
+          className={`relative flex min-h-[56px] flex-col items-center justify-center gap-1 px-1 text-[11px] ${
+            isActive ? 'font-bold text-pink-600' : 'font-medium text-gray-500 active:text-gray-700'
           }`}
         >
           <span className="pointer-events-none leading-none relative">
@@ -454,20 +457,21 @@ const cachedUnread = localStorage.getItem('dipdesk_unread_count')
 
           <Link
             href="/tools"
-            className="flex min-h-[56px] flex-col items-center justify-center gap-1 rounded-xl border border-gray-200 px-1 py-2"
+            aria-current={pathname === '/tools' ? 'page' : undefined}
+            className="flex min-h-[56px] flex-col items-center justify-center gap-1 px-1"
           >
             {avatar ? (
               <img
                 src={avatar}
                 alt="You"
-                className="h-7 w-7 rounded-full object-cover ring-2 ring-pink-200 pointer-events-none"
+                className={`h-6 w-6 rounded-full object-cover pointer-events-none ${pathname === '/tools' ? 'ring-2 ring-pink-600 ring-offset-1' : ''}`}
               />
             ) : (
-              <div className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-pink-500 to-rose-500 text-xs font-bold text-white pointer-events-none">
+              <div className={`flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br from-pink-500 to-rose-500 text-[10px] font-bold text-white pointer-events-none ${pathname === '/tools' ? 'ring-2 ring-pink-600 ring-offset-1' : ''}`}>
                 {initials || '?'}
               </div>
             )}
-            <span className="pointer-events-none text-xs font-semibold leading-none text-gray-600">
+            <span className={`pointer-events-none text-[11px] leading-none ${pathname === '/tools' ? 'font-bold text-pink-600' : 'font-medium text-gray-500'}`}>
               Me
             </span>
           </Link>
@@ -483,6 +487,9 @@ const cachedUnread = localStorage.getItem('dipdesk_unread_count')
 >
         {children}
       </main>
+
+      {/* Shared toast + confirm sheet for every page */}
+      <FeedbackHost />
     </div>
   )
 }

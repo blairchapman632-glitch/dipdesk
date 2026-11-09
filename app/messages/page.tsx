@@ -143,7 +143,7 @@ export default function MessagesPage() {
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Search conversations..."
-            className="w-full bg-gray-100 rounded-full px-4 py-2 text-sm outline-none text-gray-900 placeholder-gray-400"
+            className="w-full bg-gray-100 rounded-full px-4 py-2 text-[16px] outline-none text-gray-900 placeholder-gray-400"
           />
         </div>
 
@@ -175,7 +175,7 @@ export default function MessagesPage() {
                   setUserResults(data || [])
                 }}
                 placeholder="Search for a user..."
-                className="w-full bg-gray-100 rounded-full px-4 py-2 text-sm outline-none text-gray-900 placeholder-gray-400 mb-3"
+                className="w-full bg-gray-100 rounded-full px-4 py-2 text-[16px] outline-none text-gray-900 placeholder-gray-400 mb-3"
                 autoFocus
               />
               <div className="space-y-2 max-h-64 overflow-y-auto">

@@ -1,5 +1,41 @@
 # Session Notes
 
+## 2026-11-10 — Explore + global polish (visual only)
+**Changed**
+- `app/globals.css`: base-layer rule so a plain `border` is gray-200 (Tailwind v4 defaulted it to currentColor = near-black). Explicit border-* colours still win. Confirmed in the built CSS.
+- Explore (`app/explore/page.tsx`):
+  - "Collections" → **Suggested collectors** with "See all" (switches to the Users view). Shows people you don't follow (people followed on this visit stay, as "Following"), never yourself, nobody with 0 wraps, up to 10, newest wrap activity first then wrap count. Worked out from data already loaded — no new queries.
+  - One horizontal scrolling row (hidden scrollbar) on phone and desktop. Instagram-story items: 64px avatar, name (truncated), wrap count, small Follow pill below. Nothing overlaps the avatar; no card boxes. The section hides when there's nobody to suggest.
+  - Searching / Users view shows the same items under "Collectors" (wrapping), with Back on the Users view.
+  - Follow/unfollow logic moved into one `toggleFollowUser` (same queries). Toasts now use the shared toast (it was sitting behind the bottom nav).
+  - Featured cards: dip banner always "🎲 Being dipped", fixed 28px height. The For Sale badge moves under the banner when both show. Fixed text area (name 1 line, brand 1 line even if empty, owner pill) so cards line up. 2 columns on phone, 3 on desktop.
+  - Content capped at 960px, centred. Sticky search bar: solid white, full width, padding, light grey bottom line, grey-tinted search box.
+- Widths: profile page (`app/user/[id]`) capped at 960px; Home capped at max-w-6xl (wider because of the desktop Activity column).
+
+**To do / untested**
+- Not yet tested on phone/desktop (type check + build pass). Not committed (this and the previous UI batch).
+
+## 2026-11-10 — UI polish batch (visual/UX only; dip pages, auth, push, Sheets untouched)
+**Changed**
+- Bottom nav (`app/components/AppLayout.tsx`): plain icons + labels on white (no boxes, no pink fill). Active = pink-600 with a bolder icon; inactive gray-500. "Me" avatar gets a pink ring when active. Badges, safe area and 56px tap height kept. Desktop nav: no bordered boxes; active = pink text on a light pink background.
+- New shared components:
+  - `app/components/Toast.tsx`: `showToast()` / `askConfirm()` (+ `useToast` / `useConfirm`). `<FeedbackHost/>` is mounted once in AppLayout. The confirm is a bottom sheet on phone and a centred card on desktop; red confirm button for deletes, pink for non-destructive.
+  - `app/components/useLockBodyScroll.ts`: stops the page scrolling behind open sheets (counts nested sheets).
+  - `app/components/Sheet.tsx`: shared classes for full-screen (phone) / centred (desktop) popups + a phone-only "‹ Back" top bar with safe area.
+- Every alert()/confirm() outside the dip pages replaced: Dashboard (photo errors, save errors, report copy, delete wrap, delete all notifications, move to Departed, close while uploading/saving), Messages thread (delete conversation), Tools (unarchive dip), Admin (broadcast, deactivate/reactivate). The user profile page uses the shared toast.
+- Home (Dashboard): Instagram-style profile header above the Collection/Activity toggle — avatar, name, @username, Wraps / Followers / Following counts, bio + location, then Edit profile / Share / ⚙. Profile + follow counts are cached (`dipdesk_dashboard_follow_counts`) and loaded inside the existing parallel batch (the profile query and the last_active update no longer block). "+ Add Wrap" stays by "Your Collection"; the old Share button was removed.
+- Share: copies `wrapapp.com.au/<username>` (falls back to `/user/<id>`). Phones use navigator.share when available, else copy + "Link copied" toast.
+- Inputs: every input/select/textarea outside the dip pages and auth pages now uses text-[16px] (29 fixed, incl. the wrap form ones that dropped to 14px at xl). The sign-in and reset-password pages already used 16px via their own CSS and were left alone.
+- Tools page reads as Settings: "Settings" heading, Profile / Account / Dips sections, "View my public profile" (→ /username, or /user/<id>), consistent 44–52px rows.
+- Popups on phones: wrap view (Dashboard, Explore, profiles, Wishlist), add/edit wrap and the report are full-screen sheets with a "‹ Back" bar. Image previews go edge to edge. The Explore filter sheet and the WDYWT post sheet got safe-area padding + slide-up. Desktop keeps the centred modals. The page behind is scroll-locked. Contents and saving unchanged.
+- Filter rows (Dashboard collection + Explore filter sheet): one horizontally scrollable row, pills sized to text (text-sm), "Clear" as the last pill.
+- Light-only: removed the dark-mode media query, set `color-scheme: light` (globals.css). Added `.no-scrollbar` and a phone-only slide-up animation.
+- Consistency: Dashboard has one primary (pink gradient) and one secondary (outline) button style.
+
+**To do / untested**
+- Not yet tested on a phone or desktop (type check + build pass). Test list in chat. Not committed.
+- Lint: no new errors from this batch (only a no-img warning on the new header avatar, the same as the rest of the app). The lint now reports some older hook issues further down already-existing components (set-state-in-effect, "accessed before declared"); those are existing code, left alone.
+
 ## 2026-11-09 — Security: follows RLS, test table, dips column privacy
 **Database (Step A, run)**
 - `follows`: RLS turned on. Anyone can read; you can only insert/delete rows where you are the follower (no update policy — the app never updates follows).

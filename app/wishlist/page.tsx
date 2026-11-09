@@ -5,6 +5,8 @@ import { supabase } from '@/lib/supabase'
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { getCoverImage, sortWrapImages } from '@/lib/wrapCover'
+import { fullSheetOverlay, fullSheetPanel, SheetTopBar } from '@/app/components/Sheet'
+import { useLockBodyScroll } from '@/app/components/useLockBodyScroll'
 
 type WrapImage = {
   id: string
@@ -92,6 +94,8 @@ export default function Page() {
   const [selectedViewImage, setSelectedViewImage] = useState<string | null>(null)
   const [isViewWrapModalOpen, setIsViewWrapModalOpen] = useState(false)
   const [isImagePreviewOpen, setIsImagePreviewOpen] = useState(false)
+  // Lock the page behind any open sheet/modal
+  useLockBodyScroll(isViewWrapModalOpen || isImagePreviewOpen)
   const [selectedWrapCounts, setSelectedWrapCounts] = useState<SocialCounts>({
     likes: 0,
     wishlists: 0,
@@ -552,13 +556,14 @@ export default function Page() {
 
           return (
             <div
-              className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+              className={fullSheetOverlay}
               onClick={closeViewWrapModal}
             >
               <div
-                className="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl"
+                className={fullSheetPanel('md:max-w-4xl')}
                 onClick={(e) => e.stopPropagation()}
               >
+                <SheetTopBar onClose={closeViewWrapModal} title={selectedWrap.name} />
                 <div className="mb-6 flex items-start justify-between gap-4">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
@@ -769,7 +774,7 @@ export default function Page() {
     onChange={(e) => setSelectedWrapNotes(e.target.value)}
     placeholder="Add notes about this wrap, e.g. sales history, prices seen, seller notes"
     rows={8}
-    className="w-full rounded-2xl border border-gray-200 px-3 py-2 text-sm text-gray-700 outline-none transition focus:border-pink-300 focus:ring-2 focus:ring-pink-100"
+    className="w-full rounded-2xl border border-gray-200 px-3 py-2 text-[16px] text-gray-700 outline-none transition focus:border-pink-300 focus:ring-2 focus:ring-pink-100"
   />
 
   <div className="mt-3 flex items-center justify-between gap-3">
@@ -804,12 +809,12 @@ export default function Page() {
         })()}
 
         {isImagePreviewOpen && selectedWrap && (
-          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4">
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-0 pt-[env(safe-area-inset-top)] md:p-4">
             <div className="relative w-full max-w-6xl">
               <button
                 type="button"
                 onClick={() => setIsImagePreviewOpen(false)}
-                className="absolute right-0 top-0 z-10 rounded-full bg-white/90 px-4 py-2 text-sm font-semibold text-gray-800 shadow"
+                className="absolute right-2 top-2 z-10 min-h-[44px] rounded-full bg-white/90 px-4 text-sm font-semibold text-gray-800 shadow md:right-0 md:top-0"
               >
                 Close
               </button>

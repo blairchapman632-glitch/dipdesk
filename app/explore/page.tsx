@@ -5,6 +5,9 @@ import { supabase } from '@/lib/supabase'
 import React, { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { getCoverImage, sortWrapImages } from '@/lib/wrapCover'
+import { fullSheetOverlay, fullSheetPanel, SheetTopBar } from '@/app/components/Sheet'
+import { useLockBodyScroll } from '@/app/components/useLockBodyScroll'
+import { showToast } from '@/app/components/Toast'
 
 type WrapImage = {
   id: string
@@ -385,6 +388,8 @@ const [selectedWrap, setSelectedWrap] = useState<Wrap | null>(null)
 const [selectedViewImage, setSelectedViewImage] = useState<string | null>(null)
 const [isViewWrapModalOpen, setIsViewWrapModalOpen] = useState(false)
 const [isImagePreviewOpen, setIsImagePreviewOpen] = useState(false)
+// Lock the page behind any open sheet/modal
+useLockBodyScroll(isViewWrapModalOpen || isImagePreviewOpen || showFilterSheet)
 const [selectedWrapCounts, setSelectedWrapCounts] = useState<SocialCounts>({
   likes: 0,
   wishlists: 0,
@@ -393,7 +398,8 @@ const [hasLikedSelectedWrap, setHasLikedSelectedWrap] = useState(false)
 const [hasWishlistedSelectedWrap, setHasWishlistedSelectedWrap] = useState(false)
 const [socialLoading, setSocialLoading] = useState(false)
 const [currentUserId, setCurrentUserId] = useState<string | null>(null)
-const [toastMessage, setToastMessage] = useState('')
+// People followed from the suggestions row this visit (they stay in the row as "Following")
+const [followedThisVisit, setFollowedThisVisit] = useState<Set<string>>(() => new Set())
 const [activeDips, setActiveDips] = useState<{id: string, wrap_id: string | null, total_spots: number, price_per_spot: number, stage: string | null, facebook_group: string | null}[]>([])
 const [allActiveDips, setAllActiveDips] = useState<{id: string, wrap_id: string | null, total_spots: number, price_per_spot: number, stage: string | null, facebook_group: string | null}[]>([])
 const allActiveDipsRef = React.useRef<string[]>([])
@@ -909,6 +915,129 @@ const filteredWraps = (
   }
   return true
 })
+  // Follow / unfollow from the collectors row (same logic as before, shared by both lists)
+  async function toggleFollowUser(user: ExploreUser) {
+    const {
+      data: { user: currentUser },
+    } = await supabase.auth.getUser()
+
+    if (!currentUser || currentUser.id === user.id) return
+
+    const isAlreadyFollowing = followingUsers.some(
+      (followingUser) => followingUser.id === user.id
+    )
+
+    if (isAlreadyFollowing) {
+      const { error } = await supabase
+        .from('follows')
+        .delete()
+        .eq('follower_id', currentUser.id)
+        .eq('following_id', user.id)
+
+      if (error) {
+        showToast('Could not unfollow user')
+        return
+      }
+
+      setFollowingUsers((previous) =>
+        previous.filter((followingUser) => followingUser.id !== user.id)
+      )
+      showToast(`Unfollowed ${user.name}`)
+      return
+    }
+
+    const { error } = await supabase.from('follows').insert({
+      follower_id: currentUser.id,
+      following_id: user.id,
+      status: 'accepted',
+    })
+
+    if (error) {
+      showToast('Could not follow user')
+      return
+    }
+
+    // Keep them in the suggestions row (shown as "Following") until the page is next loaded
+    setFollowedThisVisit((previous) => new Set(previous).add(user.id))
+    setFollowingUsers((previous) => [
+      ...previous,
+      {
+        id: user.id,
+        name: user.name,
+        image_url: user.image_url,
+        wrap_count: user.wrap_count,
+      },
+    ])
+    showToast(`Following ${user.name}`)
+  }
+
+  // Suggested collectors: not me, not already followed (except people followed on this visit),
+  // at least one wrap. Newest wrap activity first, then most wraps. Up to 10.
+  const latestActivityByUser: Record<string, number> = {}
+  for (const wrap of latestWraps) {
+    const t = new Date(wrap.created_at).getTime()
+    if (!Number.isNaN(t) && t > (latestActivityByUser[wrap.user_id] || 0)) latestActivityByUser[wrap.user_id] = t
+  }
+  const followedIdSet = new Set(followingUsers.map((followingUser) => followingUser.id))
+  const suggestedCollectors = users
+    .filter((user) => user.id !== currentUserId)
+    .filter((user) => (user.wrap_count || 0) > 0)
+    .filter((user) => !followedIdSet.has(user.id) || followedThisVisit.has(user.id))
+    .sort(
+      (a, b) =>
+        (latestActivityByUser[b.id] || 0) - (latestActivityByUser[a.id] || 0) ||
+        (b.wrap_count || 0) - (a.wrap_count || 0)
+    )
+    .slice(0, 10)
+
+  // One collector "story" item: avatar, name, wrap count, Follow pill below (nothing over the avatar)
+  const renderCollector = (user: ExploreUser) => {
+    const isFollowingUser = followingUsers.some((followingUser) => followingUser.id === user.id)
+    return (
+      <div key={user.id} className="flex w-[76px] shrink-0 flex-col items-center text-center">
+        <button
+          type="button"
+          onClick={() => router.push(`/user/${user.id}`)}
+          className="flex w-full cursor-pointer flex-col items-center"
+          aria-label={`View ${user.name}`}
+        >
+          {avatarMap[user.id] ? (
+            <img
+              src={avatarMap[user.id]!}
+              loading="lazy"
+              alt={user.name}
+              className="h-16 w-16 rounded-full object-cover ring-2 ring-pink-100 pointer-events-none"
+            />
+          ) : (
+            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-pink-500 to-rose-500 text-xl font-bold text-white pointer-events-none">
+              {user.name?.[0]?.toUpperCase() || '?'}
+            </div>
+          )}
+          <p className="mt-1.5 w-full truncate text-xs font-semibold text-gray-900 pointer-events-none">
+            {user.name}
+          </p>
+          <p className="text-[11px] text-gray-500 pointer-events-none">
+            {user.wrap_count} wrap{user.wrap_count === 1 ? '' : 's'}
+          </p>
+        </button>
+        {user.id !== currentUserId && (
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation()
+              void toggleFollowUser(user)
+            }}
+            className={`mt-1.5 min-h-[28px] rounded-full px-3 text-[11px] font-semibold ${
+              isFollowingUser ? 'bg-gray-100 text-gray-600' : 'bg-pink-600 text-white'
+            }`}
+          >
+            {isFollowingUser ? 'Following' : 'Follow'}
+          </button>
+        )}
+      </div>
+    )
+  }
+
   const hasSearch = searchTerm.trim().length > 0
   const noResults =
     !loading &&
@@ -918,8 +1047,9 @@ const filteredWraps = (
     filteredWraps.length === 0
   return (
     <AppLayout>
-      <div className="space-y-2">
-        <section className="sticky top-0 z-40 rounded-xl bg-white px-3 pt-1.5 pb-1.5 shadow-sm">
+      <div className="mx-auto max-w-[960px] space-y-2">
+        {/* Solid white, full width, light grey line under it — cards never peek around it */}
+        <section className="sticky top-0 z-40 -mx-3 border-b border-gray-200 bg-white px-3 py-2 md:-mx-4 md:px-4">
           <div className="flex items-center gap-2">
             <div className="relative flex-1">
               <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 leading-none">
@@ -933,13 +1063,13 @@ const filteredWraps = (
                 value={searchTerm}
                 onChange={(event) => setSearchTerm(event.target.value)}
                 placeholder="Search wraps or collectors"
-                className="w-full rounded-lg border pl-9 pr-3 py-1.5 text-[16px] text-gray-900 outline-none focus:border-pink-500"
+                className="w-full rounded-xl border border-gray-200 bg-gray-50 pl-9 pr-3 py-2 text-[16px] text-gray-900 outline-none focus:border-pink-500 focus:bg-white"
               />
             </div>
             <button
               type="button"
               onClick={() => setShowFilterSheet(true)}
-              className={`relative shrink-0 rounded-xl border px-3 py-1.5 text-sm font-semibold transition ${
+              className={`relative flex min-h-[40px] min-w-[44px] shrink-0 items-center justify-center rounded-xl border px-3 text-sm font-semibold transition ${
                 (filterBrand || sizeMin || sizeMax || sizeRingSling || filterColour || selectedBlends.length > 0 || selectedTypes.length > 0 || resultType !== 'all')
                   ? 'border-pink-500 bg-pink-500 text-white'
                   : 'border-gray-200 bg-white text-gray-600'
@@ -956,8 +1086,8 @@ const filteredWraps = (
 
         {/* Filter bottom sheet */}
         {showFilterSheet && (
-          <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40" onClick={() => setShowFilterSheet(false)}>
-            <div className="w-full max-w-lg rounded-t-3xl bg-white px-4 pt-4 pb-8 shadow-2xl" onClick={e => e.stopPropagation()}>
+          <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 md:items-center md:p-4" onClick={() => setShowFilterSheet(false)}>
+            <div className="animate-sheet-up max-h-[92dvh] w-full max-w-lg overflow-y-auto overscroll-contain rounded-t-3xl bg-white px-4 pt-4 pb-[calc(2rem+env(safe-area-inset-bottom))] shadow-2xl md:rounded-3xl md:pb-6" onClick={e => e.stopPropagation()}>
               {/* Handle */}
               <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-gray-200" />
 
@@ -973,15 +1103,15 @@ const filteredWraps = (
                     key={type}
                     type="button"
                     onClick={() => setResultType(type)}
-                    className={`flex-1 rounded-full border py-1.5 text-xs font-semibold ${resultType === type ? 'border-pink-500 bg-pink-500 text-white' : 'border-gray-200 bg-white text-gray-600'}`}
+                    className={`min-h-[40px] flex-1 rounded-full border text-sm font-semibold ${resultType === type ? 'border-pink-500 bg-pink-500 text-white' : 'border-gray-200 bg-white text-gray-600'}`}
                   >
                     {type === 'all' ? 'All' : type === 'wraps' ? 'Wraps' : type === 'users' ? 'Users' : 'Available'}
                   </button>
                 ))}
               </div>
 
-              {/* Filter row 2 */}
-              <div className="flex gap-1.5 mb-4">
+              {/* Filter row 2 — one scrollable row, Clear is the last pill */}
+              <div className="no-scrollbar -mx-4 mb-4 flex gap-2 overflow-x-auto px-4 pb-0.5">
                 {[
                   { label: selectedTypes.length > 0 ? `Type (${selectedTypes.length})` : 'Type', key: 'type' },
                   { label: selectedBrands.length > 0 ? `Brands (${selectedBrands.length})` : 'Brands', key: 'brand' },
@@ -999,7 +1129,7 @@ const filteredWraps = (
                       setShowBlendFilter(key === 'blend' ? !showBlendFilter : false)
                       setShowTypeFilter(key === 'type' ? !showTypeFilter : false)
                     }}
-                    className={`flex-1 rounded-full border py-1.5 text-[10px] font-semibold ${
+                    className={`min-h-[36px] shrink-0 whitespace-nowrap rounded-full border px-3.5 text-sm font-semibold ${
                       (() => {
                         if (key === 'brand' && selectedBrands.length > 0) return 'border-pink-500 bg-pink-50 text-pink-700'
                         if (key === 'size' && (sizeMin || sizeMax)) return 'border-pink-500 bg-pink-50 text-pink-700'
@@ -1013,6 +1143,11 @@ const filteredWraps = (
                     {label}
                   </button>
                 ))}
+                {(filterBrand || sizeMin || sizeMax || sizeRingSling || filterColour || selectedBlends.length > 0 || selectedTypes.length > 0) && (
+                  <button type="button" onClick={() => { setFilterBrand(''); setSelectedBrands([]); setBrandSearch(''); setBrandSearchResults([]); setFilterSize(''); setSizeMin(''); setSizeMax(''); setSizeRingSling(false); setFilterColour(''); setFilterMaterial(''); setSelectedBlends([]); setSelectedTypes([]) }} className="min-h-[36px] shrink-0 whitespace-nowrap rounded-full border border-red-200 bg-white px-3.5 text-sm font-semibold text-red-500">
+                    Clear
+                  </button>
+                )}
               </div>
 
               {/* Expanded filters */}
@@ -1073,11 +1208,6 @@ const filteredWraps = (
                   </div>
                 )}
 
-                {(filterBrand || sizeMin || sizeMax || sizeRingSling || filterColour || selectedBlends.length > 0 || selectedTypes.length > 0) && (
-                  <button type="button" onClick={() => { setFilterBrand(''); setSelectedBrands([]); setBrandSearch(''); setBrandSearchResults([]); setFilterSize(''); setSizeMin(''); setSizeMax(''); setSizeRingSling(false); setFilterColour(''); setFilterMaterial(''); setSelectedBlends([]); setSelectedTypes([]) }} className="w-full rounded-full border border-red-200 px-3 py-2 text-xs font-semibold text-red-500">
-                    Clear filters
-                  </button>
-                )}
               </div>
             </div>
           </div>
@@ -1091,129 +1221,46 @@ const filteredWraps = (
         )}
         
 
-        <section className="px-0 py-1">
-          <div className="mb-2 px-0">
-            <h2 className="text-sm font-bold text-gray-500 uppercase tracking-wide">Collections</h2>
-          </div>
-
-          {loading && latestWraps.length === 0 ? (
-            <p className="text-sm text-gray-500">Loading collections...</p>
-                    ) : filteredUsers.length === 0 ? (
-            !hasSearch && (
-              <div className="rounded-lg border border-dashed px-3 py-4 text-center">
-                <p className="text-sm text-gray-500">No collections found</p>
+        {/* Suggested collectors (browsing) — or the users results (searching / Users view) */}
+        {!hasSearch && resultType !== 'users' ? (
+          resultType === 'all' && suggestedCollectors.length > 0 && (
+            <section className="py-1">
+              <div className="mb-2 flex items-center justify-between">
+                <h2 className="text-sm font-bold text-gray-500 uppercase tracking-wide">Suggested collectors</h2>
+                <button
+                  type="button"
+                  onClick={() => setResultType('users')}
+                  className="min-h-[36px] px-1 text-sm font-semibold text-pink-600"
+                >
+                  See all
+                </button>
               </div>
-            )
-                    ) : (
-            <div className="-mx-3 overflow-x-auto px-3 pb-1 sm:mx-0 sm:px-0">
-              <div className="flex gap-2 sm:flex-wrap">
-  {filteredUsers.map((user) => (
-  <div key={user.id} className="relative">
-    <button
-                    type="button"
-                    onClick={() => router.push(`/user/${user.id}`)}
-                    className="flex w-[88px] shrink-0 cursor-pointer flex-col items-center rounded-xl border bg-white px-1.5 py-1.5 text-center shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-md"
-                  >
-                    {avatarMap[user.id] ? (
-                      <img
-                        src={avatarMap[user.id]!}
-                        loading="lazy"
-                        alt={user.name}
-                        className="mb-1 h-9 w-9 rounded-full object-cover pointer-events-none"
-                      />
-                    ) : (
-                      <div className="mb-1 flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-pink-500 to-rose-500 text-sm font-bold text-white pointer-events-none">
-                        {user.name?.[0]?.toUpperCase() || '?'}
-                      </div>
-                    )}
-
-                    <p className="line-clamp-1 text-xs font-semibold text-gray-900 pointer-events-none">
-                      {user.name}
-                    </p>
-
-                    <p className="mt-0.5 text-[10px] text-gray-500 pointer-events-none">
-  {user.wrap_count} wrap{user.wrap_count === 1 ? '' : 's'}
-</p>
-                  </button>
-
+              <div className="no-scrollbar -mx-3 flex gap-3 overflow-x-auto px-3 pb-1 md:-mx-4 md:px-4">
+                {suggestedCollectors.map((user) => renderCollector(user))}
+              </div>
+            </section>
+          )
+        ) : (
+          filteredUsers.length > 0 && (
+            <section className="py-1">
+              <div className="mb-2 flex items-center justify-between">
+                <h2 className="text-sm font-bold text-gray-500 uppercase tracking-wide">Collectors</h2>
+                {resultType === 'users' && !hasSearch && (
                   <button
-  type="button"
-  onClick={async (event) => {
-    event.stopPropagation()
-
-    const {
-      data: { user: currentUser },
-    } = await supabase.auth.getUser()
-
-    if (!currentUser || currentUser.id === user.id) return
-
-    const isAlreadyFollowing = followingUsers.some(
-      (followingUser) => followingUser.id === user.id
-    )
-
-    if (isAlreadyFollowing) {
-      const { error } = await supabase
-        .from('follows')
-        .delete()
-        .eq('follower_id', currentUser.id)
-        .eq('following_id', user.id)
-
-      if (error) {
-  setToastMessage('Could not unfollow user')
-  setTimeout(() => setToastMessage(''), 2000)
-  return
-}
-
-setFollowingUsers((previous) =>
-  previous.filter((followingUser) => followingUser.id !== user.id)
-)
-
-setToastMessage(`Unfollowed ${user.name}`)
-setTimeout(() => setToastMessage(''), 2000)
-return
-    }
-
-    const { error } = await supabase.from('follows').insert({
-      follower_id: currentUser.id,
-      following_id: user.id,
-      status: 'accepted',
-    })
-
-    if (error) {
-  setToastMessage('Could not follow user')
-  setTimeout(() => setToastMessage(''), 2000)
-  return
-}
-
-setFollowingUsers((previous) => [
-  ...previous,
-  {
-    id: user.id,
-    name: user.name,
-    image_url: user.image_url,
-    wrap_count: user.wrap_count,
-  },
-])
-
-setToastMessage(`Following ${user.name}`)
-setTimeout(() => setToastMessage(''), 2000)
-  }}
-  className={`absolute right-2 top-2 rounded-full px-2 py-1 text-[10px] font-semibold text-white shadow ${
-    followingUsers.some((followingUser) => followingUser.id === user.id)
-      ? 'bg-gray-500'
-      : 'bg-pink-600'
-  }`}
->
-  {followingUsers.some((followingUser) => followingUser.id === user.id)
-    ? 'Following'
-    : 'Follow'}
-</button>
-                </div>
-              ))}
+                    type="button"
+                    onClick={() => setResultType('all')}
+                    className="min-h-[36px] px-1 text-sm font-semibold text-pink-600"
+                  >
+                    Back
+                  </button>
+                )}
               </div>
-            </div>
-          )}
-        </section>
+              <div className="flex flex-wrap gap-x-3 gap-y-4">
+                {filteredUsers.filter((user) => user.id !== currentUserId).map((user) => renderCollector(user))}
+              </div>
+            </section>
+          )
+        )}
 
         <section className="px-0 py-1">
           <div className="mb-2">
@@ -1229,13 +1276,13 @@ setTimeout(() => setToastMessage(''), 2000)
               </div>
             )
           ) : (
-            <div className="grid grid-cols-2 gap-2 xl:grid-cols-4">
+            <div className="grid grid-cols-2 gap-2 md:grid-cols-3 md:gap-3">
               {filteredWraps.map((wrap) => (
                 <button
                   key={wrap.id}
                   type="button"
                                     onClick={() => openViewWrapModal(wrap)}
-                  className="group flex cursor-pointer flex-col overflow-hidden rounded-lg border bg-white text-left shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-md hover:cursor-pointer"
+                  className="group flex h-full cursor-pointer flex-col overflow-hidden rounded-xl border border-gray-200 bg-white text-left shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-md hover:cursor-pointer"
                   style={{ cursor: 'pointer' }}
                   title="Open wrap"
                 >
@@ -1247,37 +1294,36 @@ setTimeout(() => setToastMessage(''), 2000)
                       className="h-full w-full object-cover object-[center_20%] transition duration-300 group-hover:scale-[1.03] pointer-events-none"
                     />
 
+                    {/* Dip banner: same wording and height on every card */}
+                    {activeDipWrapIds.has(wrap.id) && (
+                      <div className="absolute inset-x-0 top-0 flex h-7 items-center justify-center bg-purple-600/95 px-2 text-xs font-bold text-white shadow pointer-events-none">
+                        🎲 Being dipped
+                      </div>
+                    )}
+                    {/* For Sale badge sits under the banner when there is one */}
                     {wrap.for_sale && (
-                      <div className="absolute left-2 top-2 rounded-lg bg-white/90 px-2 py-1 text-[10px] font-semibold text-amber-700 shadow pointer-events-none">
+                      <div className={`absolute left-2 rounded-lg bg-white/90 px-2 py-1 text-[10px] font-semibold text-amber-700 shadow pointer-events-none ${activeDipWrapIds.has(wrap.id) ? 'top-9' : 'top-2'}`}>
                         🪓 For Sale
                       </div>
                     )}
-                    {activeDipWrapIds.has(wrap.id) && (() => {
-                      const wrapDip = allActiveDips.find((d) => d.wrap_id === wrap.id)
-                      const groupName = wrapDip?.facebook_group
-                      return (
-                        <div className="absolute inset-x-0 top-0 bg-purple-600/95 px-2 py-1.5 text-center text-xs font-bold text-white shadow pointer-events-none">
-                          🎲 {groupName ? `Dipping on ${groupName}` : 'Being Dipped'}
-                        </div>
-                      )
-                    })()}
 
                     
                   </div>
 
-                  <div className="px-2 py-1.5">
-                    <h3 className="line-clamp-1 text-sm font-bold text-gray-900 pointer-events-none">
+                  {/* Fixed-height text area so every card in a row lines up */}
+                  <div className="flex flex-1 flex-col items-start px-2 py-1.5">
+                    <h3 className="w-full truncate text-sm font-bold leading-5 text-gray-900 pointer-events-none">
                       {wrap.name}
                     </h3>
-                    <p className="line-clamp-1 text-xs text-gray-500 pointer-events-none">
-                      {wrap.brand || ''}
+                    <p className="h-4 w-full truncate text-xs leading-4 text-gray-500 pointer-events-none">
+                      {wrap.brand || '\u00a0'}
                     </p>
                     <span
                       onClick={(event) => {
                         event.stopPropagation()
                         router.push(`/user/${wrap.user_id}`)
                       }}
-                      className="mt-1 inline-flex cursor-pointer items-center rounded-full bg-pink-50 px-2 py-0.5 text-xs font-semibold text-pink-600 hover:bg-pink-100"
+                      className="mt-1 inline-flex max-w-full cursor-pointer items-center truncate rounded-full bg-pink-50 px-2 py-0.5 text-xs font-semibold text-pink-600 hover:bg-pink-100"
                     >
                       {getDisplayName(profilesMap[wrap.user_id])}
                     </span>
@@ -1292,13 +1338,14 @@ setTimeout(() => setToastMessage(''), 2000)
 
           return (
             <div
-              className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+              className={fullSheetOverlay}
               onClick={closeViewWrapModal}
             >
               <div
-                className="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl"
+                className={fullSheetPanel('md:max-w-4xl')}
                 onClick={(e) => e.stopPropagation()}
               >
+                <SheetTopBar onClose={closeViewWrapModal} title={selectedWrap.name} />
                                <div className="mb-6 flex items-start justify-between gap-4">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
@@ -1529,12 +1576,12 @@ setTimeout(() => setToastMessage(''), 2000)
         })()}
 
         {isImagePreviewOpen && selectedWrap && (
-          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4">
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-0 pt-[env(safe-area-inset-top)] md:p-4">
             <div className="relative w-full max-w-6xl">
               <button
                 type="button"
                 onClick={() => setIsImagePreviewOpen(false)}
-                className="absolute right-0 top-0 z-10 rounded-full bg-white/90 px-4 py-2 text-sm font-semibold text-gray-800 shadow"
+                className="absolute right-2 top-2 z-10 min-h-[44px] rounded-full bg-white/90 px-4 text-sm font-semibold text-gray-800 shadow md:right-0 md:top-0"
               >
                 Close
               </button>
@@ -1549,13 +1596,6 @@ setTimeout(() => setToastMessage(''), 2000)
           </div>
         )}
       </div>
-    {toastMessage && (
-  <div className="pointer-events-none fixed bottom-6 left-1/2 z-50 -translate-x-1/2">
-    <div className="rounded-2xl border border-white/20 bg-gray-900/90 px-5 py-3 text-sm font-semibold text-white shadow-2xl backdrop-blur">
-      {toastMessage}
-    </div>
-  </div>
-)}
 </AppLayout>
   )
 }

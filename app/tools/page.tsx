@@ -3,6 +3,7 @@
 import AppLayout from '@/app/components/AppLayout'
 import { useRouter } from 'next/navigation'
 import UsernameSheet from '@/app/components/UsernameSheet'
+import { askConfirm } from '@/app/components/Toast'
 import { supabase } from '@/lib/supabase'
 import { useEffect, useState } from 'react'
 import imageCompression from 'browser-image-compression'
@@ -170,9 +171,14 @@ const { data: dipHistory } = await supabase
 
   return (
     <AppLayout>
-      <div className="max-w-xl space-y-4">
+      <div className="mx-auto max-w-xl space-y-6">
 
-        {/* Profile header */}
+        {/* Settings heading */}
+        <h1 className="px-1 text-2xl font-bold text-gray-900">Settings</h1>
+
+        {/* Profile */}
+        <section className="space-y-2">
+        <h2 className="px-1 text-xs font-semibold uppercase tracking-wide text-gray-500">Profile</h2>
         <div className="rounded-2xl bg-white border p-5 shadow-sm">
           <div className="flex items-center gap-4">
             <label className="relative cursor-pointer group flex-shrink-0">
@@ -248,43 +254,42 @@ const { data: dipHistory } = await supabase
             <button
               type="button"
               onClick={() => {
-                const cached = localStorage.getItem(DASHBOARD_PROFILE_KEY)
-                if (cached) {
-                  try {
-                    const p = JSON.parse(cached)
-                    if (p.id) router.push(`/user/${p.id}`)
-                  } catch {}
-                }
+                // Public page: /username, or /user/<id> if no username yet
+                if (username) { router.push(`/${username}`); return }
+                if (currentUserId) router.push(`/user/${currentUserId}`)
               }}
-              className="rounded-xl border border-gray-300 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+              className="min-h-[44px] rounded-xl border border-gray-200 text-sm font-semibold text-gray-800 hover:bg-gray-50"
             >
-              View Profile
+              View my public profile
             </button>
             <button
               type="button"
               onClick={() => { setEditName(fullName); setShowNameEdit(true) }}
-              className="rounded-xl border border-gray-300 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+              className="min-h-[44px] rounded-xl border border-gray-200 text-sm font-semibold text-gray-800 hover:bg-gray-50"
             >
               Edit Name
             </button>
             <button
               type="button"
               onClick={() => setShowBioEdit(true)}
-              className="rounded-xl border border-gray-300 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+              className="min-h-[44px] rounded-xl border border-gray-200 text-sm font-semibold text-gray-800 hover:bg-gray-50"
             >
               Edit Bio
             </button>
           <button
               type="button"
               onClick={() => setShowLocationEdit(true)}
-              className="rounded-xl border border-gray-300 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 col-span-2"
+              className="min-h-[44px] rounded-xl border border-gray-200 text-sm font-semibold text-gray-800 hover:bg-gray-50 col-span-2"
             >
               📍 {city && country ? `${city}, ${country}` : 'Add Location'}
             </button>
           </div>
         </div>
+        </section>
 
-        {/* Settings list */}
+        {/* Account settings */}
+        <section className="space-y-2">
+        <h2 className="px-1 text-xs font-semibold uppercase tracking-wide text-gray-500">Account</h2>
         <div className="rounded-2xl border bg-white shadow-sm overflow-hidden">
           <button
             type="button"
@@ -300,7 +305,7 @@ const { data: dipHistory } = await supabase
           <button
             type="button"
             onClick={() => setShowFeedbackHubEdit(true)}
-            className="w-full flex items-center gap-3 px-4 py-3.5 text-left text-sm font-semibold text-gray-700 hover:bg-gray-50 border-b"
+            className="w-full flex min-h-[52px] items-center gap-3 px-4 py-3.5 text-left text-sm font-semibold text-gray-700 hover:bg-gray-50 border-b"
           >
             <span className="text-lg">🔗</span> Babywearing Feedback Hub
             {feedbackHubLink && <span className="ml-auto text-xs text-gray-400 truncate max-w-[120px]">{feedbackHubLink}</span>}
@@ -309,7 +314,7 @@ const { data: dipHistory } = await supabase
           <button
             type="button"
             onClick={() => router.push('/wishlist')}
-            className="w-full flex items-center gap-3 px-4 py-3.5 text-left text-sm font-semibold text-gray-700 hover:bg-gray-50 border-b"
+            className="w-full flex min-h-[52px] items-center gap-3 px-4 py-3.5 text-left text-sm font-semibold text-gray-700 hover:bg-gray-50 border-b"
           >
             <span className="text-lg">⭐</span> ISO Wraps
           </button>
@@ -317,7 +322,7 @@ const { data: dipHistory } = await supabase
           <button
             type="button"
             onClick={() => router.push('/dashboard?report=true')}
-            className="w-full flex items-center gap-3 px-4 py-3.5 text-left text-sm font-semibold text-gray-700 hover:bg-gray-50 border-b"
+            className="w-full flex min-h-[52px] items-center gap-3 px-4 py-3.5 text-left text-sm font-semibold text-gray-700 hover:bg-gray-50 border-b"
           >
             <span className="text-lg">📊</span> Report
           </button>
@@ -325,7 +330,7 @@ const { data: dipHistory } = await supabase
           <button
             type="button"
             onClick={() => setShowFeedback(true)}
-            className="w-full flex items-center gap-3 px-4 py-3.5 text-left text-sm font-semibold text-pink-600 hover:bg-pink-50 border-b"
+            className="w-full flex min-h-[52px] items-center gap-3 px-4 py-3.5 text-left text-sm font-semibold text-pink-600 hover:bg-pink-50 border-b"
           >
             <span className="text-lg">💬</span> Feedback / Contact
           </button>
@@ -334,7 +339,7 @@ const { data: dipHistory } = await supabase
             <button
               type="button"
               onClick={() => router.push('/admin')}
-              className="w-full flex items-center gap-3 px-4 py-3.5 text-left text-sm font-semibold text-gray-700 hover:bg-gray-50 border-b"
+              className="w-full flex min-h-[52px] items-center gap-3 px-4 py-3.5 text-left text-sm font-semibold text-gray-700 hover:bg-gray-50 border-b"
             >
               <span className="text-lg">⚙️</span> Admin
             </button>
@@ -343,11 +348,16 @@ const { data: dipHistory } = await supabase
           <button
             type="button"
             onClick={handleLogout}
-            className="w-full flex items-center gap-3 px-4 py-3.5 text-left text-sm font-semibold text-red-500 hover:bg-red-50"
+            className="w-full flex min-h-[52px] items-center gap-3 px-4 py-3.5 text-left text-sm font-semibold text-red-500 hover:bg-red-50"
           >
             <span className="text-lg">🚪</span> Logout
           </button>
         </div>
+        </section>
+
+        {/* Dips */}
+        <section className="space-y-2">
+        <h2 className="px-1 text-xs font-semibold uppercase tracking-wide text-gray-500">Dips</h2>
 {/* Start a Dip */}
         <button
           type="button"
@@ -384,11 +394,11 @@ const { data: dipHistory } = await supabase
                         <button
                           type="button"
                           onClick={async () => {
-                            if (!confirm('Unarchive this dip? It will return to your active dips.')) return
+                            if (!(await askConfirm({ title: 'Unarchive this dip?', message: 'It will return to your active dips.', confirmLabel: 'Unarchive', danger: false }))) return
                             await supabase.from('dips').update({ archived: false }).eq('id', dip.id)
                             setArchivedDips(prev => prev.filter(d => d.id !== dip.id))
                           }}
-                          className="text-[10px] text-gray-400 underline"
+                          className="min-h-[44px] px-1 text-xs text-gray-500 underline"
                         >
                           Unarchive
                         </button>
@@ -430,6 +440,7 @@ const { data: dipHistory } = await supabase
             </div>
           )}
         </div>
+        </section>
         <div className="flex justify-center gap-4 pt-2 pb-4">
           <a href="/terms" className="text-xs text-gray-400 hover:text-pink-500">Terms</a>
           <span className="text-xs text-gray-300">·</span>
