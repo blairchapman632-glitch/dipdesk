@@ -2046,9 +2046,11 @@ function exportReportCsv() {
           </div>
         </div>
 
-        <div className="grid gap-4 xl:grid-cols-[3fr_1fr]">
+        {/* grid-cols-1 = minmax(0,1fr): lets the column shrink to the screen. Without it the
+            single auto column grew to the full width of the no-wrap filter row → sideways scroll. */}
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-[3fr_1fr]">
                     <section
-            className={`order-2 rounded-3xl border-0 bg-transparent p-0 shadow-none xl:order-1 xl:rounded-3xl xl:border xl:bg-white xl:p-5 xl:shadow-sm ${
+            className={`order-2 min-w-0 rounded-3xl border-0 bg-transparent p-0 shadow-none xl:order-1 xl:rounded-3xl xl:border xl:bg-white xl:p-5 xl:shadow-sm ${
               mobileTab === 'activity' ? 'hidden xl:block' : 'block'
             }`}
           >
@@ -2322,7 +2324,7 @@ function exportReportCsv() {
           </section>
 
                              <section
-            className={`order-1 bg-white p-3 xl:order-2 xl:rounded-3xl xl:border xl:p-5 xl:shadow-sm overflow-hidden ${
+            className={`order-1 min-w-0 bg-white p-3 xl:order-2 xl:rounded-3xl xl:border xl:p-5 xl:shadow-sm overflow-hidden ${
               mobileTab === 'collection' ? 'hidden xl:block' : 'block'
             }`}
           >

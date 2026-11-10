@@ -1,5 +1,14 @@
 # Session Notes
 
+## 2026-11-10 — Phone fixes: Home sideways scroll + easier bottom nav
+**Changed**
+- Home sideways scroll. Culprit: the Home layout grid (`grid gap-4 xl:grid-cols-[3fr_1fr]`) had a single *auto* column on phones. Auto grid columns grow to the widest unshrinkable content, and the new no-wrap filter-pill row (horizontal scroller) made the column as wide as all the pills together → the page was wider than the screen. Fix: `grid-cols-1` (= minmax(0,1fr)) + `min-w-0` on both sections (`app/dashboard/page.tsx`).
+- Safety net: `overflow-x-clip` on the AppLayout wrapper (clip, not hidden, so sticky bars still work; scroll rows still scroll inside themselves).
+- Bottom nav (`app/components/AppLayout.tsx`): each tab fills its whole fifth of the bar (full width + height, padding included) with 6px top padding and 6px + safe-area bottom padding. Icons 26px, labels 12px (font-medium; active font-semibold pink). Still no borders/boxes. Main bottom padding is now 7rem + safe area so content clears the taller bar; the install banner moved up to match.
+
+**To do**
+- Test on the live site on a phone: Home no longer drags sideways; filter row and Suggested collectors still scroll; nav tabs easy to hit; content not hidden behind the nav.
+
 ## 2026-11-10 — Explore + global polish (visual only)
 **Changed**
 - `app/globals.css`: base-layer rule so a plain `border` is gray-200 (Tailwind v4 defaulted it to currentColor = near-black). Explicit border-* colours still win. Confirmed in the built CSS.

@@ -306,7 +306,8 @@ const cachedUnread = localStorage.getItem('dipdesk_unread_count')
   }
 
   return (
-    <div className="flex min-h-dvh flex-col bg-white">
+    // overflow-x-clip: safety net against sideways page scroll (clip, not hidden, so sticky bars keep working)
+    <div className="flex min-h-dvh flex-col overflow-x-clip bg-white">
       {!hideHeader && (
         <>
           {/* Desktop top nav */}
@@ -371,7 +372,7 @@ const cachedUnread = localStorage.getItem('dipdesk_unread_count')
           {/* Install banner */}
           {showInstallBanner && (
             <div className="fixed inset-x-0 z-40 md:hidden"
-              style={{ bottom: 'calc(4rem + env(safe-area-inset-bottom))' }}>
+              style={{ bottom: 'calc(4.5rem + env(safe-area-inset-bottom))' }}>
               <div className="mx-3 mb-2 rounded-2xl border border-pink-100 bg-white p-3 shadow-lg">
                 <div className="flex items-center gap-3">
                   <img src="/icon-192.png" alt="WrapApp" className="h-10 w-10 rounded-xl" />
@@ -405,7 +406,7 @@ const cachedUnread = localStorage.getItem('dipdesk_unread_count')
 
           {/* Phone bottom nav — plain icons + labels on white (Instagram-style) */}
 <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-gray-100 bg-white md:hidden">
-  <div className="grid grid-cols-5 px-1" style={{paddingBottom: 'env(safe-area-inset-bottom)'}}>
+  <div className="grid grid-cols-5">
     {navItems.map((item) => {
       const isActive = pathname === item.href
       // Active icon draws a little bolder
@@ -413,15 +414,15 @@ const cachedUnread = localStorage.getItem('dipdesk_unread_count')
 
       const icon =
         item.label === 'Home' ? (
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill={isActive ? 'currentColor' : 'none'} fillOpacity={isActive ? 0.15 : 0} stroke="currentColor" strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill={isActive ? 'currentColor' : 'none'} fillOpacity={isActive ? 0.15 : 0} stroke="currentColor" strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round" className="h-[26px] w-[26px]"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
         ) : item.label === 'Explore' ? (
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round" className="h-[26px] w-[26px]"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
         ) : item.label === 'WDYWT' ? (
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill={isActive ? 'currentColor' : 'none'} fillOpacity={isActive ? 0.15 : 0} stroke="currentColor" strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill={isActive ? 'currentColor' : 'none'} fillOpacity={isActive ? 0.15 : 0} stroke="currentColor" strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round" className="h-[26px] w-[26px]"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
         ) : item.label === 'Messages' ? (
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill={isActive ? 'currentColor' : 'none'} fillOpacity={isActive ? 0.15 : 0} stroke="currentColor" strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill={isActive ? 'currentColor' : 'none'} fillOpacity={isActive ? 0.15 : 0} stroke="currentColor" strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round" className="h-[26px] w-[26px]"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
         ) : (
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round" className="h-[26px] w-[26px]"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
         )
 
       return (
@@ -430,8 +431,9 @@ const cachedUnread = localStorage.getItem('dipdesk_unread_count')
           href={item.href}
           prefetch={true}
           aria-current={isActive ? 'page' : undefined}
-          className={`relative flex min-h-[56px] flex-col items-center justify-center gap-1 px-1 text-[11px] ${
-            isActive ? 'font-bold text-pink-600' : 'font-medium text-gray-500 active:text-gray-700'
+          style={{ paddingBottom: 'calc(6px + env(safe-area-inset-bottom))' }}
+          className={`relative flex h-full w-full min-h-[60px] flex-col items-center justify-start gap-1 px-1 pt-1.5 text-xs leading-none ${
+            isActive ? 'font-semibold text-pink-600' : 'font-medium text-gray-500 active:text-gray-700'
           }`}
         >
           <span className="pointer-events-none leading-none relative">
@@ -458,20 +460,21 @@ const cachedUnread = localStorage.getItem('dipdesk_unread_count')
           <Link
             href="/tools"
             aria-current={pathname === '/tools' ? 'page' : undefined}
-            className="flex min-h-[56px] flex-col items-center justify-center gap-1 px-1"
+            style={{ paddingBottom: 'calc(6px + env(safe-area-inset-bottom))' }}
+            className="flex h-full w-full min-h-[60px] flex-col items-center justify-start gap-1 px-1 pt-1.5"
           >
             {avatar ? (
               <img
                 src={avatar}
                 alt="You"
-                className={`h-6 w-6 rounded-full object-cover pointer-events-none ${pathname === '/tools' ? 'ring-2 ring-pink-600 ring-offset-1' : ''}`}
+                className={`h-[26px] w-[26px] rounded-full object-cover pointer-events-none ${pathname === '/tools' ? 'ring-2 ring-pink-600 ring-offset-1' : ''}`}
               />
             ) : (
-              <div className={`flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br from-pink-500 to-rose-500 text-[10px] font-bold text-white pointer-events-none ${pathname === '/tools' ? 'ring-2 ring-pink-600 ring-offset-1' : ''}`}>
+              <div className={`flex h-[26px] w-[26px] items-center justify-center rounded-full bg-gradient-to-br from-pink-500 to-rose-500 text-[10px] font-bold text-white pointer-events-none ${pathname === '/tools' ? 'ring-2 ring-pink-600 ring-offset-1' : ''}`}>
                 {initials || '?'}
               </div>
             )}
-            <span className={`pointer-events-none text-[11px] leading-none ${pathname === '/tools' ? 'font-bold text-pink-600' : 'font-medium text-gray-500'}`}>
+            <span className={`pointer-events-none text-xs leading-none ${pathname === '/tools' ? 'font-semibold text-pink-600' : 'font-medium text-gray-500'}`}>
               Me
             </span>
           </Link>
@@ -482,7 +485,7 @@ const cachedUnread = localStorage.getItem('dipdesk_unread_count')
 
       <main
   className={`flex-1 px-3 pt-4 md:px-10 md:pt-10 ${
-    !hideHeader ? 'pb-28 md:pb-10' : ''
+    !hideHeader ? 'pb-[calc(7rem+env(safe-area-inset-bottom))] md:pb-10' : ''
   }`}
 >
         {children}
