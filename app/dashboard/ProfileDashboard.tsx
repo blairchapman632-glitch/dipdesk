@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import imageCompression from 'browser-image-compression'
 import AppLayout from '@/app/components/AppLayout'
+import IsoList from '@/app/components/IsoList'
 import { askConfirm, showToast } from '@/app/components/Toast'
 import { useLockBodyScroll } from '@/app/components/useLockBodyScroll'
 import { fullSheetOverlay, fullSheetPanel, SheetTopBar } from '@/app/components/Sheet'
@@ -315,6 +316,8 @@ export default function ProfileDashboard({ mode = 'profile' }: { mode?: 'profile
   const [loading, setLoading] = useState(true)
     // Profile tabs (Instagram-style)
     const [profileTab, setProfileTab] = useState<'collection' | 'forsale' | 'dips' | 'iso'>('collection')
+    // ISO list mounts the first time its tab is opened (keeps the profile fast)
+    const [isoOpened, setIsoOpened] = useState(false)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [isAdmin, setIsAdmin] = useState(false)
 const [profile, setProfile] = useState<{ full_name: string | null; username: string | null; avatar_url: string | null; bio?: string | null; city?: string | null; country?: string | null } | null>(null)
@@ -2135,7 +2138,7 @@ function exportReportCsv() {
                 <button
                   key={tab.key}
                   type="button"
-                  onClick={() => setProfileTab(tab.key)}
+                  onClick={() => { setProfileTab(tab.key); if (tab.key === 'iso') setIsoOpened(true) }}
                   aria-current={isActive ? 'page' : undefined}
                   className={`flex min-h-[40px] min-w-max flex-1 items-center justify-center gap-1.5 rounded-lg px-2.5 text-sm transition ${
                     isActive ? 'bg-white font-bold text-gray-900 shadow-sm' : 'font-semibold text-gray-500'
@@ -2498,21 +2501,12 @@ function exportReportCsv() {
           </section>
         )}
 
-        {/* ISO: your wishlist lives on its own page (all its logic stays there) */}
-        {mode === 'profile' && profileTab === 'iso' && (
-          <section className="mt-3! min-w-0">
-            <div className="rounded-2xl border bg-white p-6 text-center shadow-sm space-y-3">
-              <p className="text-3xl">⭐</p>
-              <h2 className="text-lg font-bold text-gray-900">Your ISO list</h2>
-              <p className="text-sm text-gray-500">Wraps you’re in search of. You’ll get a notification when one comes up for sale.</p>
-              <button
-                type="button"
-                onClick={() => router.push('/wishlist')}
-                className={`${BTN_PRIMARY} min-h-[44px] w-full max-w-xs`}
-              >
-                Open my ISO list
-              </button>
-            </div>
+        {/* ISO: the shared list (same as /wishlist). Only mounted once the tab is first
+            opened, so the profile itself doesn't load ISO data; then kept (hidden) so
+            switching tabs back is instant. */}
+        {mode === 'profile' && isoOpened && (
+          <section className={`mt-3! min-w-0 ${profileTab === 'iso' ? '' : 'hidden'}`}>
+            <IsoList layout="profile" />
           </section>
         )}
 

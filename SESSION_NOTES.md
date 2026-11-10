@@ -1,5 +1,14 @@
 # Session Notes
 
+## 2026-11-10 — Profile ISO tab shows the list (not committed yet)
+**Changed**
+- New shared `app/components/IsoList.tsx`: the whole ISO list moved out of `app/wishlist/page.tsx`, with the logic word for word: data loading, cache keys, tiles, wrap view, like/ISO toggle, notes, Contact Seller. The only differences: it uses the shared toast, and the empty state is now "Nothing on your ISO yet" plus a hint (tap ⭐ on any wrap).
+- `/wishlist` is now a thin wrapper with the same heading, card and grid (`layout="page"`).
+- Profile ISO tab: the "Open my ISO list" button is gone, and the list shows in the tab (`layout="profile"`: 2 columns on phone, 3 on desktop, like the Collection grid). It only mounts the first time the tab is tapped, so the profile doesn't load ISO data up front. After that it stays mounted but hidden, so switching back is instant. Cache shows first, then a silent refresh.
+
+**Notes**
+- Lint flags "setState in effect" in IsoList. That's the original wishlist cache-loading code, unchanged.
+
 ## 2026-11-10 — Navigation restructure: Explore = Home, Home = Profile (not committed yet)
 **Changed**
 - Nav (`app/components/AppLayout.tsx`): phone tabs Home (/explore) · WDYWT · ➕ · Messages · Profile (avatar, /dashboard). ➕ opens a Create sheet: Add a wrap (/dashboard?add=1 or `wrapapp:add-wrap` event), Post WDYWT (/wdywt?post=1 or `wrapapp:post-wdywt` event), Start a dip (/create-dip), Cancel. Desktop: Home, WDYWT, Messages, then ♡, ➕ and avatar. ♡ with unread badge in the phone top bar on every page (except message threads) and the desktop nav → /activity. The badge stays in sync via the `wrapapp:unread` event.
@@ -13,8 +22,8 @@
 
 **Decisions / notes**
 - The WDYWT tab on other people's profiles was dropped (spec listed Collection · For Sale · Dips only). Its data still loads, so it's easy to bring back.
-- DB `generate_username` reserved list doesn't include 'activity' yet. Nobody has it, and the risk is low. SQL to add it was given to Blair (optional).
-- Supabase Auth: add https://wrapapp.com.au/explore to the allowed redirect URLs (Google sign-in now returns there).
+- DB `generate_username` now reserves 'activity' too (SQL run by Blair, checked: "Activity" → activity2).
+- Supabase Auth: https://wrapapp.com.au/explore added to the allowed redirect URLs (done by Blair).
 
 **Untested**
 - Everything above on a real phone; ➕ options from each page; ♡ badge clearing; the public page logged out.

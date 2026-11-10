@@ -1,0 +1,830 @@
+'use client'
+
+// Your ISO (wishlist) list: tiles, cached loading, wrap view, notes and remove.
+// Shared by /wishlist and the ISO tab on your profile.
+import { supabase } from '@/lib/supabase'
+import { useEffect, useMemo, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { getCoverImage, sortWrapImages } from '@/lib/wrapCover'
+import { fullSheetOverlay, fullSheetPanel, SheetTopBar } from '@/app/components/Sheet'
+import { useLockBodyScroll } from '@/app/components/useLockBodyScroll'
+import { showToast } from '@/app/components/Toast'
+
+type WrapImage = {
+  id: string
+  image_url: string
+  is_primary: boolean
+  sort_order: number
+}
+
+type Wrap = {
+  id: string
+  user_id: string
+  name: string
+  brand: string | null
+  description: string | null
+  // Purchase, loan and sale details are private (not readable for other people's wraps)
+  status: 'active' | 'holiday' | 'departed'
+  sold_date: string | null
+  is_favourite: boolean
+  for_sale: boolean
+  for_sale_price: number | null
+  for_sale_currency: 'AUD' | 'USD' | 'EUR' | null
+  for_sale_price_is_pm: boolean
+  wrap_images?: WrapImage[]
+}
+
+type Profile = {
+  id: string
+  full_name: string | null
+  username: string | null
+}
+
+type WishlistRow = {
+  id: string
+  wrap_id: string
+  notes: string | null
+  wraps: Wrap | Wrap[] | null
+}
+
+type SocialCounts = {
+  likes: number
+  wishlists: number
+}
+
+const WRAP_PLACEHOLDER =
+  'https://placehold.co/800x800/fdf2f8/be185d?text=Wrap'
+const WISHLIST_WRAPS_KEY = 'dipdesk_wishlist_wraps'
+const WISHLIST_PROFILES_KEY = 'dipdesk_wishlist_profiles'
+const WISHLIST_NOTES_KEY = 'dipdesk_wishlist_notes'
+function getPrimaryImage(wrap?: Wrap) {
+  return getCoverImage(wrap?.wrap_images)?.image_url || WRAP_PLACEHOLDER
+}
+
+function getDisplayName(profile?: Profile) {
+  if (profile?.full_name?.trim()) {
+    return profile.full_name.split(' ')[0]
+  }
+
+  if (profile?.username?.trim()) {
+    return profile.username
+  }
+
+  return 'User'
+}
+
+function formatCurrency(
+  value: number | null | undefined,
+  currency: 'AUD' | 'USD' | 'EUR' = 'AUD'
+) {
+  if (value === null || value === undefined || Number.isNaN(value)) return ''
+  return new Intl.NumberFormat('en-AU', {
+    style: 'currency',
+    currency,
+    maximumFractionDigits: 0,
+  }).format(value)
+}
+
+// 'page' = /wishlist grid (unchanged); 'profile' = matches the profile Collection grid
+const GRID_CLASSES = {
+  page: 'grid grid-cols-2 gap-2 xl:grid-cols-4 xl:gap-4',
+  profile: 'grid grid-cols-2 gap-3 sm:grid-cols-2 xl:grid-cols-3 xl:gap-4',
+} as const
+
+export default function IsoList({ layout = 'page' }: { layout?: 'page' | 'profile' }) {
+  const gridClassName = GRID_CLASSES[layout]
+  const router = useRouter()
+
+  const [loading, setLoading] = useState(true)
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+  const [wishlistWraps, setWishlistWraps] = useState<Wrap[]>([])
+  const [profilesMap, setProfilesMap] = useState<Record<string, Profile>>({})
+  const [selectedWrap, setSelectedWrap] = useState<Wrap | null>(null)
+  const [selectedViewImage, setSelectedViewImage] = useState<string | null>(null)
+  const [isViewWrapModalOpen, setIsViewWrapModalOpen] = useState(false)
+  const [isImagePreviewOpen, setIsImagePreviewOpen] = useState(false)
+  // Lock the page behind any open sheet/modal
+  useLockBodyScroll(isViewWrapModalOpen || isImagePreviewOpen)
+  const [selectedWrapCounts, setSelectedWrapCounts] = useState<SocialCounts>({
+    likes: 0,
+    wishlists: 0,
+  })
+  const [hasLikedSelectedWrap, setHasLikedSelectedWrap] = useState(false)
+  const [hasWishlistedSelectedWrap, setHasWishlistedSelectedWrap] = useState(false)
+    const [socialLoading, setSocialLoading] = useState(false)
+  const [wishlistNotesMap, setWishlistNotesMap] = useState<Record<string, string>>({})
+  const [selectedWrapNotes, setSelectedWrapNotes] = useState('')
+  const [savingNotes, setSavingNotes] = useState(false)
+
+    useEffect(() => {
+        const cachedWraps = localStorage.getItem(WISHLIST_WRAPS_KEY)
+    const cachedProfiles = localStorage.getItem(WISHLIST_PROFILES_KEY)
+    const cachedNotes = localStorage.getItem(WISHLIST_NOTES_KEY)
+
+    if (cachedWraps) {
+      try {
+        setWishlistWraps(JSON.parse(cachedWraps))
+        setLoading(false)
+      } catch {}
+    }
+
+        if (cachedProfiles) {
+      try {
+        setProfilesMap(JSON.parse(cachedProfiles))
+      } catch {}
+    }
+
+    if (cachedNotes) {
+      try {
+        setWishlistNotesMap(JSON.parse(cachedNotes))
+      } catch {}
+    }
+
+        async function loadWishlistPage() {
+
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+
+      const loggedInUserId = user?.id || null
+      setCurrentUserId(loggedInUserId)
+
+            if (!loggedInUserId) {
+        setWishlistWraps([])
+        setProfilesMap({})
+                localStorage.removeItem(WISHLIST_WRAPS_KEY)
+        localStorage.removeItem(WISHLIST_PROFILES_KEY)
+        localStorage.removeItem(WISHLIST_NOTES_KEY)
+        setLoading(false)
+        return
+      }
+
+      const { data: wishlistData, error: wishlistError } = await supabase
+        .from('wishlists')
+        .select(`
+                    id,
+          wrap_id,
+          notes,
+          wraps (
+            id,
+            user_id,
+            name,
+            brand,
+            description,
+            status,
+            sold_date,
+            is_favourite,
+            for_sale,
+            for_sale_price,
+            for_sale_currency,
+            for_sale_price_is_pm,
+            wrap_images (
+              id,
+              image_url,
+              is_primary,
+              sort_order
+            )
+          )
+        `)
+        .eq('user_id', loggedInUserId)
+        .order('created_at', { ascending: false })
+        .order('sort_order', { referencedTable: 'wraps.wrap_images' })
+
+      if (wishlistError) {
+        console.error(wishlistError)
+        setWishlistWraps([])
+        setProfilesMap({})
+        setLoading(false)
+        return
+      }
+
+            const rows = ((wishlistData as WishlistRow[]) || []).filter(
+        (row) => row.wraps
+      )
+
+      const wraps = rows
+        .map((row) =>
+          Array.isArray(row.wraps) ? row.wraps[0] : row.wraps
+        )
+        .filter(Boolean) as Wrap[]
+
+      const notesMap = rows.reduce<Record<string, string>>((acc, row) => {
+        acc[row.wrap_id] = row.notes || ''
+        return acc
+      }, {})
+
+            setWishlistWraps(wraps)
+      setWishlistNotesMap(notesMap)
+      localStorage.setItem(WISHLIST_WRAPS_KEY, JSON.stringify(wraps))
+      localStorage.setItem(WISHLIST_NOTES_KEY, JSON.stringify(notesMap))
+
+      const uniqueUserIds = [...new Set(wraps.map((wrap) => wrap.user_id))]
+
+      if (uniqueUserIds.length === 0) {
+        setProfilesMap({})
+        localStorage.setItem(WISHLIST_PROFILES_KEY, JSON.stringify({}))
+        setLoading(false)
+        return
+      }
+
+      const { data: profileData, error: profileError } = await supabase
+        .from('profiles')
+        .select('id, full_name, username')
+        .in('id', uniqueUserIds)
+
+      if (profileError) {
+        console.error(profileError)
+        setProfilesMap({})
+        setLoading(false)
+        return
+      }
+
+      const profileMap = ((profileData as Profile[]) || []).reduce<
+        Record<string, Profile>
+      >((accumulator, profile) => {
+        accumulator[profile.id] = profile
+        return accumulator
+      }, {})
+
+      setProfilesMap(profileMap)
+      localStorage.setItem(WISHLIST_PROFILES_KEY, JSON.stringify(profileMap))
+      setLoading(false)
+    }
+
+    loadWishlistPage()
+
+    const handleFocus = () => {
+      loadWishlistPage()
+    }
+
+    window.addEventListener('focus', handleFocus)
+
+    return () => {
+      window.removeEventListener('focus', handleFocus)
+    }
+  }, [])
+
+  const activeWishlistWraps = useMemo(() => {
+    return wishlistWraps
+      .filter((wrap) => wrap.status === 'active' || wrap.status === 'holiday')
+      .sort((a, b) => a.name.localeCompare(b.name))
+  }, [wishlistWraps])
+
+  async function loadWrapSocialData(wrapId: string) {
+    const [
+      { count: likeCount },
+      { count: wishlistCount },
+      likedRowResult,
+      wishlistedRowResult,
+    ] = await Promise.all([
+      supabase
+        .from('wrap_likes')
+        .select('*', { count: 'exact', head: true })
+        .eq('wrap_id', wrapId),
+      supabase
+        .from('wishlists')
+        .select('*', { count: 'exact', head: true })
+        .eq('wrap_id', wrapId),
+      currentUserId
+        ? supabase
+            .from('wrap_likes')
+            .select('id')
+            .eq('wrap_id', wrapId)
+            .eq('user_id', currentUserId)
+            .maybeSingle()
+        : Promise.resolve({ data: null, error: null }),
+      currentUserId
+        ? supabase
+            .from('wishlists')
+            .select('id')
+            .eq('wrap_id', wrapId)
+            .eq('user_id', currentUserId)
+            .maybeSingle()
+        : Promise.resolve({ data: null, error: null }),
+    ])
+
+    setSelectedWrapCounts({
+      likes: likeCount || 0,
+      wishlists: wishlistCount || 0,
+    })
+    setHasLikedSelectedWrap(!!likedRowResult.data)
+    setHasWishlistedSelectedWrap(!!wishlistedRowResult.data)
+  }
+
+  async function openViewWrapModal(wrap: Wrap) {
+    const primaryImage = getPrimaryImage(wrap)
+
+        setSelectedWrap(wrap)
+    setSelectedWrapNotes(wishlistNotesMap[wrap.id] || '')
+    setSelectedViewImage(primaryImage)
+    setIsViewWrapModalOpen(true)
+    await loadWrapSocialData(wrap.id)
+  }
+
+    function closeViewWrapModal() {
+    setIsViewWrapModalOpen(false)
+    setSelectedWrap(null)
+    setSelectedWrapNotes('')
+    setSelectedViewImage(null)
+    setIsImagePreviewOpen(false)
+    setSelectedWrapCounts({ likes: 0, wishlists: 0 })
+    setHasLikedSelectedWrap(false)
+    setHasWishlistedSelectedWrap(false)
+    setSocialLoading(false)
+    setSavingNotes(false)
+  }
+
+  async function handleToggleLike() {
+    if (!selectedWrap || !currentUserId || currentUserId === selectedWrap.user_id || socialLoading) return
+
+    setSocialLoading(true)
+
+    if (hasLikedSelectedWrap) {
+      const { error } = await supabase
+        .from('wrap_likes')
+        .delete()
+        .eq('wrap_id', selectedWrap.id)
+        .eq('user_id', currentUserId)
+
+      if (!error) {
+        setHasLikedSelectedWrap(false)
+        setSelectedWrapCounts((prev) => ({
+          ...prev,
+          likes: Math.max(0, prev.likes - 1),
+        }))
+      }
+
+      setSocialLoading(false)
+      return
+    }
+
+    const { error } = await supabase
+      .from('wrap_likes')
+      .insert({
+        wrap_id: selectedWrap.id,
+        user_id: currentUserId,
+      })
+
+    if (!error) {
+      setHasLikedSelectedWrap(true)
+      setSelectedWrapCounts((prev) => ({
+        ...prev,
+        likes: prev.likes + 1,
+      }))
+
+      await supabase.from('notifications').insert({
+        recipient_user_id: selectedWrap.user_id,
+        actor_user_id: currentUserId,
+        wrap_id: selectedWrap.id,
+        type: 'like',
+      })
+    }
+
+    setSocialLoading(false)
+  }
+  async function handleSaveWishlistNotes() {
+    if (!selectedWrap || !currentUserId || savingNotes) return
+
+    setSavingNotes(true)
+
+    const { error } = await supabase
+      .from('wishlists')
+      .update({
+        notes: selectedWrapNotes.trim() || null,
+      })
+      .eq('wrap_id', selectedWrap.id)
+      .eq('user_id', currentUserId)
+
+        if (!error) {
+      const updatedNotesMap = {
+        ...wishlistNotesMap,
+        [selectedWrap.id]: selectedWrapNotes.trim(),
+      }
+
+      setWishlistNotesMap(updatedNotesMap)
+      localStorage.setItem(WISHLIST_NOTES_KEY, JSON.stringify(updatedNotesMap))
+      showToast('ISO notes saved')
+    }
+
+    setSavingNotes(false)
+  }
+  async function handleToggleWishlist() {
+    if (!selectedWrap || !currentUserId || socialLoading) return
+
+    setSocialLoading(true)
+
+    if (hasWishlistedSelectedWrap) {
+      const { error } = await supabase
+        .from('wishlists')
+        .delete()
+        .eq('wrap_id', selectedWrap.id)
+        .eq('user_id', currentUserId)
+
+      if (!error) {
+        setHasWishlistedSelectedWrap(false)
+        setSelectedWrapCounts((prev) => ({
+          ...prev,
+          wishlists: Math.max(0, prev.wishlists - 1),
+        }))
+                setWishlistWraps((prev) => prev.filter((wrap) => wrap.id !== selectedWrap.id))
+
+        const nextNotesMap = { ...wishlistNotesMap }
+        delete nextNotesMap[selectedWrap.id]
+
+        setWishlistNotesMap(nextNotesMap)
+        localStorage.setItem(WISHLIST_NOTES_KEY, JSON.stringify(nextNotesMap))
+        showToast('Removed from wishlist')
+        closeViewWrapModal()
+      }
+
+      setSocialLoading(false)
+      return
+    }
+
+    const { error } = await supabase
+      .from('wishlists')
+            .insert({
+        wrap_id: selectedWrap.id,
+        user_id: currentUserId,
+        notes: null,
+      })
+
+    if (!error) {
+      setHasWishlistedSelectedWrap(true)
+      setSelectedWrapCounts((prev) => ({
+        ...prev,
+        wishlists: prev.wishlists + 1,
+      }))
+      setWishlistWraps((prev) => {
+        if (prev.some((wrap) => wrap.id === selectedWrap.id)) return prev
+        return [selectedWrap, ...prev]
+      })
+
+      if (currentUserId !== selectedWrap.user_id) {
+        await supabase.from('notifications').insert({
+          recipient_user_id: selectedWrap.user_id,
+          actor_user_id: currentUserId,
+          wrap_id: selectedWrap.id,
+          type: 'wishlist',
+        })
+      }
+
+      showToast('Added to wishlist')
+    }
+
+    setSocialLoading(false)
+  }
+
+  return (
+    <>
+                    {loading && activeWishlistWraps.length === 0 ? (
+            <div className="rounded-2xl border border-dashed p-8 text-center">
+              <p className="text-gray-600">Loading ISO Wraps...</p>
+            </div>
+          ) : activeWishlistWraps.length === 0 ? (
+            <div className="rounded-2xl border border-dashed p-8 text-center">
+              <p className="font-semibold text-gray-700">Nothing on your ISO yet</p>
+              <p className="mt-1 text-sm text-gray-500">Open any wrap on Home or in someone&apos;s collection and tap ⭐ to add it here.</p>
+            </div>
+          ) : (
+            <div className={gridClassName}>
+              {activeWishlistWraps.map((wrap) => (
+                <button
+                  key={wrap.id}
+                  type="button"
+                  onClick={() => openViewWrapModal(wrap)}
+                  className="group flex cursor-pointer flex-col overflow-hidden rounded-xl border bg-white p-0 text-left shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-md xl:rounded-2xl"
+                >
+                  <div className="relative aspect-[3/4] w-full bg-gray-100 pointer-events-none">
+                    <img
+                      src={getPrimaryImage(wrap)}
+                      alt={wrap.name}
+                      className="h-full w-full object-cover object-[center_20%] transition duration-300 group-hover:scale-[1.03]"
+                    />
+
+                    {wrap.for_sale && (
+                      <div className="absolute left-2 top-2 rounded-xl bg-white/90 px-2 py-1 text-[10px] font-semibold text-amber-700 shadow">
+                        <div>🪓 For Sale</div>
+                        <div className="text-[10px] font-medium text-gray-700">
+                          {wrap.for_sale_price_is_pm
+                            ? 'PM'
+                            : wrap.for_sale_price !== null
+                            ? formatCurrency(
+                                wrap.for_sale_price,
+                                wrap.for_sale_currency || 'AUD'
+                              )
+                            : ''}
+                        </div>
+                      </div>
+                    )}
+
+                    {wrap.is_favourite && (
+                      <div className="absolute right-2 top-2 rounded-full bg-white/90 px-2 py-1 text-xs font-semibold text-pink-600 shadow">
+                        ★ Perma
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="space-y-1 p-3">
+                    <h3 className="line-clamp-1 text-sm font-bold text-gray-900 xl:text-base">
+                      {wrap.name}
+                    </h3>
+
+                    <p className="line-clamp-1 text-xs text-gray-500 xl:text-sm">
+                      {wrap.brand || 'No brand added'}
+                    </p>
+
+                    <span
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        router.push(`/user/${wrap.user_id}`)
+                      }}
+                      className="inline-flex cursor-pointer items-center gap-1 rounded-full bg-pink-50 px-2 py-1 text-xs font-semibold text-pink-600 hover:bg-pink-100"
+                    >
+                      {getDisplayName(profilesMap[wrap.user_id])}
+                    </span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+
+        {isViewWrapModalOpen && selectedWrap && (() => {
+          const sortedImages = sortWrapImages(selectedWrap.wrap_images)
+
+          return (
+            <div
+              className={fullSheetOverlay}
+              onClick={closeViewWrapModal}
+            >
+              <div
+                className={fullSheetPanel('md:max-w-4xl')}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <SheetTopBar onClose={closeViewWrapModal} title={selectedWrap.name} />
+                <div className="mb-6 flex items-start justify-between gap-4">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h2 className="text-2xl font-bold text-gray-900">
+                        {selectedWrap.name}
+                      </h2>
+
+                      {currentUserId && currentUserId !== selectedWrap.user_id && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={handleToggleLike}
+                            disabled={socialLoading}
+                            className={`rounded-full border px-3 py-1 text-sm font-semibold transition ${
+                              hasLikedSelectedWrap
+                                ? 'border-pink-200 bg-pink-50 text-pink-600'
+                                : 'border-gray-200 bg-white text-gray-700 hover:border-pink-200 hover:text-pink-600'
+                            }`}
+                          >
+                            ❤️ {selectedWrapCounts.likes}
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={handleToggleWishlist}
+                            disabled={socialLoading}
+                            className={`rounded-full border px-3 py-1 text-sm font-semibold transition ${
+                              hasWishlistedSelectedWrap
+                                ? 'border-amber-200 bg-amber-50 text-amber-700'
+                                : 'border-gray-200 bg-white text-gray-700 hover:border-amber-200 hover:text-amber-700'
+                            }`}
+                          >
+                            ⭐ {selectedWrapCounts.wishlists}
+                          </button>
+                        </>
+                      )}
+                    </div>
+
+                    <div className="mt-1 flex flex-wrap items-center gap-2">
+                      <p className="text-sm text-gray-500">
+                        {selectedWrap.brand || 'No brand added'}
+                      </p>
+
+                      {selectedWrap.is_favourite && (
+                        <span className="rounded-full bg-pink-100 px-2 py-0.5 text-xs font-semibold text-pink-600">
+                          ★ Perma
+                        </span>
+                      )}
+
+                      <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-700">
+                        {selectedWrap.status}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    {selectedWrap.for_sale && currentUserId && currentUserId !== selectedWrap.user_id && (
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const sellerId = selectedWrap.user_id
+
+                          const { data: existing } = await supabase
+                            .from('conversations')
+                            .select('id')
+                            .or(`and(participant_1_id.eq.${currentUserId},participant_2_id.eq.${sellerId}),and(participant_1_id.eq.${sellerId},participant_2_id.eq.${currentUserId})`)
+                            .maybeSingle()
+
+                          if (existing) {
+                            closeViewWrapModal()
+                            router.push(`/messages/${existing.id}`)
+                            return
+                          }
+
+                          const { data: newConv } = await supabase
+                            .from('conversations')
+                            .insert({
+                              participant_1_id: currentUserId,
+                              participant_2_id: sellerId,
+                              last_message: `Hi, is your ${selectedWrap.name} still available?`,
+                              last_message_at: new Date().toISOString()
+                            })
+                            .select('id')
+                            .single()
+
+                          if (newConv) {
+                            await supabase.from('messages').insert({
+                              conversation_id: newConv.id,
+                              sender_id: currentUserId,
+                              content: `Hi, is your ${selectedWrap.name} still available?`
+                            })
+                            closeViewWrapModal()
+                            router.push(`/messages/${newConv.id}`)
+                          }
+                        }}
+                        className="cursor-pointer rounded-xl bg-amber-500 hover:bg-amber-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm transition"
+                      >
+                        🪓 Contact Seller
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={closeViewWrapModal}
+                      className="cursor-pointer rounded-full border px-3 py-1 text-sm text-gray-600"
+                    >
+                      Close
+                    </button>
+                  </div>
+                </div>
+
+                <div className="mb-4 overflow-hidden rounded-3xl bg-gray-100 shadow-sm">
+                  <button
+                    type="button"
+                    onClick={() => setIsImagePreviewOpen(true)}
+                    className="block w-full cursor-zoom-in bg-black"
+                  >
+                    <img
+                      src={selectedViewImage || getPrimaryImage(selectedWrap)}
+                      alt={selectedWrap.name}
+                      className="h-[440px] w-full object-cover transition duration-300 hover:scale-[1.01]"
+                    />
+                  </button>
+                </div>
+
+                <p className="mb-4 text-xs text-gray-500">
+                  Click the main image to view larger
+                </p>
+
+                {sortedImages.length > 0 && (
+                  <div className="mb-6 grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-6">
+                    {sortedImages.map((image) => (
+                      <button
+                        key={image.id}
+                        type="button"
+                        onClick={() => setSelectedViewImage(image.image_url)}
+                        className={`overflow-hidden rounded-xl border transition duration-200 ${
+                          selectedViewImage === image.image_url
+                            ? 'border-pink-500 ring-2 ring-pink-200 shadow-sm'
+                            : 'border-gray-200 hover:border-pink-300 hover:shadow-sm'
+                        }`}
+                      >
+                        <img
+                          src={image.image_url}
+                          alt={selectedWrap.name}
+                          className="h-20 w-full object-cover transition duration-200 hover:scale-[1.02]"
+                        />
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                                <div className="grid gap-5 md:grid-cols-3">
+                  <div className="rounded-2xl border bg-white p-5 shadow-sm">
+                    <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-400">
+                      Wrap Details
+                    </h3>
+
+                    <div className="space-y-2 text-sm text-gray-700">
+                      <p>
+                        <span className="font-semibold text-gray-900">Status:</span>{' '}
+                        {selectedWrap.status}
+                      </p>
+                      {/* Purchase details are private to the wrap's owner */}
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border bg-white p-5 shadow-sm">
+                    <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-400">
+                      Extra Info
+                    </h3>
+
+                    <div className="space-y-2 text-sm text-gray-700">
+                      <p>
+                        <span className="font-semibold text-gray-900">Favourite:</span>{' '}
+                        {selectedWrap.is_favourite ? 'Yes' : 'No'}
+                      </p>
+
+                      {selectedWrap.for_sale && (
+                        <p>
+                          <span className="font-semibold text-gray-900">For Sale:</span>{' '}
+                          {selectedWrap.for_sale_price_is_pm
+                            ? 'PM'
+                            : selectedWrap.for_sale_price !== null
+                            ? formatCurrency(
+                                selectedWrap.for_sale_price,
+                                selectedWrap.for_sale_currency || 'AUD'
+                              )
+                            : 'Yes'}
+                        </p>
+                      )}
+
+                      {/* Loan and sale details (who / how much) are private to the owner */}
+                      {selectedWrap.status === 'departed' && selectedWrap.sold_date && (
+                        <p>
+                          <span className="font-semibold text-gray-900">Sold Date:</span>{' '}
+                          {selectedWrap.sold_date}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+<div className="rounded-2xl border bg-white p-5 shadow-sm md:col-span-1">
+  <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-400">
+    ISO Notes
+  </h3>
+
+  <textarea
+    value={selectedWrapNotes}
+    onChange={(e) => setSelectedWrapNotes(e.target.value)}
+    placeholder="Add notes about this wrap, e.g. sales history, prices seen, seller notes"
+    rows={8}
+    className="w-full rounded-2xl border border-gray-200 px-3 py-2 text-[16px] text-gray-700 outline-none transition focus:border-pink-300 focus:ring-2 focus:ring-pink-100"
+  />
+
+  <div className="mt-3 flex items-center justify-between gap-3">
+    <p className="text-xs text-gray-500">
+      Private note for your ISO list
+    </p>
+
+    <button
+      type="button"
+      onClick={handleSaveWishlistNotes}
+      disabled={savingNotes}
+      className="rounded-full bg-pink-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-pink-700 disabled:cursor-not-allowed disabled:opacity-60"
+    >
+      {savingNotes ? 'Saving...' : 'Save Notes'}
+    </button>
+  </div>
+</div>
+                  {selectedWrap.description && (
+                    <div className="md:col-span-2 rounded-2xl border bg-white p-5 shadow-sm">
+                      <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-400">
+                        Description
+                      </h3>
+                      <p className="whitespace-pre-wrap text-sm text-gray-700">
+                        {selectedWrap.description}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )
+        })()}
+
+        {isImagePreviewOpen && selectedWrap && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-0 pt-[env(safe-area-inset-top)] md:p-4">
+            <div className="relative w-full max-w-6xl">
+              <button
+                type="button"
+                onClick={() => setIsImagePreviewOpen(false)}
+                className="absolute right-2 top-2 z-10 min-h-[44px] rounded-full bg-white/90 px-4 text-sm font-semibold text-gray-800 shadow md:right-0 md:top-0"
+              >
+                Close
+              </button>
+
+              <img
+                src={selectedViewImage || getPrimaryImage(selectedWrap)}
+                alt={selectedWrap.name}
+                className="max-h-[90vh] w-full rounded-2xl bg-black object-contain"
+              />
+            </div>
+          </div>
+        )}
+    </>
+  )
+}
