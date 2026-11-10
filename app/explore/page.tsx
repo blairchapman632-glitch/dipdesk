@@ -1105,7 +1105,7 @@ const filteredWraps = (
                     onClick={() => setResultType(type)}
                     className={`min-h-[40px] flex-1 rounded-full border text-sm font-semibold ${resultType === type ? 'border-pink-500 bg-pink-500 text-white' : 'border-gray-200 bg-white text-gray-600'}`}
                   >
-                    {type === 'all' ? 'All' : type === 'wraps' ? 'Wraps' : type === 'users' ? 'Users' : 'Available'}
+                    {type === 'all' ? 'All' : type === 'wraps' ? 'Wraps' : type === 'users' ? 'Users' : 'For Sale'}
                   </button>
                 ))}
               </div>

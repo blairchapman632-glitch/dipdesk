@@ -1,5 +1,9 @@
 # Session Notes
 
+## 2026-11-10 — Explore filter: "Available" → "For Sale"
+- `app/explore/page.tsx`: the filter sheet option is now labelled "For Sale". Label only; the internal value stays `for-sale` and behaviour is unchanged. No other user-facing "Available" text for this filter (the only other "Available" is the username checker, which is unrelated).
+- Note: this filter also shows wraps that are in an active dip, not just ones marked for sale (unchanged).
+
 ## 2026-11-10 — Profile ISO tab shows the list (not committed yet)
 **Changed**
 - New shared `app/components/IsoList.tsx`: the whole ISO list moved out of `app/wishlist/page.tsx`, with the logic word for word: data loading, cache keys, tiles, wrap view, like/ISO toggle, notes, Contact Seller. The only differences: it uses the shared toast, and the empty state is now "Nothing on your ISO yet" plus a hint (tap ⭐ on any wrap).
