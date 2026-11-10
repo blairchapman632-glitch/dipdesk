@@ -38,7 +38,7 @@ const loadPage = cache(async (rawUsername: string): Promise<PageData | null> => 
   if (!profile) return null
   if ((profile as any).is_private) return { kind: 'private' }
 
-  const [{ data: wraps }, { data: dips }] = await Promise.all([
+  const [{ data: wraps }, { data: dips }, { count: followers }, { count: following }] = await Promise.all([
     db
       .from('wraps')
       .select('id, name, brand, colour, size, material, wrap_type, description, for_sale, for_sale_price, for_sale_currency, for_sale_price_is_pm, is_favourite, created_at, wrap_images(id, image_url, sort_order)')
@@ -54,6 +54,9 @@ const loadPage = cache(async (rawUsername: string): Promise<PageData | null> => 
       .eq('user_id', profile.id)
       .eq('archived', false)
       .in('stage', ['interest', 'queue', 'live', 'payments', 'closed']),
+    // Counts only (numbers, no names) — same as the profile header
+    db.from('follows').select('id', { count: 'exact', head: true }).eq('following_id', profile.id).eq('status', 'accepted'),
+    db.from('follows').select('id', { count: 'exact', head: true }).eq('follower_id', profile.id).eq('status', 'accepted'),
   ])
 
   return {
@@ -65,6 +68,8 @@ const loadPage = cache(async (rawUsername: string): Promise<PageData | null> => 
       avatarUrl: (profile as any).avatar_url || null,
       bio: (profile as any).bio || null,
       location: [(profile as any).city, (profile as any).country].filter(Boolean).join(', ') || null,
+      followers: followers || 0,
+      following: following || 0,
     },
     wraps: ((wraps as any[]) || []).map(w => ({
       id: w.id,

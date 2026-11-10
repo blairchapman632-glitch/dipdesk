@@ -244,7 +244,7 @@ export default function Page() {
             user_ids: [selectedWrap.user_id],
             title: `❤️ ${myNameLike} liked your wrap`,
             body: selectedWrap.name,
-            url: '/dashboard',
+            url: '/activity',
           }),
         }).catch(() => {})
       }
@@ -318,7 +318,7 @@ export default function Page() {
             user_ids: [selectedWrap.user_id],
             title: `⭐ ${myNameWishlist} wishlisted your wrap`,
             body: selectedWrap.name,
-            url: '/dashboard',
+            url: '/activity',
           }),
         }).catch(() => {})
       }

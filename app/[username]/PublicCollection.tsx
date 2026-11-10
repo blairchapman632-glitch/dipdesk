@@ -13,6 +13,8 @@ export type PublicProfile = {
   avatarUrl: string | null
   bio: string | null
   location: string | null
+  followers: number
+  following: number
 }
 
 export type PublicWrap = {
@@ -56,6 +58,7 @@ export default function PublicCollection({
   // null = still checking. Logged-out visitors get the join prompts.
   const [loggedIn, setLoggedIn] = useState<boolean | null>(null)
   const [openWrap, setOpenWrap] = useState<PublicWrap | null>(null)
+  const [tab, setTab] = useState<'collection' | 'forsale'>('collection')
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setLoggedIn(!!data.session))
@@ -70,70 +73,89 @@ export default function PublicCollection({
   const wrapsById = Object.fromEntries(wraps.map(w => [w.id, w]))
   const initials = profile.name.split(/\s+/).map(p => p[0]).join('').slice(0, 2).toUpperCase()
 
+  const forSaleWraps = wraps.filter(w => w.forSale)
+  const shownWraps = tab === 'forsale' ? forSaleWraps : wraps
+  const stat = (value: number, label: string) => (
+    <div className="text-center md:flex md:items-baseline md:gap-1 md:text-left">
+      <p className="text-base font-bold text-gray-900 md:text-lg">{value}</p>
+      <p className="text-xs text-gray-500 md:text-sm">{label}</p>
+    </div>
+  )
+
   return (
-    <main className="min-h-dvh bg-gray-50 pb-32 md:pb-10">
-      <div className="mx-auto max-w-3xl px-4 pt-4 space-y-4">
-
-        {/* Brand bar */}
-        <div className="flex items-center justify-between">
-          <Link href="/" className="flex min-h-[44px] items-center text-lg font-extrabold text-pink-600">WrapApp</Link>
+    <main className="min-h-dvh bg-white pb-28 md:pb-10">
+      {/* Top bar: WrapApp + Join (logged out) or your profile (logged in) */}
+      <header className="sticky top-0 z-30 border-b border-gray-200 bg-white pt-[env(safe-area-inset-top)]">
+        <div className="mx-auto flex h-12 max-w-[960px] items-center justify-between px-3 md:h-16 md:px-6">
+          <Link href={loggedIn ? '/explore' : '/'} className="text-xl font-extrabold tracking-tight text-pink-600">WrapApp</Link>
           {loggedIn ? (
-            <Link href="/dashboard" className="flex min-h-[44px] items-center rounded-xl border bg-white px-3 text-sm font-semibold text-gray-700">My dashboard</Link>
-          ) : (
-            <Link href="/" className="flex min-h-[44px] items-center rounded-xl border bg-white px-3 text-sm font-semibold text-gray-700">Log in</Link>
-          )}
+            <Link href="/dashboard" className="inline-flex min-h-[36px] items-center rounded-xl border border-gray-200 bg-white px-3 text-sm font-semibold text-gray-800">My profile</Link>
+          ) : loggedIn === false ? (
+            <div className="flex items-center gap-1">
+              <Link href="/" className="inline-flex min-h-[36px] items-center px-2 text-sm font-semibold text-gray-600">Log in</Link>
+              <Link href="/?signup=1" className="inline-flex min-h-[36px] items-center rounded-xl bg-gradient-to-r from-pink-500 to-rose-500 px-3 text-sm font-bold text-white shadow-sm">Join WrapApp</Link>
+            </div>
+          ) : null}
         </div>
+      </header>
 
-        {/* Profile */}
-        <section className="rounded-3xl border bg-white p-4 shadow-sm space-y-3">
-          <div className="flex items-center gap-3">
+      <div className="mx-auto max-w-[960px] space-y-4 px-3 pt-4 md:px-6">
+
+        {/* Profile header — same layout as a WrapApp profile */}
+        <section className="px-1 md:px-2">
+          <div className="flex items-center gap-4 md:gap-10">
             {profile.avatarUrl ? (
-              <img src={profile.avatarUrl} alt={profile.name} className="h-16 w-16 shrink-0 rounded-full object-cover" />
+              <img src={profile.avatarUrl} alt={profile.name} className="h-20 w-20 shrink-0 rounded-full object-cover ring-2 ring-pink-100 md:h-32 md:w-32" />
             ) : (
-              <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-pink-100 text-xl font-bold text-pink-700">{initials}</div>
+              <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-pink-500 to-rose-500 text-2xl font-bold text-white md:h-32 md:w-32 md:text-4xl">{initials || '?'}</div>
             )}
-            <div className="min-w-0">
-              <h1 className="text-xl font-bold text-gray-900 break-words">{profile.name}</h1>
-              <p className="text-sm text-gray-500">@{profile.username}{profile.location ? ` · ${profile.location}` : ''}</p>
-              <p className="text-sm font-semibold text-gray-700">{wraps.length} {wraps.length === 1 ? 'wrap' : 'wraps'}</p>
+            <div className="min-w-0 flex-1 space-y-2 md:space-y-3">
+              <div className="md:flex md:items-baseline md:gap-3">
+                <h1 className="truncate text-lg font-bold text-gray-900 md:text-2xl">{profile.name}</h1>
+                <p className="truncate text-sm text-gray-500">@{profile.username}</p>
+              </div>
+              <div className="grid grid-cols-3 gap-1 md:flex md:gap-8">
+                {stat(wraps.length, wraps.length === 1 ? 'Wrap' : 'Wraps')}
+                {stat(profile.followers, 'Followers')}
+                {stat(profile.following, 'Following')}
+              </div>
             </div>
           </div>
-          {profile.bio && <p className="text-[15px] text-gray-700 whitespace-pre-wrap break-words">{profile.bio}</p>}
-          <div className="grid grid-cols-2 gap-2">
-            <button type="button" onClick={requireAccount} className="min-h-[44px] rounded-xl bg-gradient-to-r from-pink-500 to-rose-500 text-sm font-bold text-white">
-              + Follow
+
+          {(profile.bio || profile.location) && (
+            <div className="mt-3 space-y-0.5 md:ml-[10.5rem] md:mt-0">
+              {profile.bio && <p className="whitespace-pre-wrap break-words text-sm text-gray-800">{profile.bio}</p>}
+              {profile.location && <p className="text-sm text-gray-500">📍 {profile.location}</p>}
+            </div>
+          )}
+
+          <div className="mt-3 grid grid-cols-2 gap-2 md:ml-[10.5rem] md:max-w-md">
+            <button type="button" onClick={requireAccount} className="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-gradient-to-r from-pink-500 to-rose-500 px-4 text-sm font-semibold text-white shadow-sm">
+              Follow
             </button>
-            <button type="button" onClick={requireAccount} className="min-h-[44px] rounded-xl border text-sm font-semibold text-gray-700">
-              💬 Message
+            <button type="button" onClick={requireAccount} className="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-gray-200 bg-white px-4 text-sm font-semibold text-gray-800">
+              Message
             </button>
           </div>
         </section>
 
-        {/* What is WrapApp — logged-out visitors only */}
-        {loggedIn === false && (
-          <p className="text-center text-sm text-gray-600">
-            WrapApp is the free social home for babywearing wrap collectors — share your collection, find wraps and run dips.
-          </p>
-        )}
-
         {/* Active dips */}
         {dips.length > 0 && (
           <section className="space-y-2">
-            <h2 className="text-base font-bold text-gray-900">🎲 Dipping now</h2>
             {dips.map(d => {
               const wrap = d.wrapId ? wrapsById[d.wrapId] : undefined
               const img = wrap?.images[0]
               return (
-                <div key={d.id} className="flex items-center gap-3 rounded-2xl border border-purple-200 bg-purple-50 p-3">
+                <div key={d.id} className="flex items-center gap-3 rounded-2xl border border-purple-200 bg-purple-50/60 p-2.5">
                   {img ? (
                     <img src={thumb(img)} alt={d.title} loading="lazy" className="h-14 w-14 shrink-0 rounded-xl object-cover object-[center_30%]" />
                   ) : (
-                    <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-purple-100 text-2xl">🎲</div>
+                    <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-white text-2xl">🎲</div>
                   )}
                   <div className="min-w-0">
-                    <p className="font-bold text-gray-900 break-words">{d.title}</p>
-                    <p className="text-sm text-gray-600">{d.totalSpots} spots · ${d.pricePerSpot} each · {getDipStageLabel(d.stage)}</p>
-                    <p className="text-xs text-gray-500">Running in Chasing Unicorns on Facebook</p>
+                    <p className="text-xs font-bold text-fuchsia-700">🎲 Dipping now</p>
+                    <p className="truncate font-bold text-gray-900">{d.title}</p>
+                    <p className="text-xs text-gray-600">{d.totalSpots} spots · ${d.pricePerSpot} each · {getDipStageLabel(d.stage)}</p>
                   </div>
                 </div>
               )
@@ -141,29 +163,52 @@ export default function PublicCollection({
           </section>
         )}
 
-        {/* Collection */}
-        <section className="space-y-2">
-          <h2 className="text-base font-bold text-gray-900">🧣 Collection</h2>
-          {wraps.length === 0 ? (
-            <p className="rounded-2xl border bg-white p-6 text-center text-sm text-gray-500">No wraps to show yet.</p>
+        {/* Tabs: Collection · For Sale (segmented, like the profile) */}
+        <div className="flex gap-1 rounded-xl bg-gray-100 p-1">
+          {([
+            { key: 'collection', label: 'Collection' },
+            { key: 'forsale', label: `For Sale${forSaleWraps.length ? ` (${forSaleWraps.length})` : ''}` },
+          ] as const).map(t => (
+            <button
+              key={t.key}
+              type="button"
+              onClick={() => setTab(t.key)}
+              aria-current={tab === t.key ? 'page' : undefined}
+              className={`flex min-h-[40px] flex-1 items-center justify-center rounded-lg px-2.5 text-sm transition ${tab === t.key ? 'bg-white font-bold text-gray-900 shadow-sm' : 'font-semibold text-gray-500'}`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Wrap grid */}
+        <section className="min-w-0">
+          {shownWraps.length === 0 ? (
+            <p className="rounded-2xl border border-dashed p-8 text-center text-sm text-gray-500">{tab === 'forsale' ? 'Nothing for sale' : 'No wraps to show yet'}</p>
           ) : (
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-              {wraps.map(w => (
+            <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 xl:grid-cols-4 xl:gap-4">
+              {shownWraps.map(w => (
                 <button
                   key={w.id}
                   type="button"
                   onClick={() => setOpenWrap(w)}
-                  className="overflow-hidden rounded-2xl border bg-white text-left shadow-sm"
+                  className="flex flex-col overflow-hidden rounded-xl border bg-white text-left xl:rounded-2xl xl:shadow-sm"
                 >
-                  {w.images[0] ? (
-                    <img src={thumb(w.images[0])} alt={w.name} loading="lazy" className="aspect-square w-full object-cover object-[center_30%]" />
-                  ) : (
-                    <div className="flex aspect-square w-full items-center justify-center bg-pink-50 text-3xl">🧣</div>
-                  )}
-                  <div className="p-2">
-                    <p className="line-clamp-2 text-sm font-semibold text-gray-900">{w.name}</p>
-                    {w.brand && <p className="line-clamp-1 text-xs text-gray-500">{w.brand}</p>}
-                    {w.forSale && <p className="mt-0.5 text-xs font-bold text-green-700">For sale</p>}
+                  <div className="relative aspect-[3/4] w-full bg-gray-100">
+                    {w.images[0] ? (
+                      <img src={thumb(w.images[0])} alt={w.name} loading="lazy" className="h-full w-full object-cover object-[center_20%]" />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center bg-pink-50 text-3xl">🧣</div>
+                    )}
+                    {w.forSale && (
+                      <div className="absolute left-2 top-2 rounded-xl bg-white/90 px-2 py-1 text-xs font-semibold text-amber-700 shadow">
+                        🪓 For Sale{w.forSalePm ? ' · PM' : ''}
+                      </div>
+                    )}
+                  </div>
+                  <div className="space-y-0.5 p-2">
+                    <p className="line-clamp-2 text-sm font-bold leading-tight text-gray-900">{w.name}</p>
+                    {w.brand && <p className="line-clamp-1 text-xs text-gray-600">{w.brand}</p>}
                   </div>
                 </button>
               ))}
@@ -171,22 +216,23 @@ export default function PublicCollection({
           )}
         </section>
 
-        {/* Join — desktop (inline). Phone gets the sticky bar below. */}
+        {/* Desktop: inline join prompt (phone gets the bottom banner) */}
         {loggedIn === false && (
-          <div className="hidden rounded-3xl border bg-white p-5 text-center shadow-sm md:block">
-            <p className="mb-3 text-sm text-gray-600">Share your own collection and follow other collectors.</p>
-            <Link href="/?signup=1" className="inline-flex min-h-[48px] items-center rounded-xl bg-gradient-to-r from-pink-500 to-rose-500 px-6 text-base font-bold text-white">
-              Join WrapApp — it’s free
+          <div className="hidden rounded-2xl border bg-white p-5 text-center md:block">
+            <p className="mb-3 text-sm text-gray-600">See more collections — join WrapApp, the free social home for wrap collectors.</p>
+            <Link href="/?signup=1" className="inline-flex min-h-[44px] items-center rounded-xl bg-gradient-to-r from-pink-500 to-rose-500 px-6 text-sm font-bold text-white">
+              Join WrapApp
             </Link>
           </div>
         )}
       </div>
 
-      {/* Sticky join bar — phone, logged out */}
+      {/* Small bottom banner — phone, logged out */}
       {loggedIn === false && (
-        <div className="fixed inset-x-0 bottom-0 z-40 border-t bg-white/95 px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur md:hidden">
-          <Link href="/?signup=1" className="flex min-h-[52px] items-center justify-center rounded-xl bg-gradient-to-r from-pink-500 to-rose-500 text-base font-bold text-white">
-            Join WrapApp — it’s free
+        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-gray-200 bg-white/95 px-3 pt-2.5 pb-[calc(0.625rem+env(safe-area-inset-bottom))] backdrop-blur md:hidden">
+          <Link href="/?signup=1" className="flex items-center justify-between gap-3">
+            <span className="min-w-0 text-sm font-semibold text-gray-800">See more collections, join WrapApp</span>
+            <span className="inline-flex min-h-[36px] shrink-0 items-center rounded-xl bg-gradient-to-r from-pink-500 to-rose-500 px-3 text-sm font-bold text-white">Join</span>
           </Link>
         </div>
       )}

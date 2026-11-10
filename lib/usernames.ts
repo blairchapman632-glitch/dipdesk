@@ -8,7 +8,7 @@ export const USERNAME_PATTERN = /^[a-z0-9._]{3,30}$/
 // would just make that user's link unreachable — blocking them avoids that.
 // Never allowed for anyone (app routes / confusing words)
 export const RESERVED_USERNAMES = new Set([
-  'admin', 'api', 'app', 'auth', 'community', 'components', 'create-dip', 'createdip',
+  'activity', 'admin', 'api', 'app', 'auth', 'community', 'components', 'create-dip', 'createdip',
   'dashboard', 'dip', 'dips', 'explore', 'messages', 'message', 'privacy', 'reset-password',
   'terms', 'tools', 'user', 'users', 'wdywt', 'wishlist', 'login', 'logout', 'signin',
   'signup', 'register', 'join', 'settings', 'profile', 'profiles', 'about', 'help',

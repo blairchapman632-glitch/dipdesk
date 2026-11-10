@@ -2,7 +2,7 @@
   "name": "WrapApp",
   "short_name": "WrapApp",
   "description": "For the Love of Wraps",
-  "start_url": "/dashboard",
+  "start_url": "/explore",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#ffffff",

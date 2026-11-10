@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import imageCompression from 'browser-image-compression'
 import { FeedbackHost } from './Toast'
+import { useLockBodyScroll } from './useLockBodyScroll'
 
 export default function AppLayout({
   children,
@@ -171,12 +172,72 @@ const cachedUnread = localStorage.getItem('dipdesk_unread_count')
       } catch {}
     }
   }
-  const navItems = [
-    { label: 'Home', href: '/dashboard' },
+  // Navigation: Home = Explore, Profile = your own profile (/dashboard)
+  const desktopNavItems = [
+    { label: 'Home', href: '/explore' },
     { label: 'WDYWT', href: '/wdywt' },
-    { label: 'Explore', href: '/explore' },
     { label: 'Messages', href: '/messages' },
   ]
+  const phoneNavItems = [
+    { kind: 'link', label: 'Home', href: '/explore' },
+    { kind: 'link', label: 'WDYWT', href: '/wdywt' },
+    { kind: 'create', label: 'Create', href: '' },
+    { kind: 'link', label: 'Messages', href: '/messages' },
+    { kind: 'profile', label: 'Profile', href: '/dashboard' },
+  ] as const
+  const isActivePath = (href: string) =>
+    pathname === href || (href === '/messages' && (pathname || '').startsWith('/messages/'))
+
+  // ➕ Create sheet
+  const [createOpen, setCreateOpen] = useState(false)
+  useLockBodyScroll(createOpen)
+
+  function handleCreate(option: 'wrap' | 'wdywt' | 'dip') {
+    setCreateOpen(false)
+    if (option === 'wrap') {
+      // Already on the profile → open the form there; otherwise go there and open it
+      if (pathname === '/dashboard') window.dispatchEvent(new Event('wrapapp:add-wrap'))
+      else router.push('/dashboard?add=1')
+    } else if (option === 'wdywt') {
+      if (pathname === '/wdywt') window.dispatchEvent(new Event('wrapapp:post-wdywt'))
+      else router.push('/wdywt?post=1')
+    } else {
+      router.push('/create-dip')
+    }
+  }
+
+  // Keep the ♡ badge in step when Activity marks things read / clears them
+  useEffect(() => {
+    const onUnread = (event: Event) => {
+      const count = Number((event as CustomEvent).detail)
+      if (!Number.isNaN(count)) setUnreadCount(count)
+    }
+    window.addEventListener('wrapapp:unread', onUnread)
+    return () => window.removeEventListener('wrapapp:unread', onUnread)
+  }, [])
+
+  const plusIcon = (className: string, strokeWidth: string) => (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" className={className}><rect x="3" y="3" width="18" height="18" rx="5"/><path d="M12 8v8M8 12h8"/></svg>
+  )
+
+  // ♡ → /activity, with the unread count
+  const heartLink = (variant: 'phone' | 'desktop') => {
+    const isActive = pathname === '/activity'
+    return (
+      <Link
+        href="/activity"
+        aria-label={unreadCount > 0 ? `Activity, ${unreadCount} unread` : 'Activity'}
+        className={`relative flex items-center justify-center ${variant === 'phone' ? 'h-11 w-11' : 'h-10 w-10 rounded-xl hover:bg-gray-50'} ${isActive ? 'text-pink-600' : 'text-gray-800'}`}
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill={isActive ? 'currentColor' : 'none'} fillOpacity={isActive ? 0.15 : 0} stroke="currentColor" strokeWidth={isActive ? '2.2' : '1.8'} strokeLinecap="round" strokeLinejoin="round" className={variant === 'phone' ? 'h-[26px] w-[26px]' : 'h-6 w-6'}><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1 1.1L12 21l7.8-7.5 1-1.1a5.5 5.5 0 0 0 0-7.8z"/></svg>
+        {unreadCount > 0 && (
+          <span className="absolute right-1 top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-pink-600 px-1 text-[9px] font-bold text-white">
+            {unreadCount > 9 ? '9+' : unreadCount}
+          </span>
+        )}
+      </Link>
+    )
+  }
 
   const [showSplash, setShowSplash] = useState(() => {
     if (typeof window === 'undefined') return false
@@ -313,34 +374,32 @@ const cachedUnread = localStorage.getItem('dipdesk_unread_count')
     <div className="flex min-h-dvh flex-col overflow-x-clip bg-white">
       {!hideHeader && (
         <>
-          {/* Phone top bar: slim, white, light grey line, padded for the iPhone notch.
+          {/* Phone top bar: WrapApp + ♡ (notifications) on every main page, padded for the iPhone notch.
               Not on message threads — they have their own full-screen header. */}
           {!(pathname || '').startsWith('/messages/') && (
             <header className="sticky top-0 z-40 border-b border-gray-200 bg-white pt-[env(safe-area-inset-top)] md:hidden">
               <div className="flex h-12 items-center justify-between px-3">
-                <Link href="/dashboard" className="text-xl font-extrabold tracking-tight text-pink-600">
+                <Link href="/explore" className="text-xl font-extrabold tracking-tight text-pink-600">
                   WrapApp
                 </Link>
-                {phoneTopRight && <div className="flex items-center gap-1">{phoneTopRight}</div>}
+                <div className="flex items-center gap-1">
+                  {phoneTopRight}
+                  {heartLink('phone')}
+                </div>
               </div>
             </header>
           )}
 
-          {/* Desktop top nav */}
+          {/* Desktop top nav: Home · WDYWT · Messages, then ♡ ➕ and your avatar (Profile) */}
           <header className="hidden border-b bg-white md:block">
             <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
-             <button
-                type="button"
-                onClick={() => router.push('/dashboard')}
-                className="cursor-pointer text-xl font-bold text-gray-900"
-              >
+              <Link href="/explore" className="cursor-pointer text-xl font-bold text-gray-900">
                 WrapApp
-              </button>
+              </Link>
 
               <nav className="flex items-center gap-1">
-                {navItems.map((item) => {
-                  const isActive = pathname === item.href
-
+                {desktopNavItems.map((item) => {
+                  const isActive = isActivePath(item.href)
                   return (
                     <button
                       key={item.href}
@@ -364,24 +423,34 @@ const cachedUnread = localStorage.getItem('dipdesk_unread_count')
                 })}
               </nav>
 
-              <Link href="/tools" className="group relative cursor-pointer shrink-0">
-                {avatar ? (
-                  <img
-                    src={avatar}
-                    alt="Your avatar"
-                    className="h-9 w-9 rounded-full object-cover ring-2 ring-pink-200"
-                  />
-                ) : (
-                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-pink-500 to-rose-500 text-sm font-bold text-white ring-2 ring-pink-200">
-                    {initials || '?'}
-                  </div>
-                )}
-                <div className="absolute inset-0 flex items-center justify-center rounded-full bg-black/40 opacity-0 transition group-hover:opacity-100">
-                  <span className="text-[10px] font-semibold text-white leading-tight text-center px-1">
-                    Me
-                  </span>
-                </div>
-              </Link>
+              <div className="flex items-center gap-2">
+                {heartLink('desktop')}
+                <button
+                  type="button"
+                  onClick={() => setCreateOpen(true)}
+                  aria-label="Create"
+                  className="flex h-10 w-10 items-center justify-center rounded-xl text-gray-700 hover:bg-gray-50"
+                >
+                  {plusIcon('h-6 w-6', '1.8')}
+                </button>
+                <Link
+                  href="/dashboard"
+                  aria-label="Your profile"
+                  className={`group relative ml-1 cursor-pointer shrink-0 rounded-full ${isActivePath('/dashboard') ? 'ring-2 ring-pink-600 ring-offset-2' : ''}`}
+                >
+                  {avatar ? (
+                    <img
+                      src={avatar}
+                      alt="Your profile"
+                      className="h-9 w-9 rounded-full object-cover ring-2 ring-pink-200"
+                    />
+                  ) : (
+                    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-pink-500 to-rose-500 text-sm font-bold text-white ring-2 ring-pink-200">
+                      {initials || '?'}
+                    </div>
+                  )}
+                </Link>
+              </div>
             </div>
           </header>
 
@@ -420,25 +489,67 @@ const cachedUnread = localStorage.getItem('dipdesk_unread_count')
             </div>
           )}
 
-          {/* Phone bottom nav — plain icons + labels on white (Instagram-style) */}
+          {/* Phone bottom nav: Home · WDYWT · ➕ · Messages · Profile (Instagram-style) */}
 <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-gray-100 bg-white md:hidden">
   <div className="grid grid-cols-5">
-    {navItems.map((item) => {
-      const isActive = pathname === item.href
+    {phoneNavItems.map((item) => {
+      // Centre ➕ opens the create sheet
+      if (item.kind === 'create') {
+        return (
+          <button
+            key="create"
+            type="button"
+            onClick={() => setCreateOpen(true)}
+            aria-label="Create"
+            style={{ paddingBottom: 'max(6px, env(safe-area-inset-bottom))' }}
+            className="flex h-full w-full min-h-[60px] flex-col items-center justify-start px-1 pt-1 text-gray-800 active:text-gray-600"
+          >
+            {plusIcon('h-[34px] w-[34px] pointer-events-none', '1.7')}
+          </button>
+        )
+      }
+
+      // Profile = your avatar
+      if (item.kind === 'profile') {
+        const isActive = isActivePath('/dashboard') || isActivePath('/tools')
+        return (
+          <Link
+            key="profile"
+            href="/dashboard"
+            prefetch={true}
+            aria-current={isActive ? 'page' : undefined}
+            style={{ paddingBottom: 'max(6px, env(safe-area-inset-bottom))' }}
+            className="flex h-full w-full min-h-[60px] flex-col items-center justify-start gap-1 px-1 pt-1.5"
+          >
+            {avatar ? (
+              <img
+                src={avatar}
+                alt="Your profile"
+                className={`h-[26px] w-[26px] rounded-full object-cover pointer-events-none ${isActive ? 'ring-2 ring-pink-600 ring-offset-1' : ''}`}
+              />
+            ) : (
+              <div className={`flex h-[26px] w-[26px] items-center justify-center rounded-full bg-gradient-to-br from-pink-500 to-rose-500 text-[10px] font-bold text-white pointer-events-none ${isActive ? 'ring-2 ring-pink-600 ring-offset-1' : ''}`}>
+                {initials || '?'}
+              </div>
+            )}
+            <span className={`pointer-events-none text-xs leading-none ${isActive ? 'font-semibold text-pink-600' : 'font-medium text-gray-500'}`}>
+              Profile
+            </span>
+          </Link>
+        )
+      }
+
+      const isActive = isActivePath(item.href)
       // Active icon draws a little bolder
       const sw = isActive ? '2.5' : '1.8'
 
       const icon =
         item.label === 'Home' ? (
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill={isActive ? 'currentColor' : 'none'} fillOpacity={isActive ? 0.15 : 0} stroke="currentColor" strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round" className="h-[26px] w-[26px]"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-        ) : item.label === 'Explore' ? (
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round" className="h-[26px] w-[26px]"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
         ) : item.label === 'WDYWT' ? (
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill={isActive ? 'currentColor' : 'none'} fillOpacity={isActive ? 0.15 : 0} stroke="currentColor" strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round" className="h-[26px] w-[26px]"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
-        ) : item.label === 'Messages' ? (
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill={isActive ? 'currentColor' : 'none'} fillOpacity={isActive ? 0.15 : 0} stroke="currentColor" strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round" className="h-[26px] w-[26px]"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
         ) : (
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round" className="h-[26px] w-[26px]"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill={isActive ? 'currentColor' : 'none'} fillOpacity={isActive ? 0.15 : 0} stroke="currentColor" strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round" className="h-[26px] w-[26px]"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
         )
 
       return (
@@ -454,11 +565,6 @@ const cachedUnread = localStorage.getItem('dipdesk_unread_count')
         >
           <span className="pointer-events-none leading-none relative">
             {icon}
-            {item.label === 'Home' && unreadCount > 0 && (
-              <span className="absolute -right-2 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-pink-600 text-[9px] font-bold text-white">
-                {unreadCount > 9 ? '9+' : unreadCount}
-              </span>
-            )}
             {item.label === 'Messages' && unreadMessages > 0 && (
               <span className="absolute -right-2 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-pink-600 text-[9px] font-bold text-white">
                 {unreadMessages > 9 ? '9+' : unreadMessages}
@@ -472,28 +578,6 @@ const cachedUnread = localStorage.getItem('dipdesk_unread_count')
         </Link>
       )
     })}
-
-          <Link
-            href="/tools"
-            aria-current={pathname === '/tools' ? 'page' : undefined}
-            style={{ paddingBottom: 'max(6px, env(safe-area-inset-bottom))' }}
-            className="flex h-full w-full min-h-[60px] flex-col items-center justify-start gap-1 px-1 pt-1.5"
-          >
-            {avatar ? (
-              <img
-                src={avatar}
-                alt="You"
-                className={`h-[26px] w-[26px] rounded-full object-cover pointer-events-none ${pathname === '/tools' ? 'ring-2 ring-pink-600 ring-offset-1' : ''}`}
-              />
-            ) : (
-              <div className={`flex h-[26px] w-[26px] items-center justify-center rounded-full bg-gradient-to-br from-pink-500 to-rose-500 text-[10px] font-bold text-white pointer-events-none ${pathname === '/tools' ? 'ring-2 ring-pink-600 ring-offset-1' : ''}`}>
-                {initials || '?'}
-              </div>
-            )}
-            <span className={`pointer-events-none text-xs leading-none ${pathname === '/tools' ? 'font-semibold text-pink-600' : 'font-medium text-gray-500'}`}>
-              Me
-            </span>
-          </Link>
   </div>
 </nav>
         </>
@@ -507,6 +591,50 @@ const cachedUnread = localStorage.getItem('dipdesk_unread_count')
 >
         {children}
       </main>
+
+      {/* ➕ Create: bottom sheet on phone, small card on desktop */}
+      {createOpen && (
+        <div
+          className="fixed inset-0 z-[70] flex items-end justify-center bg-black/40 md:items-center md:p-4"
+          onClick={() => setCreateOpen(false)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Create"
+            onClick={(e) => e.stopPropagation()}
+            className="animate-sheet-up w-full max-w-sm rounded-t-3xl bg-white p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] shadow-2xl md:rounded-3xl md:pb-3"
+          >
+            <div className="mx-auto mb-2 h-1 w-10 rounded-full bg-gray-200 md:hidden" />
+            <p className="px-3 pb-2 pt-1 text-center text-sm font-semibold text-gray-500">Create</p>
+            {([
+              { key: 'wrap', emoji: '🧣', label: 'Add a wrap', hint: 'Add to your collection' },
+              { key: 'wdywt', emoji: '📸', label: 'Post WDYWT', hint: 'What did you wear today?' },
+              { key: 'dip', emoji: '🎲', label: 'Start a dip', hint: 'Run a dip in Chasing Unicorns' },
+            ] as const).map((option) => (
+              <button
+                key={option.key}
+                type="button"
+                onClick={() => handleCreate(option.key)}
+                className="flex min-h-[56px] w-full items-center gap-3 rounded-2xl px-3 text-left hover:bg-gray-50 active:bg-gray-100"
+              >
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-pink-50 text-xl">{option.emoji}</span>
+                <span className="min-w-0">
+                  <span className="block text-base font-semibold text-gray-900">{option.label}</span>
+                  <span className="block text-xs text-gray-500">{option.hint}</span>
+                </span>
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={() => setCreateOpen(false)}
+              className="mt-2 min-h-[48px] w-full rounded-2xl border border-gray-200 text-base font-semibold text-gray-700"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Shared toast + confirm sheet for every page */}
       <FeedbackHost />

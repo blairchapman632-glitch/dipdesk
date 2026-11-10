@@ -1,0 +1,3961 @@
+'use client'
+
+import { supabase } from '@/lib/supabase'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import imageCompression from 'browser-image-compression'
+import AppLayout from '@/app/components/AppLayout'
+import { askConfirm, showToast } from '@/app/components/Toast'
+import { useLockBodyScroll } from '@/app/components/useLockBodyScroll'
+import { fullSheetOverlay, fullSheetPanel, SheetTopBar } from '@/app/components/Sheet'
+import { getCoverImage, sortWrapImages } from '@/lib/wrapCover'
+import { getDipStageLabel, isDipLiveOrLater } from '@/lib/dipStages'
+
+type CurrencyCode = 'AUD' | 'USD' | 'EUR'
+
+type WrapImage = {
+  id: string
+  image_url: string
+  is_primary: boolean
+  sort_order: number
+}
+
+type Wrap = {
+  id: string
+  user_id: string
+  name: string
+  brand: string | null
+  description: string | null
+  size: string | null
+  material: string | null
+  colour: string | null
+  dibs_user_id: string | null
+  dibs_users?: DibsUser[]
+  dibs_names?: string[]
+  purchase_date: string | null
+  purchase_price: number | null
+  purchase_currency: CurrencyCode | null
+  purchased_from: string | null
+  purchase_country: string | null
+  status: 'active' | 'holiday' | 'departed'
+  on_loan_to: string | null
+  sold_to: string | null
+  sold_price: number | null
+  sold_currency: CurrencyCode | null
+  sold_date: string | null
+  is_favourite: boolean
+  for_sale: boolean
+  for_sale_price: number | null
+  for_sale_currency: CurrencyCode | null
+  for_sale_price_is_pm: boolean
+  created_at: string
+  wrap_images?: WrapImage[]
+}
+type Profile = {
+  id: string
+  full_name: string | null
+  username: string | null
+  avatar_url?: string | null
+}
+type Dip = {
+  id: string
+  title: string
+  brand: string | null
+  wrap_name: string | null
+  total_spots: number
+  price_per_spot: number
+  current_likes: number | null
+  likes_required: number | null
+  stage: string | null
+  status: string | null
+  wrap_id: string | null
+  archived: boolean | null
+  // Shown in Dip History (Profile → Dips)
+  drawn_at?: string | null
+  winner_name?: string | null
+  winning_number?: number | null
+  total_raised?: number | null
+  wrap_condition?: string | null
+  wrap_size?: string | null
+  wrap_blend?: string | null
+  filled_spots?: number
+  liked_count?: number
+}
+
+type WrapFormImage = {
+  id: string
+  image_url: string
+  is_primary: boolean
+  sort_order: number
+  status: 'uploaded' | 'uploading' | 'error'
+  storage_path: string | null
+  file_name: string | null
+  // Saved photo URL this image replaced; its file is deleted only after save succeeds
+  replaced_url: string | null
+}
+type ReportRow = {
+  id: string
+  wrap_name: string
+  wrap_status: 'Collection' | 'Departed'
+  purchase_date: string
+  purchase_price: number | null
+  sold_price: number | null
+}
+type WrapFormState = {
+  id: string | null
+  name: string
+  brand: string
+  size: string
+  material: string
+  colour: string
+  dibs_users: DibsUser[]
+  dibs_names: string[]
+  dibs_name_input: string
+  dibs_search: string
+purchase_date: string
+  purchase_price: string
+  purchase_currency: CurrencyCode
+  purchased_from: string
+  purchase_country: string
+  images: WrapFormImage[]
+  on_loan_to: string
+  sold_to: string
+  sold_price: string
+  sold_currency: CurrencyCode
+  sold_date: string
+  is_favourite: boolean
+  for_sale: boolean
+    for_sale_price: string
+  for_sale_currency: CurrencyCode
+  for_sale_price_is_pm: boolean
+  status: 'active' | 'holiday' | 'departed'
+  wrap_type: string
+  is_private: boolean
+}
+type DibsUser = {
+  id: string
+  user_id: string
+  wrap_id: string
+  profile: {
+    full_name: string | null
+    username: string | null
+    avatar_url: string | null
+  }
+}
+type NotificationRow = {
+  id: string
+  recipient_user_id: string
+  actor_user_id: string | null
+  wrap_id: string | null
+  type: 'like' | 'wishlist' | 'for_sale' | 'comment' | 'dibs' | 'dip_live'
+  created_at: string
+  read_at: string | null
+}
+
+type NotificationItem = {
+  id: string
+  actor_user_id: string | null
+  created_at: string
+  read_at: string | null
+  type: 'like' | 'wishlist' | 'for_sale' | 'comment' | 'dibs' | 'dip_live'
+  actor_name: string
+  actor_avatar: string | null
+  wrap: Wrap | null
+}
+const DASHBOARD_EMAIL_KEY = 'dipdesk_dashboard_email'
+const DASHBOARD_DIPS_KEY = 'dipdesk_dashboard_dips'
+const DASHBOARD_WRAPS_KEY = 'dipdesk_dashboard_wraps'
+const DASHBOARD_NOTIFICATIONS_KEY = 'dipdesk_dashboard_notifications'
+const DASHBOARD_PROFILE_KEY = 'dipdesk_dashboard_profile'
+// Followers / following counts for the profile header (cached for instant display)
+const DASHBOARD_FOLLOW_COUNTS_KEY = 'dipdesk_dashboard_follow_counts'
+const DASHBOARD_ACTOR_AVATARS_KEY = 'dipdesk_dashboard_actor_avatars'
+
+const EMPTY_WRAP_FORM: WrapFormState = {
+  id: null,
+  name: '',
+  brand: '',
+  size: '',
+  material: '',
+  colour: '',
+    dibs_users: [],
+  dibs_names: [],
+  dibs_name_input: '',
+  dibs_search: '',
+purchase_date: new Date().toISOString().slice(0, 10),
+  purchase_price: '',
+  purchase_currency: 'AUD',
+  purchased_from: '',
+  purchase_country: '',
+  images: [],
+  on_loan_to: '',
+  sold_to: '',
+  sold_price: '',
+  sold_currency: 'AUD',
+  sold_date: new Date().toISOString().slice(0, 10),
+  is_favourite: false,
+   for_sale: false,
+  for_sale_price: '',
+  for_sale_currency: 'AUD',
+  for_sale_price_is_pm: false,
+  status: 'active',
+  wrap_type: '',
+  is_private: false,
+}
+
+const WRAP_PLACEHOLDER =
+  'https://placehold.co/800x800/fdf2f8/be185d?text=Wrap'
+const MAX_WRAP_IMAGES = 6
+const MAX_IMAGE_SIZE_MB = 5
+const ALLOWED_IMAGE_TYPES = [
+  'image/jpeg',
+  'image/jpg',
+  'image/png',
+  'image/webp',
+]
+function formatCurrency(
+  value: number | null | undefined,
+  currency: CurrencyCode = 'AUD'
+) {
+  if (value === null || value === undefined || Number.isNaN(value)) return ''
+  return new Intl.NumberFormat('en-AU', {
+    style: 'currency',
+    currency,
+    maximumFractionDigits: 0,
+  }).format(value)
+}
+
+// One primary (pink gradient) and one secondary (outline) button style for this page
+const BTN_PRIMARY = 'inline-flex min-h-[40px] items-center justify-center rounded-xl bg-gradient-to-r from-pink-500 to-rose-500 px-4 text-sm font-semibold text-white shadow-sm hover:opacity-90'
+const BTN_SECONDARY = 'inline-flex min-h-[40px] items-center justify-center rounded-xl border border-gray-200 bg-white px-4 text-sm font-semibold text-gray-800 hover:bg-gray-50'
+
+function getStageLabel(stage: string | null, status: string | null) {
+  return getDipStageLabel(stage || status)
+}
+
+// Before Live: likes progress. From Live onward: spots filled.
+function getDipProgress(dip: Dip) {
+  if (isDipLiveOrLater(dip.stage || dip.status)) {
+    if (!dip.total_spots) return 0
+    return Math.min(100, Math.round(((dip.filled_spots || 0) / dip.total_spots) * 100))
+  }
+
+  // Likes = liker names not marked unliked (counted from dip_likers)
+  const likesRequired = dip.likes_required || 0
+  const currentLikes = dip.liked_count || 0
+
+  if (likesRequired > 0) {
+    return Math.min(100, Math.round((currentLikes / likesRequired) * 100))
+  }
+
+  return 0
+}
+
+function getPrimaryImage(wrap?: Wrap) {
+  const url = getCoverImage(wrap?.wrap_images)?.image_url || ''
+
+  if (!url) return WRAP_PLACEHOLDER
+
+  const bucketMarker = '/wrap-images/'
+  const bucketIndex = url.indexOf(bucketMarker)
+
+  if (bucketIndex === -1) return WRAP_PLACEHOLDER
+
+  const pathAfterBucket = url.slice(bucketIndex + bucketMarker.length)
+
+  if (!pathAfterBucket.includes('/')) return WRAP_PLACEHOLDER
+
+  return `${url}?width=400&quality=60`
+}
+
+// The first photo is always the cover, and positions run 0, 1, 2... with no gaps
+function renumberFormImages(images: WrapFormImage[]): WrapFormImage[] {
+  return images.map((image, index) => ({
+    ...image,
+    sort_order: index,
+    is_primary: index === 0,
+  }))
+}
+
+function getWrapImageStoragePath(url: string) {
+  const bucketMarker = '/wrap-images/'
+  const bucketIndex = url.indexOf(bucketMarker)
+  if (bucketIndex === -1) return null
+
+  const path = url.slice(bucketIndex + bucketMarker.length).split('?')[0]
+  return path ? decodeURIComponent(path) : null
+}
+function formatTimeAgo(dateString: string) {
+  const now = new Date().getTime()
+  const then = new Date(dateString).getTime()
+  const diffSeconds = Math.max(1, Math.floor((now - then) / 1000))
+
+  if (diffSeconds < 60) return 'Just now'
+
+  const diffMinutes = Math.floor(diffSeconds / 60)
+  if (diffMinutes < 60) return `${diffMinutes}m ago`
+
+  const diffHours = Math.floor(diffMinutes / 60)
+  if (diffHours < 24) return `${diffHours}h ago`
+
+  const diffDays = Math.floor(diffHours / 24)
+  if (diffDays < 7) return `${diffDays}d ago`
+
+  return new Intl.DateTimeFormat('en-AU', {
+    day: 'numeric',
+    month: 'short',
+  }).format(new Date(dateString))
+}
+// Your own profile (mode "profile", at /dashboard) and notifications (mode "activity", at /activity).
+// One component so both share the same data, cache and logic.
+export default function ProfileDashboard({ mode = 'profile' }: { mode?: 'profile' | 'activity' }) {
+  const [email, setEmail] = useState('')
+  const [dips, setDips] = useState<Dip[]>([])
+  const [wraps, setWraps] = useState<Wrap[]>([])
+  const [loading, setLoading] = useState(true)
+    // Profile tabs (Instagram-style)
+    const [profileTab, setProfileTab] = useState<'collection' | 'forsale' | 'dips' | 'iso'>('collection')
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+  const [isAdmin, setIsAdmin] = useState(false)
+const [profile, setProfile] = useState<{ full_name: string | null; username: string | null; avatar_url: string | null; bio?: string | null; city?: string | null; country?: string | null } | null>(null)
+const [followCounts, setFollowCounts] = useState<{ followers: number; following: number } | null>(null)
+const [isUploadingAvatar, setIsUploadingAvatar] = useState(false)
+  const [isWrapModalOpen, setIsWrapModalOpen] = useState(false)
+const [isViewWrapModalOpen, setIsViewWrapModalOpen] = useState(false)
+const [isReportModalOpen, setIsReportModalOpen] = useState(false)
+const [reportDateFrom, setReportDateFrom] = useState('')
+const [reportDateTo, setReportDateTo] = useState('')
+const [reportStatusFilter, setReportStatusFilter] = useState<
+  'all' | 'collection' | 'departed'
+>('all')
+const [selectedWrap, setSelectedWrap] = useState<Wrap | null>(null)
+const [selectedViewImage, setSelectedViewImage] = useState<string | null>(null)
+const [isImagePreviewOpen, setIsImagePreviewOpen] = useState(false)
+// Lock the page behind any open sheet/modal
+useLockBodyScroll(isWrapModalOpen || isViewWrapModalOpen || isReportModalOpen || isImagePreviewOpen)
+const [isReadOnlyWrapView, setIsReadOnlyWrapView] = useState(false)
+const [isSavingWrap, setIsSavingWrap] = useState(false)
+const [isUploadingImages, setIsUploadingImages] = useState(false)
+const [dibsSearchResults, setDibsSearchResults] = useState<{id: string, name: string, username: string | null}[]>([])
+const [dibsSearchLoading, setDibsSearchLoading] = useState(false)
+const [purchasedFromResults, setPurchasedFromResults] = useState<{id: string, name: string, username: string | null}[]>([])
+const [purchasedFromLoading, setPurchasedFromLoading] = useState(false)
+const [brandSuggestions, setBrandSuggestions] = useState<string[]>([])
+const [materialSuggestions, setMaterialSuggestions] = useState<string[]>([])
+const [sizeSuggestions, setSizeSuggestions] = useState<string[]>([])
+const [colourSuggestions, setColourSuggestions] = useState<string[]>([])
+
+const COLOUR_TAGS = [
+  'White/Cream', 'Grey', 'Black', 'Brown/Tan', 'Pink/Blush',
+  'Red/Burgundy', 'Orange/Rust', 'Yellow/Mustard', 'Green', 'Teal/Petrol',
+  'Blue', 'Navy', 'Purple', 'Rainbow', 'Multi/Variegated', 'Natural/Undyed'
+]
+const [brandFocused, setBrandFocused] = useState(false)
+const [materialFocused, setMaterialFocused] = useState(false)
+const [sizeFocused, setSizeFocused] = useState(false)
+const [colourFocused, setColourFocused] = useState(false)
+const [wrapForm, setWrapForm] = useState<WrapFormState>(EMPTY_WRAP_FORM)
+const [notifications, setNotifications] = useState<NotificationItem[]>([])
+const [selectedWrapCounts, setSelectedWrapCounts] = useState({
+  likes: 0,
+  wishlists: 0,
+})
+const [isClearingNotifications, setIsClearingNotifications] = useState(false)
+const [showOnboarding, setShowOnboarding] = useState(false)
+const [onboardingStep, setOnboardingStep] = useState(1)
+const [onboardingAvatar, setOnboardingAvatar] = useState<string | null>(null)
+const [isUploadingOnboardingAvatar, setIsUploadingOnboardingAvatar] = useState(false)
+
+// Collection filters
+const [collectionSearch, setCollectionSearch] = useState('')
+const [showCollectionBrandFilter, setShowCollectionBrandFilter] = useState(false)
+const [showCollectionLengthFilter, setShowCollectionLengthFilter] = useState(false)
+const [showCollectionColourFilter, setShowCollectionColourFilter] = useState(false)
+const [showCollectionBlendFilter, setShowCollectionBlendFilter] = useState(false)
+const [showCollectionTypeFilter, setShowCollectionTypeFilter] = useState(false)
+const [collectionFilterBrand, setCollectionFilterBrand] = useState('')
+const [collectionFilterColour, setCollectionFilterColour] = useState('')
+const [collectionFilterBlend, setCollectionFilterBlend] = useState<string[]>([])
+const [collectionFilterType, setCollectionFilterType] = useState<string[]>([])
+const [collectionSizeMin, setCollectionSizeMin] = useState('')
+const [collectionSizeMax, setCollectionSizeMax] = useState('')
+const COLLECTION_COLOUR_TAGS = ['White/Cream', 'Grey', 'Black', 'Brown/Tan', 'Pink/Blush', 'Red/Burgundy', 'Orange/Rust', 'Yellow/Mustard', 'Green', 'Teal/Petrol', 'Blue', 'Navy', 'Purple', 'Rainbow', 'Multi/Variegated', 'Natural/Undyed']
+const COLLECTION_BLEND_TAGS = ['Cotton', 'Linen', 'Silk', 'Hemp', 'Wool/Merino', 'Seacell', 'Tencel', 'Chenille', 'Camel', 'Bamboo', 'Cashmere']
+const COLLECTION_TYPE_TAGS = ['Hand Woven', 'Machine Woven', 'Ring Sling', 'Carrier']
+    const router = useRouter()
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut()
+    localStorage.clear()
+    router.replace('/')
+  }
+
+const updateWrapForm = <K extends keyof WrapFormState>(
+  field: K,
+  value: WrapFormState[K]
+) => {
+  setWrapForm((previous) => ({
+    ...previous,
+    [field]: value,
+  }))
+}
+  const wrapsById = useMemo(() => {
+    return wraps.reduce<Record<string, Wrap>>((accumulator, wrap) => {
+      accumulator[wrap.id] = wrap
+      return accumulator
+    }, {})
+  }, [wraps])
+
+  const collectionWraps = useMemo(() => {
+    return wraps
+      .filter((wrap) => wrap.status === 'active' || wrap.status === 'holiday')
+      .sort((a, b) => {
+        if (a.is_favourite !== b.is_favourite) return a.is_favourite ? -1 : 1
+        return (b.purchase_price || 0) - (a.purchase_price || 0)
+      })
+  }, [wraps])
+
+  const filteredCollectionWraps = useMemo(() => {
+    return collectionWraps.filter((wrap) => {
+      if (collectionSearch.trim()) {
+        const term = collectionSearch.toLowerCase()
+        const matchesName = wrap.name.toLowerCase().includes(term)
+        const matchesBrand = (wrap.brand || '').toLowerCase().includes(term)
+        if (!matchesName && !matchesBrand) return false
+      }
+      if (collectionFilterBrand) {
+        const wrapBrand = (wrap.brand || '').toLowerCase()
+        if (!wrapBrand.includes(collectionFilterBrand.toLowerCase())) return false
+      }
+      if (collectionSizeMin || collectionSizeMax) {
+        const wrapSize = parseFloat((wrap.size || ''))
+        if (isNaN(wrapSize)) return false
+        if (collectionSizeMin && wrapSize < parseFloat(collectionSizeMin)) return false
+        if (collectionSizeMax && wrapSize > parseFloat(collectionSizeMax)) return false
+      }
+      if (collectionFilterColour) {
+        const selected = collectionFilterColour.split(',').map(c => c.trim().toLowerCase()).filter(Boolean)
+        const wrapColour = ((wrap as any).colour || '').toLowerCase()
+        if (!selected.some(c => wrapColour.includes(c.split('/')[0].trim()))) return false
+      }
+      if (collectionFilterBlend.length > 0) {
+        const wrapMaterial = ((wrap as any).material || '').toLowerCase()
+        if (!collectionFilterBlend.some(b => wrapMaterial.includes(b.toLowerCase().split('/')[0].trim()))) return false
+      }
+      if (collectionFilterType.length > 0) {
+        const wrapType = ((wrap as any).wrap_type || '').toLowerCase()
+        if (!collectionFilterType.some(t => wrapType === t.toLowerCase())) return false
+      }
+      return true
+    })
+  }, [collectionWraps, collectionSearch, collectionFilterBrand, collectionSizeMin, collectionSizeMax, collectionFilterColour, collectionFilterBlend, collectionFilterType])
+
+  const departedWraps = useMemo(() => {
+    return wraps
+      .filter((wrap) => wrap.status === 'departed')
+      .sort((a, b) => {
+        if (a.is_favourite !== b.is_favourite) return a.is_favourite ? -1 : 1
+        return (b.purchase_price || 0) - (a.purchase_price || 0)
+      })
+  }, [wraps])
+
+  const filteredDepartedWraps = useMemo(() => {
+    return departedWraps.filter((wrap) => {
+      if (collectionFilterBrand) {
+        const wrapBrand = (wrap.brand || '').toLowerCase()
+        if (!wrapBrand.includes(collectionFilterBrand.toLowerCase())) return false
+      }
+      if (collectionSizeMin || collectionSizeMax) {
+        const wrapSize = parseFloat((wrap.size || ''))
+        if (isNaN(wrapSize)) return false
+        if (collectionSizeMin && wrapSize < parseFloat(collectionSizeMin)) return false
+        if (collectionSizeMax && wrapSize > parseFloat(collectionSizeMax)) return false
+      }
+      if (collectionFilterColour) {
+        const selected = collectionFilterColour.split(',').map(c => c.trim().toLowerCase()).filter(Boolean)
+        const wrapColour = ((wrap as any).colour || '').toLowerCase()
+        if (!selected.some(c => wrapColour.includes(c.split('/')[0].trim()))) return false
+      }
+      if (collectionFilterBlend.length > 0) {
+        const wrapMaterial = ((wrap as any).material || '').toLowerCase()
+        if (!collectionFilterBlend.some(b => wrapMaterial.includes(b.toLowerCase().split('/')[0].trim()))) return false
+      }
+      if (collectionFilterType.length > 0) {
+        const wrapType = ((wrap as any).wrap_type || '').toLowerCase()
+        if (!collectionFilterType.some(t => wrapType === t.toLowerCase())) return false
+      }
+      return true
+    })
+  }, [departedWraps, collectionFilterBrand, collectionSizeMin, collectionSizeMax, collectionFilterColour, collectionFilterBlend, collectionFilterType])
+const reportRows = useMemo<ReportRow[]>(() => {
+  return wraps
+    .filter((wrap) => {
+      if (reportStatusFilter === 'collection') {
+        if (!(wrap.status === 'active' || wrap.status === 'holiday')) return false
+      }
+
+      if (reportStatusFilter === 'departed') {
+        if (wrap.status !== 'departed') return false
+      }
+
+      if (reportDateFrom && wrap.purchase_date && wrap.purchase_date < reportDateFrom) {
+        return false
+      }
+
+      if (reportDateTo && wrap.purchase_date && wrap.purchase_date > reportDateTo) {
+        return false
+      }
+
+      if (reportDateFrom && !wrap.purchase_date) return false
+
+      return true
+    })
+    .sort((a, b) => {
+      const aDate = a.purchase_date || ''
+      const bDate = b.purchase_date || ''
+      return bDate.localeCompare(aDate)
+    })
+    .map((wrap) => ({
+      id: wrap.id,
+      wrap_name: wrap.name,
+      wrap_status: wrap.status === 'departed' ? 'Departed' : 'Collection',
+      purchase_date: wrap.purchase_date || '',
+      purchase_price: wrap.purchase_price,
+      sold_price: wrap.sold_price,
+    }))
+}, [wraps, reportDateFrom, reportDateTo, reportStatusFilter])
+const reportTotals = useMemo(() => {
+  const totalPurchaseValue = reportRows.reduce((sum, row) => {
+    return sum + (row.purchase_price || 0)
+  }, 0)
+
+  const totalSoldValue = reportRows.reduce((sum, row) => {
+    return sum + (row.sold_price || 0)
+  }, 0)
+
+  return {
+    totalPurchaseValue,
+    totalSoldValue,
+  }
+}, [reportRows])
+const unreadNotificationCount = useMemo(() => {
+  return notifications.filter((notification) => !notification.read_at).length
+}, [notifications])
+  const loadData = useCallback(async () => {
+    const { data: { session } } = await supabase.auth.getSession()
+    const user = session?.user
+
+    if (!user) {
+      router.replace('/')
+      return
+    }
+
+    setCurrentUserId(user.id)
+    
+    // Fire-and-forget: no need to wait for this before loading the page
+    void supabase
+  .from('profiles')
+  .update({ last_active_at: new Date().toISOString() })
+  .eq('id', user.id)
+
+const userEmail = user.email || ''
+setEmail(userEmail)
+localStorage.setItem(DASHBOARD_EMAIL_KEY, userEmail)
+    // Everything loads in parallel (profile + header counts included — no waterfall)
+    const [
+  { data: userProfile },
+  { count: followerCount },
+  { count: followingCount },
+  { data: dipData, error: dipError },
+  { data: wrapData, error: wrapError },
+  { data: notificationData, error: notificationError }
+] = await Promise.all([
+  supabase
+    .from('profiles')
+    .select('full_name, username, avatar_url, role, bio, city, country')
+    .eq('id', user.id)
+    .single(),
+  supabase
+    .from('follows')
+    .select('id', { count: 'exact', head: true })
+    .eq('following_id', user.id)
+    .eq('status', 'accepted'),
+  supabase
+    .from('follows')
+    .select('id', { count: 'exact', head: true })
+    .eq('follower_id', user.id)
+    .eq('status', 'accepted'),
+
+  // Own dips (likes/status are owner-only columns) from the my_dips view
+  supabase
+    .from('my_dips')
+    .select(
+      'id, title, brand, wrap_name, total_spots, price_per_spot, current_likes, likes_required, stage, status, wrap_id, archived, drawn_at, winner_name, winning_number, total_raised, wrap_condition, wrap_size, wrap_blend'
+    )
+    .eq('user_id', user.id)
+    .order('created_at', { ascending: false }),
+
+  // Own wraps incl. private fields (purchase/sold/loan) come from the owner-only my_wraps view
+  supabase
+    .from('my_wraps')
+    .select(
+'id, name, brand, description, size, material, colour, wrap_type, is_private, dibs_names, purchase_date, purchase_price, purchase_currency, purchased_from, purchase_country, status, on_loan_to, sold_to, sold_price, sold_currency, sold_date, is_favourite, for_sale, for_sale_price, for_sale_currency, for_sale_price_is_pm, created_at, wrap_images(id, image_url, is_primary, sort_order)'
+)
+    .eq('user_id', user.id)
+    .order('is_favourite', { ascending: false })
+    .order('purchase_price', { ascending: false })
+    .order('sort_order', { referencedTable: 'wrap_images' }),
+
+  supabase
+    .from('notifications')
+        .select('id, recipient_user_id, actor_user_id, wrap_id, type, created_at, read_at')
+    .eq('recipient_user_id', user.id)
+    .order('created_at', { ascending: false })
+    .limit(20)
+])
+
+if (userProfile) {
+  setProfile(userProfile as any)
+  setIsAdmin((userProfile as any).role === 'super_admin')
+  // Merge so fields cached by other pages (e.g. Tools) aren't dropped
+  let prevCached: Record<string, unknown> = {}
+  try { prevCached = JSON.parse(localStorage.getItem(DASHBOARD_PROFILE_KEY) || '{}') } catch {}
+  localStorage.setItem(DASHBOARD_PROFILE_KEY, JSON.stringify({ ...prevCached, ...userProfile, id: user.id }))
+}
+
+// Profile header counts (cached for instant display next time)
+const nextFollow = { followers: followerCount || 0, following: followingCount || 0 }
+setFollowCounts(nextFollow)
+try { localStorage.setItem(DASHBOARD_FOLLOW_COUNTS_KEY, JSON.stringify(nextFollow)) } catch {}
+
+    if (!dipError && dipData) {
+      // Keep last known counts so cards don't flash to 0% while recounting
+      const prevFilled: Record<string, number> = {}
+      const prevLiked: Record<string, number> = {}
+      try {
+        for (const d of JSON.parse(localStorage.getItem(DASHBOARD_DIPS_KEY) || '[]') as Dip[]) {
+          if (typeof d.filled_spots === 'number') prevFilled[String(d.id)] = d.filled_spots
+          if (typeof d.liked_count === 'number') prevLiked[String(d.id)] = d.liked_count
+        }
+      } catch {}
+      const dipsWithPrev = (dipData as Dip[]).map((d) => ({
+        ...d,
+        ...(prevFilled[String(d.id)] !== undefined ? { filled_spots: prevFilled[String(d.id)] } : {}),
+        ...(prevLiked[String(d.id)] !== undefined ? { liked_count: prevLiked[String(d.id)] } : {}),
+      }))
+      localStorage.removeItem(DASHBOARD_DIPS_KEY)
+      setDips(dipsWithPrev)
+      localStorage.setItem(DASHBOARD_DIPS_KEY, JSON.stringify(dipsWithPrev))
+
+      // Progress bar counts: spots filled (Live onward) and liked names (before Live)
+      const activeDips = (dipData as Dip[]).filter((d) => !d.archived)
+      const liveDipIds = activeDips.filter((d) => isDipLiveOrLater(d.stage || d.status)).map((d) => d.id)
+      const preLiveDipIds = activeDips.filter((d) => !isDipLiveOrLater(d.stage || d.status)).map((d) => d.id)
+
+      if (liveDipIds.length > 0 || preLiveDipIds.length > 0) {
+        void Promise.all([
+          liveDipIds.length > 0
+            ? supabase.from('spots').select('dip_id, player_name').in('dip_id', liveDipIds)
+            : Promise.resolve({ data: [], error: null }),
+          preLiveDipIds.length > 0
+            ? supabase.from('dip_likers').select('dip_id, unliked').in('dip_id', preLiveDipIds)
+            : Promise.resolve({ data: [], error: null }),
+        ]).then(([spotRes, likerRes]) => {
+          const filled: Record<string, number> = { ...prevFilled }
+          const liked: Record<string, number> = { ...prevLiked }
+          if (!spotRes.error && spotRes.data) {
+            for (const id of liveDipIds) filled[String(id)] = 0
+            for (const s of spotRes.data as { dip_id: string; player_name: string | null }[]) {
+              if (s.player_name) filled[String(s.dip_id)] = (filled[String(s.dip_id)] || 0) + 1
+            }
+          }
+          if (!likerRes.error && likerRes.data) {
+            for (const id of preLiveDipIds) liked[String(id)] = 0
+            for (const l of likerRes.data as { dip_id: string; unliked: boolean | null }[]) {
+              if (!l.unliked) liked[String(l.dip_id)] = (liked[String(l.dip_id)] || 0) + 1
+            }
+          }
+          const withCounts = (dipData as Dip[]).map((d) => ({
+            ...d,
+            ...(filled[String(d.id)] !== undefined ? { filled_spots: filled[String(d.id)] } : {}),
+            ...(liked[String(d.id)] !== undefined ? { liked_count: liked[String(d.id)] } : {}),
+          }))
+          setDips(withCounts)
+          localStorage.setItem(DASHBOARD_DIPS_KEY, JSON.stringify(withCounts))
+        })
+      }
+    }
+
+    if (!wrapError && wrapData) {
+  const safeWraps = (wrapData as unknown as Wrap[]) || []
+  setWraps(safeWraps)
+  localStorage.setItem(DASHBOARD_WRAPS_KEY, JSON.stringify(safeWraps))
+}
+if (!notificationError && notificationData) {
+  const rows = (notificationData as NotificationRow[]) || []
+  const actorIds = [...new Set(rows.map((row) => row.actor_user_id).filter(Boolean) as string[])]
+  const wrapIds = [...new Set(rows.map((row) => row.wrap_id).filter(Boolean) as string[])]
+
+  let actorMap: Record<string, Profile> = {}
+  let wrapMap: Record<string, Wrap> = {}
+
+  if (actorIds.length > 0) {
+    const { data: actorProfileData } = await supabase
+      .from('profiles')
+      .select('id, full_name, username, avatar_url')
+      .in('id', actorIds)
+
+    actorMap = ((actorProfileData as Profile[]) || []).reduce<Record<string, Profile>>(
+      (accumulator, profile) => {
+        accumulator[profile.id] = profile
+        return accumulator
+      },
+      {}
+    )
+  }
+
+  if (wrapIds.length > 0) {
+    const { data: notificationWrapData } = await supabase
+      .from('wraps')
+      .select(
+        'id, user_id, name, brand, description, colour, size, material, wrap_type, status, sold_date, is_favourite, for_sale, for_sale_price, for_sale_currency, for_sale_price_is_pm, created_at, wrap_images(id, image_url, is_primary, sort_order)'
+      )
+      .in('id', wrapIds)
+      .order('sort_order', { referencedTable: 'wrap_images' })
+
+    wrapMap = ((notificationWrapData as unknown as Wrap[]) || []).reduce<Record<string, Wrap>>(
+      (accumulator, wrap) => {
+        accumulator[wrap.id] = wrap
+        return accumulator
+      },
+      {}
+    )
+  }
+
+  const nextNotifications: NotificationItem[] = rows.map((row) => ({
+  id: row.id,
+  actor_user_id: row.actor_user_id,
+  created_at: row.created_at,
+  read_at: row.read_at,
+  type: row.type,
+  actor_name: row.actor_user_id
+      ? ((actorMap[row.actor_user_id]?.full_name?.split(' ')[0]) ||
+          actorMap[row.actor_user_id]?.username ||
+          'Someone')
+      : 'Someone',
+  actor_avatar: row.actor_user_id
+      ? (actorMap[row.actor_user_id] as any)?.avatar_url || null
+      : null,
+  wrap: row.wrap_id ? wrapMap[row.wrap_id] || null : null,
+}))
+
+  setNotifications(nextNotifications)
+  localStorage.setItem(DASHBOARD_NOTIFICATIONS_KEY, JSON.stringify(nextNotifications))
+  const actorAvatarMap: Record<string, string | null> = {}
+  nextNotifications.forEach((n) => {
+    if (n.actor_user_id) {
+      actorAvatarMap[n.actor_user_id] = n.actor_avatar
+    }
+  })
+  localStorage.setItem(DASHBOARD_ACTOR_AVATARS_KEY, JSON.stringify(actorAvatarMap))
+}
+
+    setLoading(false)
+
+    const hasNoAvatar = !userProfile?.avatar_url
+    const hasNoWraps = !wrapData || (wrapData as any[]).length === 0
+    if (hasNoAvatar && hasNoWraps) {
+      setShowOnboarding(true)
+    }
+  }, [])
+
+  useEffect(() => {
+        const cachedEmail = localStorage.getItem(DASHBOARD_EMAIL_KEY)
+    const cachedDips = localStorage.getItem(DASHBOARD_DIPS_KEY)
+    const cachedWraps = localStorage.getItem(DASHBOARD_WRAPS_KEY)
+    const cachedNotifications = localStorage.getItem(DASHBOARD_NOTIFICATIONS_KEY)
+
+    // If no cache exists at all, keep loading=true until Supabase responds
+    const hasCache = cachedEmail || cachedWraps
+    if (!hasCache) {
+      loadData()
+      return
+    }
+
+    if (cachedEmail) setEmail(cachedEmail)
+
+    if (cachedDips) {
+      try {
+        const parsed = JSON.parse(cachedDips)
+        setDips(parsed)
+      } catch {
+        localStorage.removeItem(DASHBOARD_DIPS_KEY)
+      }
+    }
+
+        if (cachedWraps) {
+      try {
+        setWraps(JSON.parse(cachedWraps))
+      } catch {
+        localStorage.removeItem(DASHBOARD_WRAPS_KEY)
+      }
+    }
+
+    if (cachedNotifications) {
+      try {
+        setNotifications(JSON.parse(cachedNotifications))
+      } catch {
+        localStorage.removeItem(DASHBOARD_NOTIFICATIONS_KEY)
+      }
+    }
+
+    const cachedProfile = localStorage.getItem(DASHBOARD_PROFILE_KEY)
+    if (cachedProfile) {
+      try {
+        const p = JSON.parse(cachedProfile)
+        setProfile(p)
+        setIsAdmin(p.role === 'super_admin')
+      } catch {}
+    }
+    try {
+      const cachedFollow = localStorage.getItem(DASHBOARD_FOLLOW_COUNTS_KEY)
+      if (cachedFollow) setFollowCounts(JSON.parse(cachedFollow))
+    } catch {}
+
+    const cachedActorAvatars = localStorage.getItem(DASHBOARD_ACTOR_AVATARS_KEY)
+    if (cachedActorAvatars) {
+      try {
+        const avatarMap = JSON.parse(cachedActorAvatars)
+        setNotifications((prev) =>
+          prev.map((n) => ({
+            ...n,
+            actor_avatar: n.actor_user_id ? avatarMap[n.actor_user_id] ?? n.actor_avatar : n.actor_avatar,
+          }))
+        )
+      } catch {}
+    }
+
+    setLoading(false)
+    loadData()
+  }, [loadData])
+  // ➕ → "Add a wrap" (from another page: /dashboard?add=1; already here: an event)
+  useEffect(() => {
+    if (mode !== 'profile') return
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('add') === '1') {
+      openNewWrapModal()
+      router.replace('/dashboard')
+    }
+    const onAdd = () => openNewWrapModal()
+    window.addEventListener('wrapapp:add-wrap', onAdd)
+    return () => window.removeEventListener('wrapapp:add-wrap', onAdd)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode])
+
+  useEffect(() => {
+  const params = new URLSearchParams(window.location.search)
+
+  if (params.get('report') === 'true') {
+    setIsReportModalOpen(true)
+    router.replace('/dashboard')
+  }
+}, [router])
+async function openViewWrapModal(wrap: Wrap, readOnly = false) {
+  const primaryImage =
+    getCoverImage(wrap.wrap_images)?.image_url || WRAP_PLACEHOLDER
+
+  setSelectedWrap(wrap)
+  setSelectedViewImage(primaryImage)
+  setIsReadOnlyWrapView(readOnly)
+  setIsViewWrapModalOpen(true)
+
+  const [
+    { count: likeCount },
+    { count: wishlistCount }
+  ] = await Promise.all([
+    supabase
+      .from('wrap_likes')
+      .select('*', { count: 'exact', head: true })
+      .eq('wrap_id', wrap.id),
+    supabase
+      .from('wishlists')
+      .select('*', { count: 'exact', head: true })
+      .eq('wrap_id', wrap.id)
+  ])
+
+  setSelectedWrapCounts({
+    likes: likeCount || 0,
+    wishlists: wishlistCount || 0,
+  })
+}
+function closeViewWrapModal() {
+  setIsViewWrapModalOpen(false)
+  setSelectedWrap(null)
+  setSelectedViewImage(null)
+  setIsImagePreviewOpen(false)
+  setIsReadOnlyWrapView(false)
+}
+// Saves the unread count and updates the ♡ badge in the nav straight away
+function broadcastUnread(count: number) {
+  try { localStorage.setItem('dipdesk_unread_count', JSON.stringify(count)) } catch {}
+  window.dispatchEvent(new CustomEvent('wrapapp:unread', { detail: count }))
+}
+
+function handleNotificationClick(notification: NotificationItem) {
+  if (!notification.read_at) {
+    setNotifications((prev) => {
+      const updated = prev.map((n) =>
+        n.id === notification.id
+          ? { ...n, read_at: new Date().toISOString() }
+          : n
+      )
+      const newUnread = updated.filter((n) => !n.read_at).length
+      broadcastUnread(newUnread)
+      localStorage.setItem(DASHBOARD_NOTIFICATIONS_KEY, JSON.stringify(updated))
+      return updated
+    })
+
+    supabase
+      .from('notifications')
+      .update({ read_at: new Date().toISOString() })
+      .eq('id', notification.id)
+      .then(() => {})
+  }
+
+  if (notification.type === 'for_sale' && notification.wrap) {
+    openViewWrapModal(notification.wrap, true)
+    return
+  }
+
+  if ((notification.type === 'like' || notification.type === 'wishlist') && notification.wrap) {
+    openViewWrapModal(notification.wrap, true)
+    return
+  }
+
+  if (notification.type === 'dip_live') {
+    router.push('/explore')
+    return
+  }
+
+  if (notification.type === 'comment' || (notification.type === 'like' && !notification.wrap)) {
+    router.push('/wdywt')
+    return
+  }
+
+  if (notification.actor_user_id) {
+    router.push(`/user/${notification.actor_user_id}`)
+    return
+  }
+}
+async function uploadAvatar(file: File) {
+  if (!currentUserId) return
+
+  setIsUploadingAvatar(true)
+
+  const fileExt = file.name.split('.').pop() || 'jpg'
+  const fileName = `${currentUserId}/avatar.${fileExt}`
+
+  const { error: uploadError } = await supabase.storage
+    .from('avatars')
+    .upload(fileName, file, { upsert: true })
+
+  if (uploadError) {
+    console.error(uploadError)
+    setIsUploadingAvatar(false)
+    return
+  }
+
+  const { data } = supabase.storage
+    .from('avatars')
+    .getPublicUrl(fileName)
+
+  const avatarUrl = `${data.publicUrl}?t=${Date.now()}`
+
+  const { error: updateError } = await supabase
+    .from('profiles')
+    .update({ avatar_url: avatarUrl })
+    .eq('id', currentUserId)
+
+  if (!updateError) {
+    setProfile((prev) => prev ? { ...prev, avatar_url: avatarUrl } : prev)
+  }
+
+  setIsUploadingAvatar(false)
+}
+
+function getInitials(name: string | null | undefined) {
+  if (!name?.trim()) return '?'
+  return name
+    .trim()
+    .split(' ')
+    .slice(0, 2)
+    .map((word) => word[0].toUpperCase())
+    .join('')
+}
+async function uploadOnboardingAvatar(file: File) {
+  if (!currentUserId) return
+  setIsUploadingOnboardingAvatar(true)
+  try {
+    file = await imageCompression(file, { maxSizeMB: 0.3, maxWidthOrHeight: 400, useWebWorker: true })
+  } catch {}
+  const fileExt = file.name.split('.').pop() || 'jpg'
+  const fileName = `${currentUserId}/avatar.${fileExt}`
+  const { error } = await supabase.storage.from('avatars').upload(fileName, file, { upsert: true })
+  if (!error) {
+    const { data } = supabase.storage.from('avatars').getPublicUrl(fileName)
+    const avatarUrl = `${data.publicUrl}?t=${Date.now()}`
+    await supabase.from('profiles').update({ avatar_url: avatarUrl }).eq('id', currentUserId)
+    setOnboardingAvatar(avatarUrl)
+    setProfile((prev) => prev ? { ...prev, avatar_url: avatarUrl } : prev)
+    const cached = localStorage.getItem('dipdesk_dashboard_profile')
+    if (cached) {
+      try {
+        const p = JSON.parse(cached)
+        localStorage.setItem('dipdesk_dashboard_profile', JSON.stringify({ ...p, avatar_url: avatarUrl }))
+      } catch {}
+    }
+  }
+  setIsUploadingOnboardingAvatar(false)
+}
+
+async function markAllNotificationsRead() {
+  if (!currentUserId) return
+
+  await supabase
+    .from('notifications')
+    .update({ read_at: new Date().toISOString() })
+    .eq('recipient_user_id', currentUserId)
+    .is('read_at', null)
+
+  setNotifications((prev) => {
+    const updated = prev.map((n) => ({ ...n, read_at: new Date().toISOString() }))
+    localStorage.setItem(DASHBOARD_NOTIFICATIONS_KEY, JSON.stringify(updated))
+    broadcastUnread(0)
+    return updated
+  })
+}
+
+async function clearAllNotifications() {
+  if (!currentUserId) return
+
+  const confirmed = await askConfirm({ title: 'Delete all notifications?', message: 'This can’t be undone.', confirmLabel: 'Delete all' })
+  if (!confirmed) return
+
+  setIsClearingNotifications(true)
+
+  const { error } = await supabase
+    .from('notifications')
+    .delete()
+    .eq('recipient_user_id', currentUserId)
+
+  if (error) {
+    console.error('Clear notifications error:', error)
+    setIsClearingNotifications(false)
+    return
+  }
+
+  setNotifications([])
+  localStorage.setItem(DASHBOARD_NOTIFICATIONS_KEY, JSON.stringify([]))
+  broadcastUnread(0)
+  setIsClearingNotifications(false)
+}
+function openReportModal() {
+  setIsReportModalOpen(true)
+}
+
+function closeReportModal() {
+  setIsReportModalOpen(false)
+}
+useEffect(() => {
+    const term = wrapForm.brand.trim()
+    if (!term || term.length < 2 || !brandFocused) { setBrandSuggestions([]); return }
+    const timeout = setTimeout(async () => {
+      const { data } = await supabase.from('wraps').select('brand').ilike('brand', `%${term}%`).limit(10)
+      const unique = [...new Set(((data as any[]) || []).map((w) => w.brand).filter(Boolean))] as string[]
+      setBrandSuggestions(unique.sort())
+    }, 200)
+    return () => clearTimeout(timeout)
+  }, [wrapForm.brand])
+
+  useEffect(() => {
+    const term = wrapForm.material.trim()
+    if (!term || term.length < 2 || !materialFocused) { setMaterialSuggestions([]); return }
+    const timeout = setTimeout(async () => {
+      const { data } = await supabase.from('wraps').select('material').ilike('material', `%${term}%`).limit(10)
+      const unique = [...new Set(((data as any[]) || []).map((w) => w.material).filter(Boolean))] as string[]
+      setMaterialSuggestions(unique.sort())
+    }, 200)
+    return () => clearTimeout(timeout)
+  }, [wrapForm.material])
+
+  useEffect(() => {
+    setSizeSuggestions([])
+  }, [wrapForm.size])
+
+  useEffect(() => {
+    const term = wrapForm.colour.trim()
+    if (!term || term.length < 2 || !colourFocused) { setColourSuggestions([]); return }
+    const timeout = setTimeout(async () => {
+      const { data } = await supabase.from('wraps').select('colour').ilike('colour', `%${term}%`).limit(10)
+      const unique = [...new Set(((data as any[]) || []).map((w) => w.colour).filter(Boolean))] as string[]
+      setColourSuggestions(unique.sort())
+    }, 200)
+    return () => clearTimeout(timeout)
+  }, [wrapForm.colour])
+useEffect(() => {
+    const term = wrapForm.purchased_from.trim()
+
+    if (!term || term.length < 2) {
+      setPurchasedFromResults([])
+      return
+    }
+
+    setPurchasedFromLoading(true)
+
+    const timeout = setTimeout(async () => {
+      const { data } = await supabase
+        .from('profiles')
+        .select('id, full_name, username')
+        .or(`full_name.ilike.%${term}%,username.ilike.%${term}%`)
+        .limit(5)
+
+      setPurchasedFromResults(
+        ((data as any[]) || []).map((p) => ({
+          id: p.id,
+          name: p.full_name || p.username || 'User',
+          username: p.username,
+        }))
+      )
+      setPurchasedFromLoading(false)
+    }, 300)
+
+    return () => clearTimeout(timeout)
+  }, [wrapForm.purchased_from])
+useEffect(() => {
+    const term = wrapForm.dibs_search.trim()
+
+    if (!term) {
+      setDibsSearchResults([])
+      return
+    }
+
+    setDibsSearchLoading(true)
+
+    const timeout = setTimeout(async () => {
+      const { data } = await supabase
+        .from('profiles')
+        .select('id, full_name, username')
+        .or(`full_name.ilike.%${term}%,username.ilike.%${term}%`)
+        .limit(5)
+
+      setDibsSearchResults(
+        ((data as any[]) || []).map((p) => ({
+          id: p.id,
+          name: p.full_name || p.username || 'User',
+          username: p.username,
+        }))
+      )
+      setDibsSearchLoading(false)
+    }, 300)
+
+    return () => clearTimeout(timeout)
+  }, [wrapForm.dibs_search])
+  function openNewWrapModal() {
+    setWrapForm({
+      ...EMPTY_WRAP_FORM,
+      purchase_date: new Date().toISOString().slice(0, 10),
+      sold_date: new Date().toISOString().slice(0, 10),
+    })
+    setIsWrapModalOpen(true)
+  }
+
+  function openEditWrapModal(wrap: Wrap) {
+    setBrandSuggestions([])
+setMaterialSuggestions([])
+setSizeSuggestions([])
+setColourSuggestions([])
+   const sortedImages = sortWrapImages(wrap.wrap_images)
+    setWrapForm({
+  id: wrap.id,
+  name: wrap.name || '',
+  brand: wrap.brand || '',
+  size: (wrap as any).size || '',
+  material: (wrap as any).material || '',
+   colour: (wrap as any).colour || '',
+  dibs_users: [],
+  dibs_names: (wrap as any).dibs_names || [],
+  dibs_name_input: '',
+  dibs_search: '',
+purchase_date: wrap.purchase_date || '',
+  purchase_price:
+    wrap.purchase_price !== null && wrap.purchase_price !== undefined
+      ? String(wrap.purchase_price)
+      : '',
+  purchase_currency: wrap.purchase_currency || 'AUD',
+  purchased_from: wrap.purchased_from || '',
+  purchase_country: wrap.purchase_country || '',
+  images: renumberFormImages(
+    sortedImages.map((image) => ({
+      id: image.id,
+      image_url: image.image_url,
+      is_primary: false,
+      sort_order: image.sort_order,
+      status: 'uploaded',
+      storage_path: null,
+      file_name: null,
+      replaced_url: null,
+    }))
+  ),
+  on_loan_to: wrap.on_loan_to || '',
+  sold_to: wrap.sold_to || '',
+  sold_price:
+    wrap.sold_price !== null && wrap.sold_price !== undefined
+      ? String(wrap.sold_price)
+      : '',
+  sold_currency: wrap.sold_currency || 'AUD',
+   sold_date: wrap.sold_date || new Date().toISOString().slice(0, 10),
+    is_favourite: wrap.is_favourite,
+  for_sale: wrap.for_sale,
+
+  for_sale_price:
+    wrap.for_sale_price !== null && wrap.for_sale_price !== undefined
+      ? String(wrap.for_sale_price)
+      : '',
+
+    for_sale_currency: wrap.for_sale_currency || 'AUD',
+  for_sale_price_is_pm: wrap.for_sale_price_is_pm || false,
+
+  status: wrap.status,
+  wrap_type: (wrap as any).wrap_type || '',
+  is_private: !!(wrap as any).is_private,
+})
+
+    supabase
+      .from('dibs')
+      .select('id, user_id, wrap_id')
+      .eq('wrap_id', wrap.id)
+      .then(async ({ data }) => {
+        if (data && data.length > 0) {
+          const userIds = data.map((d) => d.user_id)
+          const { data: profileData } = await supabase
+            .from('profiles')
+            .select('id, full_name, username, avatar_url')
+            .in('id', userIds)
+          const profileMap: Record<string, any> = {}
+          ;(profileData || []).forEach((p) => { profileMap[p.id] = p })
+          setWrapForm((prev) => ({
+            ...prev,
+            dibs_users: data.map((d) => ({
+              id: d.id,
+              user_id: d.user_id,
+              wrap_id: d.wrap_id,
+              profile: profileMap[d.user_id] || { full_name: null, username: null, avatar_url: null },
+            })),
+          }))
+        }
+      })
+
+    setIsWrapModalOpen(true)
+  }
+
+  async function closeWrapModal() {
+  if (isUploadingImages) {
+    const confirmed = await askConfirm({ title: 'Photos are still uploading', message: 'Close anyway?', confirmLabel: 'Close', danger: false })
+    if (!confirmed) return
+  }
+
+  if (isSavingWrap) {
+    const confirmed = await askConfirm({ title: 'This wrap is still saving', message: 'Close anyway?', confirmLabel: 'Close', danger: false })
+    if (!confirmed) return
+  }
+
+  setIsWrapModalOpen(false)
+  setWrapForm(EMPTY_WRAP_FORM)
+}
+
+  function setCoverPhoto(imageId: string) {
+  // Move the chosen photo to the front; the rest keep their order behind it
+  setWrapForm((previous) => {
+    const chosen = previous.images.find((image) => image.id === imageId)
+    if (!chosen) return previous
+
+    return {
+      ...previous,
+      images: renumberFormImages([
+        chosen,
+        ...previous.images.filter((image) => image.id !== imageId),
+      ]),
+    }
+  })
+}
+
+function removeWrapImage(imageId: string) {
+  setWrapForm((previous) => ({
+    ...previous,
+    images: renumberFormImages(
+      previous.images.filter((image) => image.id !== imageId)
+    ),
+  }))
+}
+
+async function uploadWrapImages(files: FileList | File[]) {
+  if (!currentUserId) return
+
+  const incomingFiles = Array.from(files)
+  if (incomingFiles.length === 0) return
+
+  const availableSlots = MAX_WRAP_IMAGES - wrapForm.images.length
+  const limitedFiles = incomingFiles.slice(0, availableSlots)
+
+  if (limitedFiles.length === 0) {
+    showToast(`You can upload a maximum of ${MAX_WRAP_IMAGES} photos.`)
+    return
+  }
+
+  const validFiles = limitedFiles.filter((file) => {
+    const isValidType = ALLOWED_IMAGE_TYPES.includes(file.type)
+    const isValidSize = file.size <= MAX_IMAGE_SIZE_MB * 1024 * 1024
+
+    if (!isValidType) {
+      showToast(`${file.name} isn’t a supported image type.`)
+      return false
+    }
+
+    if (!isValidSize) {
+      showToast(`${file.name} is larger than ${MAX_IMAGE_SIZE_MB}MB.`)
+      return false
+    }
+
+    return true
+  })
+
+  if (validFiles.length === 0) return
+
+  setIsUploadingImages(true)
+
+  const tempImages: WrapFormImage[] = validFiles.map((file, index) => ({
+    id: `temp-${Date.now()}-${index}-${file.name}`,
+    image_url: URL.createObjectURL(file),
+    is_primary: false,
+    sort_order: 0,
+    status: 'uploading',
+    storage_path: null,
+    file_name: file.name,
+    replaced_url: null,
+  }))
+
+  setWrapForm((previous) => ({
+    ...previous,
+    images: renumberFormImages([...previous.images, ...tempImages]),
+  }))
+
+  for (let index = 0; index < validFiles.length; index++) {
+  let file = validFiles[index]
+
+  try {
+    file = await imageCompression(file, {
+      maxSizeMB: 1,
+      maxWidthOrHeight: 1200,
+      useWebWorker: true,
+    })
+  } catch (error) {
+    console.error('compression error', error)
+  }
+
+  const tempImage = tempImages[index]
+  const fileExt = file.name.split('.').pop() || 'jpg'
+  const fileName = `${currentUserId}/${Date.now()}-${index}.${fileExt}`
+
+    const { error } = await supabase.storage
+      .from('wrap-images')
+      .upload(fileName, file)
+
+    if (error) {
+      setWrapForm((previous) => ({
+        ...previous,
+        images: previous.images.map((image) =>
+          image.id === tempImage.id
+            ? {
+                ...image,
+                status: 'error',
+              }
+            : image
+        ),
+      }))
+      continue
+    }
+
+    const { data } = supabase.storage
+      .from('wrap-images')
+      .getPublicUrl(fileName)
+
+    setWrapForm((previous) => ({
+      ...previous,
+      images: previous.images.map((image) =>
+        image.id === tempImage.id
+          ? {
+              ...image,
+              image_url: data.publicUrl,
+              status: 'uploaded',
+              storage_path: fileName,
+              file_name: file.name,
+            }
+          : image
+      ),
+    }))
+  }
+
+  setIsUploadingImages(false)
+}
+
+async function replaceWrapImage(imageId: string, incomingFile: File) {
+  if (!currentUserId) return
+
+  const existingImage = wrapForm.images.find((image) => image.id === imageId)
+  if (!existingImage) return
+
+  let file = incomingFile
+
+  setIsUploadingImages(true)
+
+    try {
+    file = await imageCompression(file, {
+      maxSizeMB: 1,
+      maxWidthOrHeight: 1200,
+      useWebWorker: true,
+    })
+  } catch (error) {
+    console.error('compression error', error)
+  }
+
+  setWrapForm((previous) => ({
+    ...previous,
+    images: previous.images.map((image) =>
+      image.id === imageId
+        ? {
+            ...image,
+            image_url: URL.createObjectURL(file),
+            status: 'uploading',
+            file_name: file.name,
+          }
+        : image
+    ),
+  }))
+
+  const fileExt = file.name.split('.').pop() || 'jpg'
+  const fileName = `${currentUserId}/${Date.now()}-replace.${fileExt}`
+
+  const { error } = await supabase.storage
+    .from('wrap-images')
+    .upload(fileName, file)
+
+  if (error) {
+    // Put the original photo back so it is still saved with the wrap
+    setWrapForm((previous) => ({
+      ...previous,
+      images: previous.images.map((image) =>
+        image.id === imageId
+          ? {
+              ...image,
+              image_url: existingImage.image_url,
+              status: existingImage.status,
+              storage_path: existingImage.storage_path,
+              file_name: existingImage.file_name,
+            }
+          : image
+      ),
+    }))
+    setIsUploadingImages(false)
+    showToast('That photo couldn’t be uploaded — your original photo was kept.')
+    return
+  }
+
+  const { data } = supabase.storage
+    .from('wrap-images')
+    .getPublicUrl(fileName)
+
+  // A photo uploaded in this session was never saved, so it can go now.
+  // A saved photo is only deleted after the wrap saves (see saveWrap).
+  if (existingImage.storage_path) {
+    const { error: removeOldImageError } = await supabase.storage
+      .from('wrap-images')
+      .remove([existingImage.storage_path])
+
+    if (removeOldImageError) {
+      console.error('old image cleanup error', removeOldImageError)
+    }
+  }
+
+  const replacedUrl =
+    existingImage.replaced_url ||
+    (existingImage.status === 'uploaded' && !existingImage.storage_path
+      ? existingImage.image_url
+      : null)
+
+  setWrapForm((previous) => ({
+    ...previous,
+    images: previous.images.map((image) =>
+      image.id === imageId
+        ? {
+            ...image,
+            image_url: data.publicUrl,
+            status: 'uploaded',
+            storage_path: fileName,
+            file_name: file.name,
+            replaced_url: replacedUrl,
+          }
+        : image
+    ),
+  }))
+
+  setIsUploadingImages(false)
+}
+
+  // Update photos already saved, insert new ones, and delete only the ones the user removed.
+  // Deletes run last, so if any step fails the wrap still has its photos.
+  async function saveWrapImages(wrapId: string, images: WrapFormImage[]) {
+    const { data: existingRows, error: existingError } = await supabase
+      .from('wrap_images')
+      .select('id')
+      .eq('wrap_id', wrapId)
+
+    if (existingError) {
+      console.error('wrap_images load error', existingError)
+      return false
+    }
+
+    const existingIds = new Set((existingRows || []).map((row) => String(row.id)))
+    const rows = images.map((image, index) => ({
+      id: String(image.id),
+      wrap_id: wrapId,
+      image_url: image.image_url,
+      sort_order: index,
+      is_primary: index === 0,
+    }))
+    const keptRows = rows.filter((row) => existingIds.has(row.id))
+    const newRows = rows.filter((row) => !existingIds.has(row.id))
+    const keptIds = new Set(keptRows.map((row) => row.id))
+    const removedIds = [...existingIds].filter((id) => !keptIds.has(id))
+
+    // Clear the cover flag first so a wrap never has two covers, even mid-save
+    let clearCoverQuery = supabase
+      .from('wrap_images')
+      .update({ is_primary: false })
+      .eq('wrap_id', wrapId)
+      .eq('is_primary', true)
+
+    if (keptRows[0]?.is_primary) {
+      clearCoverQuery = clearCoverQuery.neq('id', keptRows[0].id)
+    }
+
+    const { error: clearCoverError } = await clearCoverQuery
+
+    if (clearCoverError) {
+      console.error('wrap_images cover clear error', clearCoverError)
+      return false
+    }
+
+    const updateResults = await Promise.all(
+      keptRows.map((row) =>
+        supabase
+          .from('wrap_images')
+          .update({
+            image_url: row.image_url,
+            sort_order: row.sort_order,
+            is_primary: row.is_primary,
+          })
+          .eq('id', row.id)
+      )
+    )
+
+    const updateError = updateResults.find((result) => result.error)?.error
+
+    if (updateError) {
+      console.error('wrap_images update error', updateError)
+      return false
+    }
+
+    if (newRows.length > 0) {
+      const { data: insertedRows, error: insertError } = await supabase
+        .from('wrap_images')
+        .insert(
+          newRows.map((row) => ({
+            wrap_id: row.wrap_id,
+            image_url: row.image_url,
+            sort_order: row.sort_order,
+            is_primary: row.is_primary,
+          }))
+        )
+        .select('id')
+
+      if (insertError) {
+        console.error('wrap_images insert error', insertError)
+        return false
+      }
+
+      // Swap temp ids for real ones, so a retry after a later failure updates these rows
+      const newIdByTempId = new Map(
+        newRows.map((row, index) => [row.id, insertedRows?.[index]?.id as string | undefined])
+      )
+      setWrapForm((previous) => ({
+        ...previous,
+        images: previous.images.map((image) => {
+          const newId = newIdByTempId.get(String(image.id))
+          return newId ? { ...image, id: newId } : image
+        }),
+      }))
+    }
+
+    if (removedIds.length > 0) {
+      const { error: deleteError } = await supabase
+        .from('wrap_images')
+        .delete()
+        .in('id', removedIds)
+
+      if (deleteError) {
+        console.error('wrap_images delete error', deleteError)
+        return false
+      }
+    }
+
+    return true
+  }
+
+    async function saveWrap() {
+    if (!currentUserId) return
+    if (!wrapForm.name.trim()) return
+    if (isUploadingImages) return
+    if (wrapForm.images.filter(i => i.status === 'uploaded').length === 0) {
+      showToast('Add at least one photo before saving.')
+      return
+    }
+
+    setIsSavingWrap(true)
+
+    const existingWrap = wrapForm.id ? wrapsById[wrapForm.id] : null
+    const wasForSale = existingWrap?.for_sale || false
+
+const wrapPayload = {
+  user_id: currentUserId,
+  name: wrapForm.name.trim(),
+  brand: wrapForm.brand.trim() || null,
+  size: wrapForm.size.trim() || null,
+  material: wrapForm.material.trim() || null,
+  colour: wrapForm.colour.trim() || null,
+  dibs_user_id: null,
+  dibs_names: wrapForm.dibs_names,
+  purchase_date: wrapForm.purchase_date || null,
+  purchase_price: wrapForm.purchase_price
+    ? Number(wrapForm.purchase_price)
+    : null,
+  purchase_currency: wrapForm.purchase_currency || 'AUD',
+  purchased_from: wrapForm.purchased_from.trim() || null,
+  status: wrapForm.status,
+  on_loan_to:
+    wrapForm.status === 'holiday' ? wrapForm.on_loan_to.trim() || null : null,
+  sold_to:
+    wrapForm.status === 'departed' ? wrapForm.sold_to.trim() || null : null,
+  sold_price:
+    wrapForm.status === 'departed' && wrapForm.sold_price
+      ? Number(wrapForm.sold_price)
+      : null,
+  sold_currency:
+    wrapForm.status === 'departed' ? wrapForm.sold_currency || 'AUD' : null,
+  sold_date:
+    wrapForm.status === 'departed' ? wrapForm.sold_date || null : null,
+
+  // ✅ NEW
+    for_sale: wrapForm.for_sale,
+  for_sale_price_is_pm: wrapForm.for_sale ? wrapForm.for_sale_price_is_pm : false,
+  for_sale_price:
+    wrapForm.for_sale && !wrapForm.for_sale_price_is_pm && wrapForm.for_sale_price
+      ? Number(wrapForm.for_sale_price)
+      : null,
+  for_sale_currency:
+    wrapForm.for_sale && !wrapForm.for_sale_price_is_pm
+      ? wrapForm.for_sale_currency || 'AUD'
+      : null,
+
+  is_favourite: wrapForm.is_favourite,
+  wrap_type: wrapForm.wrap_type || null,
+  // Hidden from the logged-out public collection page
+  is_private: wrapForm.is_private,
+}
+
+    let wrapId = wrapForm.id
+
+    if (wrapForm.id) {
+      const { error } = await supabase
+        .from('wraps')
+        .update(wrapPayload)
+        .eq('id', wrapForm.id)
+
+      if (error) {
+        console.error(error)
+        setIsSavingWrap(false)
+        return
+      }
+    } else {
+      const { data, error } = await supabase
+        .from('wraps')
+        .insert(wrapPayload)
+        .select('id')
+        .single()
+
+      if (error || !data) {
+        console.error(error)
+        setIsSavingWrap(false)
+        return
+      }
+
+      wrapId = data.id
+      // If the photo save below fails, trying again updates this wrap instead of adding a duplicate
+      setWrapForm((previous) => ({ ...previous, id: data.id }))
+    }
+
+    if (wrapId) {
+      const savedImages = wrapForm.images.filter(
+        (image) => image.status === 'uploaded'
+      )
+
+      const imagesSaved = await saveWrapImages(wrapId, savedImages)
+
+      if (!imagesSaved) {
+        setIsSavingWrap(false)
+        showToast('Your photos couldn’t be saved — please try again.')
+        return
+      }
+
+      // Now the save has worked, delete the files of saved photos that were replaced
+      const savedUrls = new Set(savedImages.map((image) => image.image_url))
+      const replacedPaths = savedImages
+        .map((image) => image.replaced_url)
+        .filter((url): url is string => !!url && !savedUrls.has(url))
+        .map(getWrapImageStoragePath)
+        .filter((path): path is string => !!path)
+
+      if (replacedPaths.length > 0) {
+        const { error: removeReplacedError } = await supabase.storage
+          .from('wrap-images')
+          .remove(replacedPaths)
+
+        if (removeReplacedError) {
+          console.error('replaced image cleanup error', removeReplacedError)
+        }
+      }
+    }
+
+        if (wrapId && wrapForm.for_sale && !wasForSale) {
+      const { data: wishlistUsers } = await supabase
+        .from('wishlists')
+        .select('user_id')
+        .eq('wrap_id', wrapId)
+        .neq('user_id', currentUserId)
+
+      const recipientIds = [...new Set((wishlistUsers || []).map((row) => row.user_id))]
+
+      if (recipientIds.length > 0) {
+        await supabase.from('notifications').insert(
+          recipientIds.map((recipientId) => ({
+            recipient_user_id: recipientId,
+            actor_user_id: currentUserId,
+            wrap_id: wrapId,
+            type: 'for_sale' as const,
+          }))
+        )
+
+        // Push notification to wishlist users
+        fetch('/api/push', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            user_ids: recipientIds,
+            title: '🛍️ Wrap for sale!',
+            body: `${wrapForm.name} is now for sale`,
+            url: '/explore',
+          }),
+        }).catch(() => {})
+      }
+    }
+
+    if (wrapId) {
+      const { data: existingDibs } = await supabase
+        .from('dibs')
+        .select('user_id')
+        .eq('wrap_id', wrapId)
+
+      const existingIds = (existingDibs || []).map((d) => d.user_id)
+      const newIds = wrapForm.dibs_users.map((d) => d.user_id)
+
+      const toAdd = wrapForm.dibs_users.filter((d) => !existingIds.includes(d.user_id))
+      const toRemove = existingIds.filter((id) => !newIds.includes(id))
+
+      if (toRemove.length > 0) {
+        await supabase
+          .from('dibs')
+          .delete()
+          .eq('wrap_id', wrapId)
+          .in('user_id', toRemove)
+      }
+
+      if (toAdd.length > 0) {
+        await supabase
+          .from('dibs')
+          .insert(toAdd.map((d) => ({
+            wrap_id: wrapId,
+            user_id: d.user_id,
+            created_by: currentUserId,
+          })))
+
+        await supabase
+          .from('notifications')
+          .insert(toAdd.map((d) => ({
+            recipient_user_id: d.user_id,
+            actor_user_id: currentUserId,
+            wrap_id: wrapId,
+            type: 'dibs',
+          })))
+      }
+    }
+
+    await loadData()
+    setIsSavingWrap(false)
+    closeWrapModal()
+  }
+
+  async function markWrapAsDeparted() {
+    if (!wrapForm.id) return
+
+    const confirmed = await askConfirm({ title: 'Move this wrap to Departed Wraps?', confirmLabel: 'Move', danger: false })
+    if (!confirmed) return
+
+    setWrapForm((previous) => ({
+      ...previous,
+      status: 'departed',
+      sold_date: previous.sold_date || new Date().toISOString().slice(0, 10),
+    }))
+  }
+
+  async function deleteWrap() {
+    if (!wrapForm.id) return
+    const confirmed = await askConfirm({ title: 'Delete this wrap?', message: 'This can’t be undone.', confirmLabel: 'Delete wrap' })
+    if (!confirmed) return
+
+    setIsSavingWrap(true)
+
+    const { error } = await supabase
+      .from('wraps')
+      .delete()
+      .eq('id', wrapForm.id)
+
+    if (error) {
+      console.error(error)
+      setIsSavingWrap(false)
+      return
+    }
+
+    await loadData()
+    setIsSavingWrap(false)
+    closeWrapModal()
+  }
+  async function copyReportTable() {
+  if (reportRows.length === 0) return
+
+  const header = ['Wrap Name', 'Status', 'Date Bought', 'Price Paid', 'Price Sold']
+
+  const lines = reportRows.map((row) => [
+    row.wrap_name,
+    row.wrap_status,
+    row.purchase_date || '',
+    row.purchase_price !== null ? String(row.purchase_price) : '',
+    row.sold_price !== null ? String(row.sold_price) : '',
+  ])
+
+  const text = [header, ...lines].map((row) => row.join('\t')).join('\n')
+
+  try {
+    await navigator.clipboard.writeText(text)
+    showToast('Report table copied')
+  } catch (error) {
+    console.error(error)
+    showToast('Couldn’t copy the report table')
+  }
+}
+function exportReportCsv() {
+  if (reportRows.length === 0) return
+
+  const headers = [
+    'Wrap Name',
+    'Status',
+    'Date Bought',
+    'Price Paid',
+    'Price Sold',
+  ]
+
+  const rows = reportRows.map((row) => [
+    row.wrap_name,
+    row.wrap_status,
+    row.purchase_date || '',
+    row.purchase_price !== null ? String(row.purchase_price) : '',
+    row.sold_price !== null ? String(row.sold_price) : '',
+  ])
+
+  const csvContent = [headers, ...rows]
+    .map((row) =>
+      row
+        .map((value) => `"${String(value).replace(/"/g, '""')}"`)
+        .join(',')
+    )
+    .join('\n')
+
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+
+  link.href = url
+  link.setAttribute('download', 'wrap-report.csv')
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  URL.revokeObjectURL(url)
+}
+  // Share my collection: short /username link when set, else /user/<id>.
+  // Phones use the native share sheet when available; otherwise copy + toast.
+  async function shareMyCollection() {
+    const url = profile?.username
+      ? `https://wrapapp.com.au/${profile.username}`
+      : `https://wrapapp.com.au/user/${currentUserId}`
+    const isPhone = window.matchMedia('(max-width: 767px)').matches || /iphone|ipad|ipod|android/i.test(navigator.userAgent)
+    if (isPhone && typeof navigator.share === 'function') {
+      try {
+        await navigator.share({ title: 'My wrap collection', url })
+        return
+      } catch (error) {
+        if ((error as Error)?.name === 'AbortError') return // they closed the share sheet
+      }
+    }
+    try {
+      await navigator.clipboard.writeText(url)
+      showToast('Link copied')
+    } catch {
+      showToast(url)
+    }
+  }
+
+  function createDipFromWrap() {
+    const params = new URLSearchParams()
+
+    if (wrapForm.id) params.set('wrapId', wrapForm.id)
+    if (wrapForm.name) params.set('wrapName', wrapForm.name)
+    if (wrapForm.brand) params.set('brand', wrapForm.brand)
+    if (wrapForm.purchase_price) params.set('wrapPrice', wrapForm.purchase_price)
+    if (wrapForm.purchase_currency) params.set('wrapCurrency', wrapForm.purchase_currency)
+
+    router.push(`/create-dip?${params.toString()}`)
+  }
+
+  if (loading && !profile && wraps.length === 0) {
+    return (
+      <div className="flex min-h-dvh items-center justify-center bg-gray-50">
+        <div className="flex flex-col items-center gap-4">
+          <div className="h-12 w-12 animate-spin rounded-full border-4 border-pink-200 border-t-pink-600" />
+          <p className="text-sm font-semibold text-gray-500">Loading WrapApp...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // One collection tile (used by the Collection and For Sale tabs)
+  function renderCollectionTile(wrap: Wrap) {
+                  const imageUrl = getPrimaryImage(wrap)
+
+                  return (
+                    <button
+                      key={wrap.id}
+                      type="button"
+                      onClick={() => openViewWrapModal(wrap)}
+                      className="group flex h-auto cursor-pointer flex-col overflow-hidden rounded-2xl border-0 bg-white p-0 text-left shadow-sm transition duration-200 hover:-translate-y-1 hover:shadow-lg"
+                    >
+                      <div className="relative aspect-[4/5] w-full bg-gray-100 pointer-events-none">
+                        <img
+  src={imageUrl}
+  loading="lazy"
+  alt={wrap.name}
+  className="h-full w-full object-cover object-[center_20%] transition duration-300 group-hover:scale-[1.03]"
+/>
+
+                        {wrap.for_sale && (
+  <div className="absolute left-3 top-3 rounded-xl bg-white/90 px-2 py-1 text-xs font-semibold text-amber-700 shadow">
+    <div>🪓 For Sale</div>
+    <div className="text-[10px] font-medium text-gray-700">
+      {wrap.for_sale_price_is_pm
+        ? 'PM'
+        : wrap.for_sale_price !== null
+        ? formatCurrency(wrap.for_sale_price, wrap.for_sale_currency || 'AUD')
+        : ''}
+    </div>
+  </div>
+)}
+
+{wrap.is_favourite && (
+  <div className="absolute right-3 top-3 rounded-full bg-white/90 px-2 py-1 text-xs font-semibold text-pink-600 shadow">
+    ★ Perma
+  </div>
+)}
+
+{(() => {
+  const missing = [
+    !wrap.brand,
+    !(wrap as any).size,
+    !(wrap as any).material,
+    !(wrap as any).colour,
+    !(wrap as any).wrap_type,
+  ].some(Boolean)
+  return missing ? (
+    <div className="absolute bottom-2 right-2 rounded-full bg-orange-400 px-1.5 py-0.5 text-[10px] font-bold text-white shadow">
+      ⚠
+    </div>
+  ) : null
+})()}
+                      </div>
+
+                      <div className="space-y-0.5 p-3 pointer-events-none xl:space-y-1 xl:p-5">
+  <h3 className="text-sm font-bold leading-tight text-gray-900 xl:text-base xl:leading-normal">{wrap.name}</h3>
+  <p className="text-xs leading-tight text-gray-500 xl:text-sm xl:leading-normal">
+    {wrap.brand || ''}
+  </p>
+
+                        {wrap.status === 'holiday' && wrap.on_loan_to && (
+                          <div className="inline-flex rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 xl:px-2 xl:py-1 xl:text-xs">
+                            On loan to {wrap.on_loan_to}
+                          </div>
+                        )}
+                      </div>
+                    </button>
+                  )
+  }
+
+  const forSaleWraps = wraps.filter((wrap) => wrap.for_sale && wrap.status !== 'departed')
+  const archivedDips = dips
+    .filter((dip) => dip.archived)
+    .sort((a, b) => new Date(b.drawn_at || 0).getTime() - new Date(a.drawn_at || 0).getTime())
+
+  async function unarchiveDip(dipId: string) {
+    if (!(await askConfirm({ title: 'Unarchive this dip?', message: 'It will return to your active dips.', confirmLabel: 'Unarchive', danger: false }))) return
+    await supabase.from('dips').update({ archived: false }).eq('id', dipId)
+    setDips((prev) => {
+      const next = prev.map((dip) => (dip.id === dipId ? { ...dip, archived: false } : dip))
+      try { localStorage.setItem(DASHBOARD_DIPS_KEY, JSON.stringify(next)) } catch {}
+      return next
+    })
+  }
+
+  return (
+        <AppLayout>
+      {/* Single centred column on desktop (~960px), like the other profile pages */}
+      <div className="mx-auto max-w-[960px] space-y-4 bg-white min-h-screen">
+
+        {/* Profile header (Instagram-style). Cached profile + counts show instantly. */}
+        {mode === 'profile' && (() => {
+          const displayName = profile?.full_name || profile?.username || 'My collection'
+          const initials = displayName.trim().split(/\s+/).slice(0, 2).map(w => w[0]?.toUpperCase() || '').join('')
+          const wrapCount = wraps.filter(w => w.status !== 'departed').length
+          const location = [profile?.city, profile?.country].filter(Boolean).join(', ')
+          const stat = (value: number | null | undefined, label: string) => (
+            <div className="text-center md:flex md:items-baseline md:gap-1 md:text-left">
+              <p className="text-base font-bold text-gray-900 md:text-lg">{value ?? '–'}</p>
+              <p className="text-xs text-gray-500 md:text-sm">{label}</p>
+            </div>
+          )
+          return (
+            <section className="px-1 pt-1 md:px-2">
+              <div className="flex items-center gap-4 md:gap-10">
+                {profile?.avatar_url ? (
+                  <img
+                    src={profile.avatar_url}
+                    alt={displayName}
+                    className="h-20 w-20 shrink-0 rounded-full object-cover ring-2 ring-pink-100 md:h-32 md:w-32"
+                  />
+                ) : (
+                  <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-pink-500 to-rose-500 text-2xl font-bold text-white md:h-32 md:w-32 md:text-4xl">
+                    {initials || '?'}
+                  </div>
+                )}
+                <div className="min-w-0 flex-1 space-y-2 md:space-y-3">
+                  <div className="md:flex md:items-baseline md:gap-3">
+                    <h1 className="truncate text-lg font-bold text-gray-900 md:text-2xl">{displayName}</h1>
+                    {profile?.username && <p className="truncate text-sm text-gray-500">@{profile.username}</p>}
+                  </div>
+                  <div className="grid grid-cols-3 gap-1 md:flex md:gap-8">
+                    {stat(wrapCount, wrapCount === 1 ? 'Wrap' : 'Wraps')}
+                    {stat(followCounts?.followers, 'Followers')}
+                    {stat(followCounts?.following, 'Following')}
+                  </div>
+                </div>
+              </div>
+
+              {(profile?.bio || location) && (
+                <div className="mt-3 space-y-0.5 md:ml-[10.5rem] md:mt-0">
+                  {profile?.bio && <p className="whitespace-pre-wrap break-words text-sm text-gray-800">{profile.bio}</p>}
+                  {location && <p className="text-sm text-gray-500">📍 {location}</p>}
+                </div>
+              )}
+
+              <div className="mt-3 grid grid-cols-[1fr_1fr_auto] gap-2 md:ml-[10.5rem] md:max-w-md">
+                <button type="button" onClick={() => router.push('/tools')} className={`${BTN_SECONDARY} min-h-[44px]`}>
+                  Edit profile
+                </button>
+                <button type="button" onClick={() => void shareMyCollection()} className={`${BTN_SECONDARY} min-h-[44px]`}>
+                  Share
+                </button>
+                <button
+                  type="button"
+                  onClick={() => router.push('/tools')}
+                  aria-label="Settings"
+                  className={`${BTN_SECONDARY} min-h-[44px] min-w-[44px] px-0`}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                </button>
+              </div>
+            </section>
+          )
+        })()}
+
+        {/* Profile tabs: iOS-style segmented control (scrolls if it ever needs to) */}
+        {mode === 'profile' && (
+          <div className="no-scrollbar mt-2! flex gap-1 overflow-x-auto rounded-xl bg-gray-100 p-1">
+            {([
+              { key: 'collection', label: 'Collection', icon: (<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-[18px] w-[18px]"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>) },
+              { key: 'forsale', label: 'For Sale', icon: (<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-[18px] w-[18px]"><path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z"/><circle cx="7.5" cy="7.5" r="1.5"/></svg>) },
+              { key: 'dips', label: 'Dips', icon: (<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-[18px] w-[18px]"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1"/><circle cx="15.5" cy="15.5" r="1"/><circle cx="12" cy="12" r="1"/></svg>) },
+              { key: 'iso', label: 'ISO', icon: (<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-[18px] w-[18px]"><path d="m12 3 2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.4 6.8 19.1l1-5.8L3.5 9.2l5.9-.9z"/></svg>) },
+            ] as const).map((tab) => {
+              const isActive = profileTab === tab.key
+              return (
+                <button
+                  key={tab.key}
+                  type="button"
+                  onClick={() => setProfileTab(tab.key)}
+                  aria-current={isActive ? 'page' : undefined}
+                  className={`flex min-h-[40px] min-w-max flex-1 items-center justify-center gap-1.5 rounded-lg px-2.5 text-sm transition ${
+                    isActive ? 'bg-white font-bold text-gray-900 shadow-sm' : 'font-semibold text-gray-500'
+                  }`}
+                >
+                  {tab.icon}
+                  <span>{tab.label}</span>
+                </button>
+              )
+            })}
+          </div>
+        )}
+
+        {mode === 'profile' && profileTab === 'collection' && (
+          <section className="mt-3! min-w-0">
+<div className="mb-3 hidden items-center justify-end px-1 md:flex">
+  <button
+    type="button"
+    onClick={openNewWrapModal}
+    className={`${BTN_PRIMARY} shrink-0`}
+  >
+    + Add Wrap
+  </button>
+</div>
+
+<div className="mb-4 space-y-2 px-1">
+  
+  {/* All five pills fit across a 375px phone; they share spare width (grow) but never shrink,
+      so the row scrolls once 'Clear' is added */}
+  <div className="no-scrollbar -mx-1 flex gap-1.5 overflow-x-auto pb-0.5">
+    {[
+      { label: collectionFilterBrand ? 'Brand ✓' : 'Brand', key: 'brand', active: !!collectionFilterBrand },
+      { label: (collectionSizeMin || collectionSizeMax) ? 'Length ✓' : 'Length', key: 'length', active: !!(collectionSizeMin || collectionSizeMax) },
+      { label: collectionFilterColour ? 'Colour ✓' : 'Colour', key: 'colour', active: !!collectionFilterColour },
+      { label: collectionFilterBlend.length > 0 ? 'Blend ✓' : 'Blend', key: 'blend', active: collectionFilterBlend.length > 0 },
+      { label: collectionFilterType.length > 0 ? 'Type ✓' : 'Type', key: 'type', active: collectionFilterType.length > 0 },
+    ].map(({ label, key, active }) => (
+      <button
+        key={key}
+        type="button"
+        onClick={() => {
+          setShowCollectionBrandFilter(key === 'brand' ? !showCollectionBrandFilter : false)
+          setShowCollectionLengthFilter(key === 'length' ? !showCollectionLengthFilter : false)
+          setShowCollectionColourFilter(key === 'colour' ? !showCollectionColourFilter : false)
+          setShowCollectionBlendFilter(key === 'blend' ? !showCollectionBlendFilter : false)
+          setShowCollectionTypeFilter(key === 'type' ? !showCollectionTypeFilter : false)
+        }}
+        className={`h-[34px] shrink-0 grow whitespace-nowrap rounded-full border px-2.5 text-sm font-semibold transition ${active ? 'border-pink-500 bg-pink-50 text-pink-700' : 'border-gray-200 bg-white text-gray-600'}`}
+      >
+        {label}
+      </button>
+    ))}
+    {(collectionFilterBrand || collectionSizeMin || collectionSizeMax || collectionFilterColour || collectionFilterBlend.length > 0 || collectionFilterType.length > 0) && (
+      <button
+        type="button"
+        onClick={() => {
+          setCollectionFilterBrand('')
+          setCollectionSizeMin('')
+          setCollectionSizeMax('')
+          setCollectionFilterColour('')
+          setCollectionFilterBlend([])
+          setCollectionFilterType([])
+        }}
+        className="h-[34px] shrink-0 whitespace-nowrap rounded-full border border-red-200 bg-white px-2.5 text-sm font-semibold text-red-500"
+      >
+        Clear
+      </button>
+    )}
+  </div>
+
+  {showCollectionBrandFilter && (
+    <input
+      type="text"
+      value={collectionFilterBrand}
+      onChange={(e) => setCollectionFilterBrand(e.target.value)}
+      placeholder="Filter by brand..."
+      className="w-full rounded-xl border px-3 py-2 text-[16px] text-gray-900 outline-none focus:border-pink-500"
+    />
+  )}
+
+  {showCollectionLengthFilter && (
+    <div className="flex items-center gap-2">
+      <input type="number" step="0.1" value={collectionSizeMin} onChange={(e) => setCollectionSizeMin(e.target.value)} placeholder="Min m" className="w-24 rounded-xl border px-3 py-2 text-[16px] outline-none focus:border-pink-300" />
+      <span className="text-xs text-gray-400">to</span>
+      <input type="number" step="0.1" value={collectionSizeMax} onChange={(e) => setCollectionSizeMax(e.target.value)} placeholder="Max m" className="w-24 rounded-xl border px-3 py-2 text-[16px] outline-none focus:border-pink-300" />
+      <span className="text-xs text-gray-400">meters</span>
+    </div>
+  )}
+
+
+  {showCollectionBlendFilter && (
+    <div className="flex flex-wrap gap-1.5">
+      {COLLECTION_BLEND_TAGS.map((tag) => {
+        const selected = collectionFilterBlend.includes(tag)
+        return (
+          <button key={tag} type="button"
+            onClick={() => setCollectionFilterBlend(prev => selected ? prev.filter(b => b !== tag) : [...prev, tag])}
+            className={`rounded-full border px-2.5 py-1 text-xs font-semibold transition ${selected ? 'border-pink-500 bg-pink-500 text-white' : 'border-gray-200 bg-white text-gray-600'}`}
+          >{tag}</button>
+        )
+      })}
+    </div>
+  )}
+
+  {showCollectionTypeFilter && (
+    <div className="flex flex-wrap gap-1.5">
+      {COLLECTION_TYPE_TAGS.map((tag) => {
+        const selected = collectionFilterType.includes(tag)
+        return (
+          <button key={tag} type="button"
+            onClick={() => setCollectionFilterType(prev => selected ? prev.filter(t => t !== tag) : [...prev, tag])}
+            className={`rounded-full border px-2.5 py-1 text-xs font-semibold transition ${selected ? 'border-pink-500 bg-pink-500 text-white' : 'border-gray-200 bg-white text-gray-600'}`}
+          >{tag}</button>
+        )
+      })}
+    </div>
+  )}
+
+  {showCollectionColourFilter && (
+    <div className="flex flex-wrap gap-1.5">
+      {COLLECTION_COLOUR_TAGS.map((tag) => {
+        const selected = collectionFilterColour.split(',').map(c => c.trim()).filter(Boolean).includes(tag)
+        return (
+          <button key={tag} type="button"
+            onClick={() => {
+              const current = collectionFilterColour.split(',').map(c => c.trim()).filter(Boolean)
+              const updated = selected ? current.filter(c => c !== tag) : [...current, tag]
+              setCollectionFilterColour(updated.join(', '))
+            }}
+            className={`rounded-full border px-2.5 py-1 text-xs font-semibold transition ${selected ? 'border-pink-500 bg-pink-500 text-white' : 'border-gray-200 bg-white text-gray-600'}`}
+          >{tag}</button>
+        )
+      })}
+    </div>
+  )}
+</div>
+
+            {loading && wraps.length === 0 ? (
+              <p className="text-sm text-gray-500">Loading wraps...</p>
+            ) : collectionWraps.length === 0 ? (
+              <div className="rounded-2xl border border-dashed p-8 text-center">
+                <p className="text-gray-600">No wraps yet</p>
+                <button
+                  type="button"
+                  onClick={openNewWrapModal}
+                  className="mt-4 cursor-pointer rounded-xl bg-gradient-to-r from-pink-500 to-rose-500 px-4 py-2 text-sm font-semibold text-white"
+                >
+                  Add your first wrap
+                </button>
+              </div>
+            ) : (<div className="grid grid-cols-2 gap-3 sm:grid-cols-2 xl:grid-cols-3 xl:gap-4">
+              
+                {filteredCollectionWraps.map((wrap) => renderCollectionTile(wrap))}
+              </div>
+            )}
+
+            <div className="mt-10 px-1">
+  <div className="mb-3 flex items-center gap-3">
+    <div className="h-px flex-1 bg-gray-200" />
+    <h3 className="text-xs font-semibold uppercase tracking-widest text-gray-400">
+      Departed Wraps
+    </h3>
+    <div className="h-px flex-1 bg-gray-200" />
+  </div>
+
+              {filteredDepartedWraps.length === 0 ? (
+                <p className="text-sm text-gray-500">No departed wraps yet</p>
+              ) : (
+                <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 xl:grid-cols-5">
+                  {filteredDepartedWraps.map((wrap) => (
+                    <button
+                      key={wrap.id}
+                      type="button"
+                      onClick={() => openViewWrapModal(wrap)}
+                      className="group flex cursor-pointer flex-col overflow-hidden rounded-xl border bg-gray-50 p-0 text-left shadow-none transition duration-200 hover:shadow-sm"
+                    >
+                      <div className="relative aspect-[4/5] w-full bg-gray-100 pointer-events-none">
+                        <img
+  src={getPrimaryImage(wrap)}
+  loading="lazy"
+  alt={wrap.name}
+  className="h-full w-full object-cover object-[center_20%] opacity-60 grayscale-[30%] transition duration-300 group-hover:opacity-80"
+/>
+                        {wrap.for_sale && wrap.status !== 'departed' && (
+  <div className="absolute left-3 top-3 rounded-xl bg-white/90 px-2 py-1 text-xs font-semibold text-amber-700 shadow">
+    🪓 For Sale
+    {wrap.for_sale_price !== null && (
+  <div className="text-[10px] font-medium text-gray-700">
+    {formatCurrency(wrap.for_sale_price, wrap.for_sale_currency || 'AUD')}
+  </div>
+)}
+  </div>
+)}
+
+{wrap.is_favourite && (
+  <div className="absolute right-3 top-3 rounded-full bg-white/90 px-2 py-1 text-xs font-semibold text-pink-600 shadow">
+    ★ Perma
+  </div>
+)}
+                      </div>
+
+                      <div className="space-y-0.5 p-2">
+                        <h4 className="line-clamp-1 text-xs font-semibold text-gray-500">
+                          {wrap.name}
+                        </h4>
+                        <p className="line-clamp-1 text-[10px] text-gray-400">
+                          {wrap.brand || ''}
+                        </p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </section>
+        )}
+
+        {/* For Sale: your wraps marked for sale, same tiles */}
+        {mode === 'profile' && profileTab === 'forsale' && (
+          <section className="mt-3! min-w-0">
+            {forSaleWraps.length === 0 ? (
+              <div className="rounded-2xl border border-dashed p-8 text-center text-sm text-gray-500">Nothing for sale</div>
+            ) : (
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 xl:grid-cols-3 xl:gap-4">
+                {forSaleWraps.map((wrap) => renderCollectionTile(wrap))}
+              </div>
+            )}
+          </section>
+        )}
+
+        {/* Dips: My Dips (+ Start a Dip) and Dip History (moved here from Settings) */}
+        {mode === 'profile' && profileTab === 'dips' && (
+          <section className="mt-3! min-w-0 space-y-4">
+              {/* My Dips — own section, separate from notifications */}
+              <div className="rounded-2xl border border-purple-200 bg-purple-50/60 p-3 space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <h3 className="text-base font-bold text-gray-900">🎲 My Dips</h3>
+                  <button
+                    type="button"
+                    onClick={() => router.push('/create-dip')}
+                    className="min-h-[44px] shrink-0 rounded-xl bg-gradient-to-r from-pink-500 to-rose-500 px-3 text-sm font-bold text-white"
+                  >
+                    🎲 Start a Dip
+                  </button>
+                </div>
+                {dips.filter(d => !d.archived).length === 0 && (
+                  <p className="text-sm text-gray-500">No active dips. Tap Start a Dip, or use “+ Dip” on a wrap in your collection.</p>
+                )}
+              {dips.filter(d => !d.archived).map((dip) => {
+                const linkedWrap = dip.wrap_id ? wrapsById[dip.wrap_id] : undefined
+                const imageUrl = getPrimaryImage(linkedWrap)
+                const progress = getDipProgress(dip)
+
+                return (
+                  <button
+                    key={dip.id}
+                    type="button"
+                    onClick={() => router.push(`/dips/${dip.id}`)}
+                    className="w-full cursor-pointer rounded-2xl border border-purple-200 bg-white p-3 text-left shadow-sm transition hover:shadow-md"
+                  >
+                    <div className="flex items-center justify-between gap-3 pointer-events-none">
+                      {linkedWrap ? (
+                        <img
+                          src={imageUrl}
+                          alt={dip.title}
+                          className="h-12 w-12 shrink-0 rounded-xl object-cover object-[center_30%]"
+                        />
+                      ) : (
+                        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-purple-100 text-xl">🎲</div>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-start justify-between gap-2">
+                          <h3 className="truncate text-sm font-bold text-gray-900">{dip.title}</h3>
+                          <span className="rounded-full bg-pink-50 px-2 py-0.5 text-[10px] font-semibold text-pink-600">
+                            {getStageLabel(dip.stage, dip.status)}
+                          </span>
+                        </div>
+                        <p className="mt-0.5 truncate text-[11px] text-gray-500">
+                          {dip.total_spots} spots • ${dip.price_per_spot} per spot
+                        </p>
+                        <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-gray-200">
+                          <div className="h-full bg-gradient-to-r from-pink-500 to-rose-500" style={{ width: `${progress}%` }} />
+                        </div>
+                      </div>
+                    </div>
+                  </button>
+                )
+              })}
+              </div>
+
+
+            <div className="rounded-2xl border bg-white shadow-sm overflow-hidden">
+              <div className="px-4 py-3 border-b">
+                <h2 className="font-bold text-gray-900">🎲 Dip History</h2>
+                <p className="text-xs text-gray-500 mt-0.5">Your completed and archived dips</p>
+              </div>
+              {archivedDips.length === 0 ? (
+                <div className="p-6 text-center text-sm text-gray-500">
+                  No archived dips yet — complete a drawn dip to see it here.
+                </div>
+              ) : (
+                <div className="divide-y">
+                  {archivedDips.map((dip) => {
+                    const totalRaised = dip.total_raised || dip.total_spots * dip.price_per_spot
+                    const drawnDate = dip.drawn_at ? new Date(dip.drawn_at).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'
+                    return (
+                      <div key={dip.id} className="p-4 space-y-2">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="font-bold text-gray-900 text-sm">{dip.title}</p>
+                            <p className="text-xs text-gray-500">{drawnDate}</p>
+                          </div>
+                          <div className="flex flex-col items-end gap-1">
+                            <span className="rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-semibold text-green-700">Archived</span>
+                            <button
+                              type="button"
+                              onClick={() => void unarchiveDip(dip.id)}
+                              className="min-h-[44px] px-1 text-xs text-gray-500 underline"
+                            >
+                              Unarchive
+                            </button>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 text-xs">
+                          <div className="rounded-xl bg-gray-50 px-3 py-2">
+                            <p className="text-gray-400">Winner</p>
+                            <p className="font-semibold text-gray-900">{dip.winner_name || '—'} {dip.winning_number ? `(#${dip.winning_number})` : ''}</p>
+                          </div>
+                          <div className="rounded-xl bg-gray-50 px-3 py-2">
+                            <p className="text-gray-400">Total raised</p>
+                            <p className="font-semibold text-gray-900">${totalRaised} USD</p>
+                          </div>
+                          <div className="rounded-xl bg-gray-50 px-3 py-2">
+                            <p className="text-gray-400">Spots</p>
+                            <p className="font-semibold text-gray-900">{dip.total_spots} @ ${dip.price_per_spot}</p>
+                          </div>
+                          <div className="rounded-xl bg-gray-50 px-3 py-2">
+                            <p className="text-gray-400">Condition</p>
+                            <p className="font-semibold text-gray-900">{dip.wrap_condition || '—'}</p>
+                          </div>
+                          {dip.wrap_size && (
+                            <div className="rounded-xl bg-gray-50 px-3 py-2">
+                              <p className="text-gray-400">Size</p>
+                              <p className="font-semibold text-gray-900">{dip.wrap_size}</p>
+                            </div>
+                          )}
+                          {dip.wrap_blend && (
+                            <div className="rounded-xl bg-gray-50 px-3 py-2 col-span-2">
+                              <p className="text-gray-400">Blend</p>
+                              <p className="font-semibold text-gray-900">{dip.wrap_blend}</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          </section>
+        )}
+
+        {/* ISO: your wishlist lives on its own page (all its logic stays there) */}
+        {mode === 'profile' && profileTab === 'iso' && (
+          <section className="mt-3! min-w-0">
+            <div className="rounded-2xl border bg-white p-6 text-center shadow-sm space-y-3">
+              <p className="text-3xl">⭐</p>
+              <h2 className="text-lg font-bold text-gray-900">Your ISO list</h2>
+              <p className="text-sm text-gray-500">Wraps you’re in search of. You’ll get a notification when one comes up for sale.</p>
+              <button
+                type="button"
+                onClick={() => router.push('/wishlist')}
+                className={`${BTN_PRIMARY} min-h-[44px] w-full max-w-xs`}
+              >
+                Open my ISO list
+              </button>
+            </div>
+          </section>
+        )}
+
+        {/* Activity (notifications) — its own page at /activity */}
+        {mode === 'activity' && (
+          <section className="min-w-0 bg-white">
+            <div className="mb-2 flex items-center justify-between gap-3 xl:mb-4">
+              <div>
+                <h2 className="text-xl font-bold text-gray-900 xl:text-2xl">Activity</h2>
+                <p className="text-sm text-gray-500">
+                  Updates and quick links.
+                </p>
+              </div>
+
+              {notifications.length > 0 && (
+                <div className="flex shrink-0 items-center gap-1 text-xs font-semibold">
+                  <button
+                    type="button"
+                    onClick={markAllNotificationsRead}
+                    className="min-h-[36px] px-1.5 text-gray-600 hover:text-gray-900"
+                  >
+                    Mark all read
+                  </button>
+                  <span className="text-gray-300">·</span>
+                  <button
+                    type="button"
+                    onClick={clearAllNotifications}
+                    disabled={isClearingNotifications}
+                    className="min-h-[36px] px-1.5 text-red-500 hover:text-red-600 disabled:opacity-50"
+                  >
+                    {isClearingNotifications ? 'Clearing...' : 'Clear all'}
+                  </button>
+                </div>
+              )}
+            </div>
+
+                       <div className="space-y-2 xl:space-y-3">
+              {notifications.length > 0 && (
+                <h3 className="pt-2 text-base font-bold text-gray-900">🔔 Updates</h3>
+              )}
+              {notifications.map((notification) => {
+                const wrap = notification.wrap
+                const wrapName = wrap?.name || 'Wrap'
+                const imageUrl = getPrimaryImage(wrap || undefined)
+
+                const title =
+                  notification.type === 'like' && notification.wrap
+                    ? `${notification.actor_name} liked your wrap`
+                    : notification.type === 'like' && !notification.wrap
+                    ? `${notification.actor_name} liked your WDYWT post`
+                    : notification.type === 'wishlist'
+                    ? `${notification.actor_name} added your wrap to their wishlist`
+                    : notification.type === 'comment'
+                    ? `${notification.actor_name} commented on your WDYWT post`
+                    : notification.type === 'dibs'
+                    ? `🎯 You have dibs on ${wrapName}`
+                    : notification.type === 'dip_live'
+                    ? `🎲 ${wrapName} from your wishlist is being dipped!`
+                    : `${wrapName} from your wishlist is now for sale`
+
+                const meta =
+                  notification.type === 'for_sale'
+                    ? wrap?.for_sale_price_is_pm
+                      ? 'PM'
+                      : wrap?.for_sale_price !== null && wrap?.for_sale_price !== undefined
+                      ? formatCurrency(wrap.for_sale_price, wrap.for_sale_currency || 'AUD')
+                      : 'For Sale'
+                    : wrapName
+
+                return (
+                  <button
+                    key={notification.id}
+                    type="button"
+                    onClick={() => handleNotificationClick(notification)}
+                    className={`w-full cursor-pointer rounded-2xl border p-3 text-left shadow-sm transition hover:shadow-md overflow-hidden ${
+                      !notification.read_at
+                        ? 'border-l-4 border-l-pink-500 bg-pink-50'
+                        : 'bg-white'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3 min-w-0 w-full">
+                      {notification.actor_avatar ? (
+                        <img
+                          src={notification.actor_avatar}
+                          alt={notification.actor_name}
+                          className="h-12 w-12 shrink-0 rounded-full object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-pink-500 to-rose-500 text-sm font-bold text-white">
+                          {getInitials(notification.actor_name)}
+                        </div>
+                      )}
+
+                      <div className="min-w-0 flex-1">
+                        {notification.type === 'for_sale' && (
+                          <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">FOR SALE</p>
+                        )}
+
+                        <p className="line-clamp-2 text-sm font-semibold text-gray-900">
+                          {title}
+                        </p>
+
+                        <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-gray-500">
+                          {notification.type === 'for_sale' && (
+                            <>
+                              <span className="truncate">{meta}</span>
+                              <span>•</span>
+                            </>
+                          )}
+                          <span>{formatTimeAgo(notification.created_at)}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </button>
+                )
+              })}
+
+              {notifications.length === 0 && (
+                <div className="rounded-2xl border border-dashed p-6 text-center text-sm text-gray-500">
+                  No activity yet
+                </div>
+              )}
+            </div>
+          </section>
+        )}
+{isViewWrapModalOpen && selectedWrap && (() => {
+  const sortedImages = sortWrapImages(selectedWrap.wrap_images)
+
+  return (
+   <div
+    className={fullSheetOverlay}
+    onClick={closeViewWrapModal}
+  >
+    <div
+      className={fullSheetPanel('md:max-w-4xl')}
+      onClick={(e) => e.stopPropagation()}
+    >
+      <SheetTopBar onClose={closeViewWrapModal} title={selectedWrap.name} />
+            <div className="mb-6 flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="text-lg font-bold text-gray-900 line-clamp-2">
+              {selectedWrap.name}
+            </h2>
+
+            {selectedWrap.user_id !== currentUserId && (
+              <>
+                <button
+                  type="button"
+                  className={`rounded-full border px-3 py-1 text-sm font-semibold transition ${
+                    'border-pink-200 bg-pink-50 text-pink-600'
+                  }`}
+                >
+                  ❤️ {selectedWrapCounts.likes}
+                </button>
+
+                <button
+                  type="button"
+                  className={`rounded-full border px-3 py-1 text-sm font-semibold transition ${
+                    'border-amber-200 bg-amber-50 text-amber-700'
+                  }`}
+                >
+                  ⭐ {selectedWrapCounts.wishlists}
+                </button>
+              </>
+            )}
+          </div>
+
+          <div className="mt-1 flex flex-wrap items-center gap-2">
+            <p className="text-sm text-gray-500">
+              {selectedWrap.brand || 'No brand added'}
+            </p>
+
+            {selectedWrap.is_favourite && (
+              <span className="rounded-full bg-pink-100 px-2 py-0.5 text-xs font-semibold text-pink-600">
+                ★ Perma
+              </span>
+            )}
+
+            <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-700">
+              {selectedWrap.status}
+            </span>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          {!isReadOnlyWrapView && (
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  closeViewWrapModal()
+                  openEditWrapModal(selectedWrap)
+                }}
+                className="relative cursor-pointer rounded-xl border px-3 py-1 text-sm font-semibold text-gray-700"
+              >
+                Edit
+                {[!selectedWrap.brand, !(selectedWrap as any).size, !(selectedWrap as any).material, !(selectedWrap as any).colour, !(selectedWrap as any).wrap_type].some(Boolean) && (
+                  <span className="absolute -right-1 -top-1 rounded-full bg-orange-400 px-1 py-0.5 text-[10px] font-bold text-white shadow">
+                    ⚠
+                  </span>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const params = new URLSearchParams()
+                  params.set('wrapId', selectedWrap.id)
+                  params.set('wrapName', selectedWrap.name)
+                  if (selectedWrap.brand) params.set('brand', selectedWrap.brand)
+                  if (selectedWrap.purchase_price) params.set('wrapPrice', String(selectedWrap.purchase_price))
+                  if (selectedWrap.purchase_currency) params.set('wrapCurrency', selectedWrap.purchase_currency)
+                  router.push(`/create-dip?${params.toString()}`)
+                }}
+                className="cursor-pointer rounded-xl border border-pink-500 px-3 py-1 text-sm font-semibold text-pink-500 whitespace-nowrap"
+              >
+                + Dip
+              </button>
+            </div>
+          )}
+
+          <button
+            type="button"
+            onClick={closeViewWrapModal}
+            className="cursor-pointer rounded-full border px-3 py-1 text-sm text-gray-600"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+
+      <div className="mb-4 overflow-hidden rounded-3xl bg-gray-100 shadow-sm">
+  <button
+    type="button"
+    onClick={() => setIsImagePreviewOpen(true)}
+    className="block w-full cursor-zoom-in bg-black"
+  >
+    <img
+      src={selectedViewImage || getPrimaryImage(selectedWrap)}
+      alt={selectedWrap.name}
+      className="h-[440px] w-full object-cover transition duration-300 hover:scale-[1.01]"
+    />
+  </button>
+</div>
+<p className="mb-4 text-xs text-gray-500">
+  Click the main image to view larger
+</p>
+{sortedImages.length > 0 && (
+  <div className="mb-6 grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-6">
+    {sortedImages.map((image) => (
+      <button
+        key={image.id}
+        type="button"
+        onClick={() => setSelectedViewImage(image.image_url)}
+        className={`overflow-hidden rounded-xl border transition duration-200 ${
+  selectedViewImage === image.image_url
+    ? 'border-pink-500 ring-2 ring-pink-200 shadow-sm'
+    : 'border-gray-200 hover:border-pink-300 hover:shadow-sm'
+}`}
+      >
+        <img
+          src={image.image_url}
+          alt={selectedWrap.name}
+          className="h-20 w-full object-cover transition duration-200 hover:scale-[1.02]"
+        />
+      </button>
+    ))}
+  </div>
+)}
+      <div className="grid gap-5 md:grid-cols-2">
+        <div className="rounded-2xl border bg-white p-5 shadow-sm">
+          <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-400">
+            Wrap Details
+          </h3>
+
+          <div className="space-y-2 text-sm text-gray-700">
+            <p>
+              <span className="font-semibold text-gray-900">Status:</span>{' '}
+              {selectedWrap.status}
+            </p>
+            {/* Purchase details are private: only shown on your own wraps */}
+            {!isReadOnlyWrapView && (
+              <>
+                <p>
+                  <span className="font-semibold text-gray-900">Purchase Date:</span>{' '}
+                  {selectedWrap.purchase_date || '—'}
+                </p>
+                <p>
+                  <span className="font-semibold text-gray-900">Purchased From:</span>{' '}
+                  {selectedWrap.purchased_from || '—'}
+                </p>
+                <p>
+                  <span className="font-semibold text-gray-900">Country:</span>{' '}
+                  {selectedWrap.purchase_country || '—'}
+                </p>
+              </>
+            )}
+          </div>
+        </div>
+
+        <div className="rounded-2xl border bg-white p-5 shadow-sm">
+          <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-400">
+            Extra Info
+          </h3>
+
+          <div className="space-y-2 text-sm text-gray-700">
+            <p>
+              <span className="font-semibold text-gray-900">Favourite:</span>{' '}
+              {selectedWrap.is_favourite ? 'Yes' : 'No'}
+            </p>
+
+                        {selectedWrap.for_sale && (
+              <p>
+                <span className="font-semibold text-gray-900">For Sale:</span>{' '}
+                {selectedWrap.for_sale_price_is_pm
+                  ? 'PM'
+                  : selectedWrap.for_sale_price !== null
+                  ? formatCurrency(
+                      selectedWrap.for_sale_price,
+                      selectedWrap.for_sale_currency || 'AUD'
+                    )
+                  : 'Yes'}
+              </p>
+            )}
+
+            {/* Loan and sale details are private: only shown on your own wraps (not the read-only view) */}
+            {!isReadOnlyWrapView && selectedWrap.status === 'holiday' && (
+              <p>
+                <span className="font-semibold text-gray-900">On Holiday With:</span>{' '}
+                {selectedWrap.on_loan_to || '—'}
+              </p>
+            )}
+
+            {selectedWrap.status === 'departed' && (
+              <>
+                {!isReadOnlyWrapView && (
+                  <p>
+                    <span className="font-semibold text-gray-900">Sold To:</span>{' '}
+                    {selectedWrap.sold_to || '—'}
+                  </p>
+                )}
+                <p>
+                  <span className="font-semibold text-gray-900">Sold Date:</span>{' '}
+                  {selectedWrap.sold_date || '—'}
+                </p>
+                {!isReadOnlyWrapView && (
+                  <p>
+                    <span className="font-semibold text-gray-900">Sold Price:</span>{' '}
+                    {selectedWrap.sold_price !== null
+                      ? formatCurrency(
+                          selectedWrap.sold_price,
+                          selectedWrap.sold_currency || 'AUD'
+                        )
+                      : '—'}
+                  </p>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+
+        {selectedWrap.description && (
+          <div className="md:col-span-2 rounded-2xl border bg-white p-5 shadow-sm">
+            <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-400">
+              Description
+            </h3>
+            <p className="whitespace-pre-wrap text-sm text-gray-700">
+              {selectedWrap.description}
+            </p>
+          </div>
+        )}
+      </div>
+
+      <div className="mt-6 flex flex-wrap gap-3">
+        
+
+        
+         </div>
+    </div>
+  </div>
+  )
+})()}
+        {isImagePreviewOpen && selectedWrap && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-0 pt-[env(safe-area-inset-top)] md:p-4">
+            <div className="relative w-full max-w-6xl">
+              <button
+                type="button"
+                onClick={() => setIsImagePreviewOpen(false)}
+                className="absolute right-2 top-2 z-10 min-h-[44px] rounded-full bg-white/90 px-4 text-sm font-semibold text-gray-800 shadow md:right-0 md:top-0"
+              >
+                Close
+              </button>
+
+              <img
+                src={selectedViewImage || getPrimaryImage(selectedWrap)}
+                alt={selectedWrap.name}
+                className="max-h-[90vh] w-full rounded-2xl object-contain bg-black"
+              />
+            </div>
+          </div>
+       )}
+
+        {isReportModalOpen && (
+          <div
+            className={fullSheetOverlay}
+            onClick={closeReportModal}
+          >
+            <div
+              className={fullSheetPanel('md:max-w-4xl')}
+              onClick={(e) => e.stopPropagation()}
+    >
+              <SheetTopBar onClose={closeReportModal} title="Wrap Report" />
+              <div className="mb-6 flex items-start justify-between gap-4">
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-900">
+                    Wrap Report
+                  </h2>
+                  <p className="text-sm text-gray-500">
+                    View and export your wrap collection report.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => { closeReportModal(); router.push('/tools') }}
+                  className="cursor-pointer rounded-full border px-3 py-1 text-sm text-gray-600"
+                >
+                  Close
+                </button>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-3">
+  <div>
+    <label className="mb-1 block text-sm font-medium text-gray-700">
+      Date From
+    </label>
+    <input
+      type="date"
+      value={reportDateFrom}
+      onChange={(event) => setReportDateFrom(event.target.value)}
+      className="w-full rounded-xl border px-3 py-2 outline-none focus:border-pink-500 text-[16px]"
+    />
+  </div>
+
+  <div>
+    <label className="mb-1 block text-sm font-medium text-gray-700">
+      Date To
+    </label>
+    <input
+      type="date"
+      value={reportDateTo}
+      onChange={(event) => setReportDateTo(event.target.value)}
+      className="w-full rounded-xl border px-3 py-2 outline-none focus:border-pink-500 text-[16px]"
+    />
+  </div>
+
+  <div>
+    <label className="mb-1 block text-sm font-medium text-gray-700">
+      Status
+    </label>
+    <select
+      value={reportStatusFilter}
+      onChange={(event) =>
+        setReportStatusFilter(
+          event.target.value as 'all' | 'collection' | 'departed'
+        )
+      }
+      className="w-full rounded-xl border px-3 py-2 outline-none focus:border-pink-500 text-[16px]"
+    >
+      <option value="all">All</option>
+      <option value="collection">Collection</option>
+      <option value="departed">Departed</option>
+    </select>
+  </div>
+</div>
+<div className="mt-6 grid gap-4 md:grid-cols-3">
+  <div className="rounded-2xl border bg-white p-4 shadow-sm">
+    <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+      Number of Wraps
+    </p>
+    <p className="mt-2 text-2xl font-bold text-gray-900">
+      {reportRows.length}
+    </p>
+  </div>
+
+  <div className="rounded-2xl border bg-white p-4 shadow-sm">
+    <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+      Total Purchase Value
+    </p>
+    <p className="mt-2 text-2xl font-bold text-gray-900">
+      {formatCurrency(reportTotals.totalPurchaseValue, 'AUD')}
+    </p>
+  </div>
+
+  <div className="rounded-2xl border bg-white p-4 shadow-sm">
+    <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+      Total Sold Value
+    </p>
+    <p className="mt-2 text-2xl font-bold text-gray-900">
+      {formatCurrency(reportTotals.totalSoldValue, 'AUD')}
+    </p>
+  </div>
+</div>
+<div className="mt-6 flex flex-wrap gap-3">
+  <button
+    type="button"
+    onClick={exportReportCsv}
+    disabled={reportRows.length === 0}
+    className="cursor-pointer rounded-xl border px-4 py-2 text-sm font-semibold text-gray-700 disabled:opacity-50"
+  >
+    Export CSV
+  </button>
+
+  <button
+    type="button"
+    onClick={copyReportTable}
+    disabled={reportRows.length === 0}
+    className="cursor-pointer rounded-xl border px-4 py-2 text-sm font-semibold text-gray-700 disabled:opacity-50"
+  >
+    Copy Table
+  </button>
+</div>
+<div className="mt-6 overflow-hidden rounded-2xl border bg-white">
+  {reportRows.length === 0 ? (
+    <div className="p-8 text-center text-sm text-gray-500">
+      No wraps found for this report
+    </div>
+  ) : (
+    <div className="overflow-x-auto">
+      <table className="min-w-full divide-y divide-gray-200 text-sm">
+        <thead className="bg-gray-50">
+          <tr>
+            <th className="px-4 py-3 text-left font-semibold text-gray-600">
+              Wrap Name
+            </th>
+            <th className="px-4 py-3 text-left font-semibold text-gray-600">
+              Status
+            </th>
+            <th className="px-4 py-3 text-left font-semibold text-gray-600">
+              Date Purchased
+            </th>
+            <th className="px-4 py-3 text-left font-semibold text-gray-600">
+              Price Paid
+            </th>
+            <th className="px-4 py-3 text-left font-semibold text-gray-600">
+              Price Sold
+            </th>
+          </tr>
+        </thead>
+
+        <tbody className="divide-y divide-gray-100">
+          {reportRows.map((row) => (
+            <tr key={row.id} className="hover:bg-gray-50">
+              <td className="px-4 py-3 text-gray-900">{row.wrap_name}</td>
+              <td className="px-4 py-3 text-gray-600">{row.wrap_status}</td>
+              <td className="px-4 py-3 text-gray-600">
+                {row.purchase_date || '—'}
+              </td>
+              <td className="px-4 py-3 text-gray-600">
+                {row.purchase_price !== null
+                  ? formatCurrency(row.purchase_price, 'AUD')
+                  : '—'}
+              </td>
+              <td className="px-4 py-3 text-gray-600">
+                {row.sold_price !== null
+                  ? formatCurrency(row.sold_price, 'AUD')
+                  : '—'}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )}
+</div>
+            </div>
+          </div>
+        )}
+
+              
+        {isWrapModalOpen && (
+          <div className={fullSheetOverlay}>
+            <div className={fullSheetPanel('md:max-w-3xl')}>
+              <SheetTopBar onClose={() => void closeWrapModal()} title={wrapForm.id ? 'Edit Wrap' : 'Add Wrap'} />
+              <div className="mb-6 flex items-start justify-between gap-4">
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-900">
+                    {wrapForm.id ? 'Edit Wrap' : 'Add Wrap'}
+                  </h2>
+                  <p className="text-sm text-gray-500">
+                    Save wrap details without leaving the dashboard.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={saveWrap}
+                    disabled={isSavingWrap || isUploadingImages}
+                    className="cursor-pointer rounded-full bg-gradient-to-r from-pink-500 to-rose-500 px-4 py-1.5 text-sm font-semibold text-white shadow-sm disabled:opacity-60"
+                  >
+                    {isUploadingImages
+                      ? 'Waiting...'
+                      : isSavingWrap
+                      ? 'Saving...'
+                      : 'Save'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={closeWrapModal}
+                    className="cursor-pointer rounded-full border px-3 py-1 text-sm text-gray-600"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid gap-5 md:grid-cols-2">
+  <div>
+    <label className="mb-1 block text-sm font-medium text-gray-700">
+      Name of Wrap
+    </label>
+    <input
+      value={wrapForm.name}
+      onChange={(event) => updateWrapForm('name', event.target.value)}
+      className="w-full rounded-xl border px-3 py-2 text-[16px] text-gray-900 placeholder:text-gray-400 outline-none focus:border-pink-500 "
+    />
+  </div>
+
+  <div className="relative">
+    <label className="mb-1 block text-sm font-medium text-gray-700">
+      Brand
+    </label>
+    <input
+      value={wrapForm.brand}
+      onChange={(event) => updateWrapForm('brand', event.target.value)}
+      onFocus={() => setBrandFocused(true)}
+      onBlur={() => setTimeout(() => { setBrandFocused(false); setBrandSuggestions([]) }, 200)}
+      placeholder="e.g. Didymos, Oscha"
+      className={`w-full rounded-xl border px-3 py-2 text-[16px] text-gray-900 placeholder:text-gray-400 outline-none focus:border-pink-500 ${!wrapForm.brand ? 'border-orange-300 bg-orange-50' : ''}`}
+    />
+    {brandSuggestions.length > 0 && (
+      <div className="absolute z-10 mt-1 w-full rounded-xl border bg-white shadow-lg">
+        {brandSuggestions.map((s) => (
+          <button
+            key={s}
+            type="button"
+            onClick={() => { updateWrapForm('brand', s); setBrandSuggestions([]) }}
+            className="flex w-full px-3 py-2 text-left text-sm hover:bg-pink-50 first:rounded-t-xl last:rounded-b-xl"
+          >
+            {s}
+          </button>
+        ))}
+      </div>
+    )}
+  </div>
+
+    <div>
+    <label className="mb-1 block text-sm font-medium text-gray-700">
+      STIH (length)
+    </label>
+    <input
+      value={wrapForm.size}
+      onChange={(event) => updateWrapForm('size', event.target.value)}
+      onBlur={() => {
+        const cleaned = wrapForm.size.trim().toLowerCase().replace(/\s*(meters?|m)\s*$/i, '').trim()
+        updateWrapForm('size', cleaned)
+      }}
+      placeholder="e.g. 4.2"
+      className={`w-full rounded-xl border px-3 py-2 text-[16px] text-gray-900 placeholder:text-gray-400 outline-none focus:border-pink-500 ${!wrapForm.size ? 'border-orange-300 bg-orange-50' : ''}`}
+    />
+    <p className="mt-1 text-xs text-gray-400">Enter length in metres, e.g. 4.2</p>
+  </div>
+
+  <div>
+    <label className="mb-1 block text-sm font-medium text-gray-700">
+      Type
+    </label>
+    <select
+      value={wrapForm.wrap_type}
+      onChange={(event) => updateWrapForm('wrap_type', event.target.value)}
+      className={`w-full rounded-xl border px-3 py-2 text-[16px] text-gray-900 outline-none focus:border-pink-500 ${!wrapForm.wrap_type ? 'border-orange-300 bg-orange-50' : ''}`}
+    >
+      <option value="">Select type...</option>
+      <option value="Hand Woven">Hand Woven</option>
+      <option value="Machine Woven">Machine Woven</option>
+      <option value="Ring Sling">Ring Sling</option>
+      <option value="Carrier">Carrier</option>
+    </select>
+  </div>
+
+  <div className="relative">
+    <label className="mb-1 block text-sm font-medium text-gray-700">
+      Blend / Material
+    </label>
+    <input
+      value={wrapForm.material}
+      onChange={(event) => updateWrapForm('material', event.target.value)}
+      onFocus={() => setMaterialFocused(true)}
+      onBlur={() => setTimeout(() => { setMaterialFocused(false); setMaterialSuggestions([]) }, 200)}
+      placeholder="e.g. 100% cotton, linen/cotton"
+      className={`w-full rounded-xl border px-3 py-2 text-[16px] text-gray-900 placeholder:text-gray-400 outline-none focus:border-pink-500 ${!wrapForm.material ? 'border-orange-300 bg-orange-50' : ''}`}
+    />
+    {materialSuggestions.length > 0 && (
+      <div className="absolute z-10 mt-1 w-full rounded-xl border bg-white shadow-lg">
+        {materialSuggestions.map((s) => (
+          <button
+            key={s}
+            type="button"
+            onClick={() => { updateWrapForm('material', s); setMaterialSuggestions([]) }}
+            className="flex w-full px-3 py-2 text-left text-sm hover:bg-pink-50 first:rounded-t-xl last:rounded-b-xl"
+          >
+            {s}
+          </button>
+        ))}
+      </div>
+    )}
+  </div>
+
+  <div className="md:col-span-2">
+    <label className="mb-1 block text-sm font-medium text-gray-700">
+      Colour
+    </label>
+    <div className="flex flex-wrap gap-2">
+      {COLOUR_TAGS.map((tag) => {
+        const selected = wrapForm.colour.split(',').map(c => c.trim()).filter(Boolean).includes(tag)
+        return (
+          <button
+            key={tag}
+            type="button"
+            onClick={() => {
+              const current = wrapForm.colour.split(',').map(c => c.trim()).filter(Boolean)
+              const updated = selected
+                ? current.filter(c => c !== tag)
+                : [...current, tag]
+              updateWrapForm('colour', updated.join(', '))
+            }}
+            className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
+              selected
+                ? 'border-pink-500 bg-pink-500 text-white'
+                : 'border-gray-200 bg-white text-gray-600 hover:border-pink-300'
+            }`}
+          >
+            {tag}
+          </button>
+        )
+      })}
+    </div>
+    {wrapForm.colour ? (
+      <p className="mt-2 text-xs text-gray-400">Selected: {wrapForm.colour}</p>
+    ) : (
+      <p className="mt-2 text-xs text-orange-400 font-semibold">⚠ Please select a colour</p>
+    )}
+  </div>
+
+  <div className="relative">
+    <label className="mb-1 block text-sm font-medium text-gray-700">
+      Dibs
+    </label>
+
+    {wrapForm.dibs_users.length > 0 && (
+      <div className="mb-2 flex flex-wrap gap-2">
+        {wrapForm.dibs_users.map((d) => (
+          <div key={d.user_id} className="flex items-center gap-1.5 rounded-full bg-pink-50 border border-pink-200 px-3 py-1">
+            <span className="text-xs font-semibold text-pink-700">
+              {d.profile.full_name?.split(' ')[0] || d.profile.username || 'User'}
+            </span>
+            <button
+              type="button"
+              onClick={() =>
+                updateWrapForm('dibs_users', wrapForm.dibs_users.filter((x) => x.user_id !== d.user_id))
+              }
+              className="text-pink-400 hover:text-red-500 text-xs leading-none"
+            >
+              ×
+            </button>
+          </div>
+        ))}
+      </div>
+    )}
+
+    {wrapForm.dibs_names.length > 0 && (
+      <div className="mb-2 flex flex-wrap gap-2">
+        {wrapForm.dibs_names.map((name, index) => (
+          <div key={`${name}-${index}`} className="flex items-center gap-1.5 rounded-full bg-gray-100 border border-gray-200 px-3 py-1">
+            <span className="text-xs font-semibold text-gray-700">{name}</span>
+            <button
+              type="button"
+              onClick={() =>
+                updateWrapForm('dibs_names', wrapForm.dibs_names.filter((_, i) => i !== index))
+              }
+              className="text-gray-400 hover:text-red-500 text-xs leading-none"
+            >
+              ×
+            </button>
+          </div>
+        ))}
+      </div>
+    )}
+
+    <input
+      value={wrapForm.dibs_search}
+      onChange={(event) => updateWrapForm('dibs_search', event.target.value)}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter') {
+          event.preventDefault()
+          const name = wrapForm.dibs_search.trim()
+          if (name && !wrapForm.dibs_names.includes(name)) {
+            updateWrapForm('dibs_names', [...wrapForm.dibs_names, name])
+          }
+          updateWrapForm('dibs_search', '')
+          setDibsSearchResults([])
+        }
+      }}
+      placeholder="Search a user, or type a name + Enter"
+      className="w-full rounded-xl border px-3 py-2 text-[16px] text-gray-900 placeholder:text-gray-400 outline-none focus:border-pink-500 "
+    />
+
+    {dibsSearchLoading && (
+      <p className="mt-1 text-xs text-gray-400">Searching...</p>
+    )}
+
+    {dibsSearchResults.length > 0 && (
+      <div className="absolute z-10 mt-1 w-full rounded-xl border bg-white shadow-lg">
+        {dibsSearchResults
+          .filter((u) => !wrapForm.dibs_users.some((d) => d.user_id === u.id))
+          .map((user) => (
+            <button
+              key={user.id}
+              type="button"
+              onClick={() => {
+                updateWrapForm('dibs_users', [
+                  ...wrapForm.dibs_users,
+                  {
+                    id: '',
+                    user_id: user.id,
+                    wrap_id: wrapForm.id || '',
+                    profile: { full_name: user.name, username: user.username, avatar_url: null },
+                  },
+                ])
+                updateWrapForm('dibs_search', '')
+                setDibsSearchResults([])
+              }}
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-pink-50 first:rounded-t-xl last:rounded-b-xl"
+            >
+              <span className="font-semibold text-gray-900">{user.name}</span>
+              {user.username && (
+                <span className="text-gray-400">@{user.username}</span>
+              )}
+            </button>
+          ))}
+      </div>
+    )}
+
+    <p className="mt-1 text-xs text-gray-500">
+      Users will get a notification when listed for sale or dipped.
+    </p>
+
+
+  </div>
+
+  <div>
+    <label className="mb-1 block text-sm font-medium text-gray-700">
+      Date Purchased
+    </label>
+    <input
+      type="date"
+      value={wrapForm.purchase_date}
+      onChange={(event) =>
+        updateWrapForm('purchase_date', event.target.value)
+      }
+      className="w-full rounded-xl border px-3 py-2 text-[16px] text-gray-900 outline-none focus:border-pink-500 "
+    />
+  </div>
+
+  <div className="relative">
+    <label className="mb-1 block text-sm font-medium text-gray-700">
+      Purchased From
+    </label>
+    <input
+      value={wrapForm.purchased_from}
+      onChange={(event) =>
+        updateWrapForm('purchased_from', event.target.value)
+      }
+      placeholder="Search user or type a name..."
+      className="w-full rounded-xl border px-3 py-2 text-[16px] text-gray-900 placeholder:text-gray-400 outline-none focus:border-pink-500 "
+    />
+
+    {purchasedFromLoading && (
+      <p className="mt-1 text-xs text-gray-400">Searching...</p>
+    )}
+
+    {purchasedFromResults.length > 0 && (
+      <div className="absolute z-10 mt-1 w-full rounded-xl border bg-white shadow-lg">
+        {purchasedFromResults.map((user) => (
+          <button
+            key={user.id}
+            type="button"
+            onClick={() => {
+              updateWrapForm('purchased_from', user.name)
+              setPurchasedFromResults([])
+            }}
+            className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-pink-50 first:rounded-t-xl last:rounded-b-xl"
+          >
+            <span className="font-semibold text-gray-900">{user.name}</span>
+            {user.username && (
+              <span className="text-gray-400">@{user.username}</span>
+            )}
+          </button>
+        ))}
+      </div>
+    )}
+  </div>
+
+    <div>
+    <label className="mb-1 block text-sm font-medium text-gray-700">
+      Purchase Price
+    </label>
+    <input
+      type="number"
+      step="0.01"
+      value={wrapForm.purchase_price}
+      onChange={(event) =>
+        updateWrapForm('purchase_price', event.target.value)
+      }
+      className="w-full rounded-xl border px-3 py-2 text-[16px] text-gray-900 outline-none focus:border-pink-500 "
+    />
+    <p className="mt-1 text-xs text-gray-500">
+      Only you can see this. Other users cannot view your purchase price.
+    </p>
+  </div>
+
+  <div>
+    <label className="mb-1 block text-sm font-medium text-gray-700">
+      Currency
+    </label>
+    <select
+      value={wrapForm.purchase_currency}
+      onChange={(event) =>
+        updateWrapForm(
+          'purchase_currency',
+          event.target.value as CurrencyCode
+        )
+      }
+      className="w-full rounded-xl border px-3 py-2 text-[16px] text-gray-900 outline-none focus:border-pink-500 "
+    >
+      <option value="AUD">AUD</option>
+      <option value="USD">USD</option>
+      <option value="EUR">EUR</option>
+    </select>
+    <p className="mt-1 text-xs text-gray-500">
+Record own currency for accurate reporting
+</p>
+  </div>
+
+  
+
+  <div className="md:col-span-2">
+<label className="mb-2 block text-sm font-medium text-gray-700">
+  Wrap Images (Max {MAX_WRAP_IMAGES})
+</label>
+
+{/* Upload Button */}
+<div className="flex items-center gap-3 mb-3">
+  <label className="cursor-pointer rounded-xl bg-gradient-to-r from-pink-500 to-rose-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:opacity-90">
+    {isUploadingImages ? 'Uploading...' : 'Upload Images'}
+    <input
+      type="file"
+      accept="image/*"
+      multiple
+      onChange={(event) => {
+        if (event.target.files) {
+          uploadWrapImages(event.target.files)
+        }
+      }}
+      className="hidden"
+    />
+  </label>
+
+  <span className="text-xs text-gray-500">
+    {wrapForm.images.length}/{MAX_WRAP_IMAGES} images
+  </span>
+</div>
+
+{/* Upload warning */}
+{isUploadingImages && (
+  <p className="mb-3 text-xs text-amber-600">
+    Uploading images... please wait before closing
+  </p>
+)}
+
+{/* Image Grid */}
+{wrapForm.images.length > 0 && (
+  <div className="grid grid-cols-3 gap-3">
+    {wrapForm.images.map((image) => (
+      <div
+        key={image.id}
+        className={`relative rounded-xl overflow-hidden border ${
+          image.is_primary ? 'border-pink-500' : 'border-gray-200'
+        }`}
+      >
+        <img
+          src={image.image_url}
+          className="h-24 w-full object-cover cursor-pointer"
+          onClick={() => setCoverPhoto(image.id)}
+        />
+
+        {/* Cover badge */}
+        {image.is_primary && (
+          <div className="absolute top-1 left-1 rounded bg-white/90 px-2 py-0.5 text-xs font-semibold text-pink-600">
+            Cover
+          </div>
+        )}
+
+        {/* Uploading overlay */}
+        {image.status === 'uploading' && (
+          <div className="absolute inset-0 bg-black/40 flex items-center justify-center text-white text-xs">
+            Uploading...
+          </div>
+        )}
+
+        {/* Error overlay */}
+        {image.status === 'error' && (
+          <div className="absolute inset-0 bg-red-500/70 flex items-center justify-center text-white text-xs">
+            Error
+          </div>
+        )}
+
+        {/* Actions */}
+<div className="absolute inset-x-1 bottom-1 flex gap-1 xl:bottom-1 xl:left-1 xl:right-1 xl:flex xl:justify-between xl:gap-1 xl:rounded-lg xl:bg-transparent xl:p-0">
+  <button
+    type="button"
+    onClick={() => removeWrapImage(image.id)}
+    className="min-w-0 flex-1 rounded bg-white/95 px-1 py-0.5 text-[10px] leading-tight text-gray-900 shadow-sm xl:px-0 xl:py-1 xl:text-xs xl:font-normal"
+  >
+    Remove
+  </button>
+
+  <label className="min-w-0 flex-1 cursor-pointer rounded bg-white/95 px-1 py-0.5 text-center text-[10px] leading-tight text-gray-900 shadow-sm xl:px-0 xl:py-1 xl:text-xs xl:font-normal">
+    Replace
+    <input
+      type="file"
+      accept="image/*"
+      className="hidden"
+      onChange={(event) => {
+        const file = event.target.files?.[0]
+        if (file) replaceWrapImage(image.id, file)
+      }}
+    />
+  </label>
+</div>
+      </div>
+    ))}
+  </div>
+)}
+</div>
+
+  <div>
+    <label className="mb-1 block text-sm font-medium text-gray-700">
+      Status
+    </label>
+    <select
+      value={wrapForm.status}
+      onChange={(event) =>
+        updateWrapForm(
+          'status',
+          event.target.value as 'active' | 'holiday' | 'departed'
+        )
+      }
+      className="w-full rounded-xl border px-3 py-2 text-[16px] text-gray-900 outline-none focus:border-pink-500 "
+    >
+      <option value="active">Active</option>
+      <option value="holiday">On Holiday</option>
+      <option value="departed">Departed</option>
+    </select>
+  </div>
+
+  {wrapForm.status === 'holiday' && (
+    <div>
+      <label className="mb-1 block text-sm font-medium text-gray-700">
+        On Holiday With
+      </label>
+      <input
+        value={wrapForm.on_loan_to}
+        onChange={(event) =>
+          updateWrapForm('on_loan_to', event.target.value)
+        }
+        placeholder="Borrower name"
+        className="w-full rounded-xl border px-3 py-2 text-[16px] text-gray-900 placeholder:text-gray-400 outline-none focus:border-pink-500 "
+      />
+    </div>
+  )}
+
+  {wrapForm.status === 'departed' && (
+    <>
+      <div>
+        <label className="mb-1 block text-sm font-medium text-gray-700">
+          Sold To
+        </label>
+        <input
+          value={wrapForm.sold_to}
+          onChange={(event) =>
+            updateWrapForm('sold_to', event.target.value)
+          }
+          className="w-full rounded-xl border px-3 py-2 text-[16px] text-gray-900 placeholder:text-gray-400 outline-none focus:border-pink-500 "
+        />
+      </div>
+
+      <div>
+        <label className="mb-1 block text-sm font-medium text-gray-700">
+          Date Sold
+        </label>
+        <input
+          type="date"
+          value={wrapForm.sold_date}
+          onChange={(event) =>
+            updateWrapForm('sold_date', event.target.value)
+          }
+          className="w-full rounded-xl border px-3 py-2 text-[16px] text-gray-900 outline-none focus:border-pink-500 "
+        />
+      </div>
+
+      <div>
+        <label className="mb-1 block text-sm font-medium text-gray-700">
+          Sold Price
+        </label>
+        <input
+          type="number"
+          step="0.01"
+          value={wrapForm.sold_price}
+          onChange={(event) =>
+            updateWrapForm('sold_price', event.target.value)
+          }
+          className="w-full rounded-xl border px-3 py-2 text-[16px] text-gray-900 outline-none focus:border-pink-500 "
+        />
+      </div>
+
+      <div>
+        <label className="mb-1 block text-sm font-medium text-gray-700">
+          Sold Currency
+        </label>
+        <select
+          value={wrapForm.sold_currency}
+          onChange={(event) =>
+            updateWrapForm(
+              'sold_currency',
+              event.target.value as CurrencyCode
+            )
+          }
+          className="w-full rounded-xl border px-3 py-2 text-[16px] text-gray-900 outline-none focus:border-pink-500 "
+        >
+          <option value="AUD">AUD</option>
+          <option value="USD">USD</option>
+          <option value="EUR">EUR</option>
+        </select>
+        <p className="mt-1 text-xs text-gray-500">
+Record own currency for accurate reporting
+</p>
+      </div>
+    </>
+  )}
+
+  <div className="md:col-span-2 flex flex-col gap-4">
+<div className="flex items-center gap-4">
+  <div className="flex items-center gap-2">
+    <input
+      id="wrap-favourite"
+      type="checkbox"
+      checked={wrapForm.is_favourite}
+      onChange={(event) =>
+        updateWrapForm('is_favourite', event.target.checked)
+      }
+    />
+    <label
+      htmlFor="wrap-favourite"
+      className="text-sm font-medium text-gray-700"
+    >
+      Perma
+    </label>
+  </div>
+
+  <div className="flex items-center gap-2">
+    <input
+      id="wrap-for-sale"
+      type="checkbox"
+      checked={wrapForm.for_sale}
+      onChange={(event) => {
+        const checked = event.target.checked
+
+        updateWrapForm('for_sale', checked)
+
+        // auto-fill price if empty
+        if (checked && !wrapForm.for_sale_price && wrapForm.purchase_price) {
+          updateWrapForm('for_sale_price', wrapForm.purchase_price)
+          updateWrapForm('for_sale_currency', wrapForm.purchase_currency)
+        }
+      }}
+    />
+    <label
+      htmlFor="wrap-for-sale"
+      className="text-sm font-medium text-gray-700"
+    >
+      For Sale
+    </label>
+  </div>
+</div>
+
+{/* Hide this wrap from the logged-out public collection page */}
+<label className="flex min-h-[44px] items-center gap-2 text-sm font-medium text-gray-700">
+  <input
+    type="checkbox"
+    className="h-5 w-5"
+    checked={wrapForm.is_private}
+    onChange={(event) => updateWrapForm('is_private', event.target.checked)}
+  />
+  🔒 Hide from my public page
+</label>
+
+{wrapForm.for_sale && (
+  <div className="space-y-3">
+    <div className="flex items-center gap-2">
+      <input
+        id="wrap-for-sale-pm"
+        type="checkbox"
+        checked={wrapForm.for_sale_price_is_pm}
+        onChange={(event) => {
+          const checked = event.target.checked
+          updateWrapForm('for_sale_price_is_pm', checked)
+          if (checked) {
+            updateWrapForm('for_sale_price', '')
+          }
+        }}
+      />
+      <label
+        htmlFor="wrap-for-sale-pm"
+        className="text-sm font-medium text-gray-700"
+      >
+        List price as PM
+      </label>
+    </div>
+
+    {!wrapForm.for_sale_price_is_pm && (
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="mb-1 block text-sm font-medium text-gray-700">
+            Sale Price
+          </label>
+          <input
+            type="number"
+            step="0.01"
+            value={wrapForm.for_sale_price}
+            onChange={(event) =>
+              updateWrapForm('for_sale_price', event.target.value)
+            }
+            className="w-full rounded-xl border px-3 py-2 text-[16px] text-gray-900 outline-none focus:border-pink-500 "
+          />
+        </div>
+
+        <div>
+          <label className="mb-1 block text-sm font-medium text-gray-700">
+            Currency
+          </label>
+          <select
+            value={wrapForm.for_sale_currency}
+            onChange={(event) =>
+              updateWrapForm(
+                'for_sale_currency',
+                event.target.value as CurrencyCode
+              )
+            }
+            className="w-full rounded-xl border px-3 py-2 text-[16px] text-gray-900 outline-none focus:border-pink-500 "
+          >
+            <option value="AUD">AUD</option>
+            <option value="USD">USD</option>
+            <option value="EUR">EUR</option>
+          </select>
+        </div>
+      </div>
+    )}
+  </div>
+)}
+</div>
+              </div>
+
+              <div className="mt-6 flex flex-wrap gap-3">
+                <button
+  type="button"
+  onClick={saveWrap}
+  disabled={isSavingWrap || isUploadingImages}
+                  className="cursor-pointer rounded-xl bg-gradient-to-r from-pink-500 to-rose-500 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+                >
+                  {isUploadingImages
+  ? 'Waiting for images...'
+  : isSavingWrap
+  ? 'Saving...'
+  : 'Save Wrap'}
+                </button>
+
+                                <button
+                  type="button"
+                  onClick={createDipFromWrap}
+                  className="cursor-pointer rounded-xl border px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+                >
+                  Create Dip
+                </button>
+
+                {wrapForm.id && wrapForm.status !== 'departed' && (
+                  <button
+                    type="button"
+                    onClick={markWrapAsDeparted}
+                    className="cursor-pointer rounded-xl border px-4 py-2 text-sm font-semibold text-gray-700"
+                  >
+                    Sold
+                  </button>
+                )}
+
+                {wrapForm.id && (
+                  <button
+                    type="button"
+                    onClick={deleteWrap}
+                    className="cursor-pointer rounded-xl border border-red-200 px-4 py-2 text-sm font-semibold text-red-600"
+                  >
+                    Delete
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    {showOnboarding && (
+        <div className="fixed inset-0 z-[100] flex flex-col bg-white overflow-y-auto">
+
+          {onboardingStep === 1 && (
+            <div className="flex flex-1 flex-col items-center justify-center px-8 text-center">
+              <div className="mb-6 flex h-24 w-24 items-center justify-center rounded-3xl bg-gradient-to-br from-pink-500 to-rose-500 shadow-lg">
+                <img src="/icon-512.png" alt="WrapApp" className="h-20 w-20 rounded-2xl" />
+              </div>
+              <h1 className="text-3xl font-extrabold text-gray-900 mb-2">
+                Welcome to WrapApp{profile?.full_name ? `, ${profile.full_name.split(' ')[0]}` : ''}! 🎉
+              </h1>
+              <p className="text-gray-500 text-base mb-6 leading-relaxed">
+                Your home for wrap collecting, sharing, and discovering.
+              </p>
+              <div className="space-y-3 w-full text-left">
+                <div className="flex items-center gap-3 rounded-2xl bg-pink-50 px-4 py-3">
+                  <span className="text-2xl">👜</span>
+                  <div>
+                    <p className="font-semibold text-gray-900 text-sm">Manage your collection</p>
+                    <p className="text-xs text-gray-500">Track, organise and showcase your wraps</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 rounded-2xl bg-pink-50 px-4 py-3">
+                  <span className="text-2xl">🔍</span>
+                  <div>
+                    <p className="font-semibold text-gray-900 text-sm">Discover the community</p>
+                    <p className="text-xs text-gray-500">Explore other collections and connect</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 rounded-2xl bg-pink-50 px-4 py-3">
+                  <span className="text-2xl">🛍️</span>
+                  <div>
+                    <p className="font-semibold text-gray-900 text-sm">Buy and sell wraps</p>
+                    <p className="text-xs text-gray-500">List your wraps for sale within the community</p>
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setOnboardingStep(2)}
+                className="mt-8 w-full rounded-2xl bg-gradient-to-r from-pink-500 to-rose-500 py-4 text-base font-bold text-white shadow-lg"
+              >
+                Let's get started →
+              </button>
+            </div>
+          )}
+
+          {onboardingStep === 2 && (
+            <div className="flex flex-1 flex-col items-center justify-center px-8 text-center">
+              <h2 className="text-2xl font-extrabold text-gray-900 mb-2">Add a profile photo</h2>
+              <p className="text-gray-500 text-sm mb-8">Help the community put a face to your collection</p>
+              <label className="relative cursor-pointer group mb-8">
+                {onboardingAvatar ? (
+                  <img src={onboardingAvatar} alt="Your avatar" className="h-32 w-32 rounded-full object-cover ring-4 ring-pink-200 shadow-lg" />
+                ) : (
+                  <div className="h-32 w-32 rounded-full bg-gradient-to-br from-pink-100 to-rose-100 ring-4 ring-pink-200 shadow-lg flex flex-col items-center justify-center">
+                    <span className="text-4xl">📷</span>
+                    <p className="text-xs text-pink-400 font-semibold mt-1">Tap to upload</p>
+                  </div>
+                )}
+                <input type="file" accept="image/*" className="hidden" onChange={(e) => { const file = e.target.files?.[0]; if (file) uploadOnboardingAvatar(file) }} />
+              </label>
+              {isUploadingOnboardingAvatar && <p className="text-sm text-pink-500 mb-4">Uploading...</p>}
+              <button
+                type="button"
+                onClick={() => setOnboardingStep(3)}
+                disabled={isUploadingOnboardingAvatar}
+                className="w-full rounded-2xl bg-gradient-to-r from-pink-500 to-rose-500 py-4 text-base font-bold text-white shadow-lg disabled:opacity-50 mb-3"
+              >
+                {onboardingAvatar ? 'Looking great! Continue →' : 'Continue →'}
+              </button>
+              <button type="button" onClick={() => setOnboardingStep(3)} className="text-sm text-gray-400">
+                Skip for now
+              </button>
+            </div>
+          )}
+
+          {onboardingStep === 3 && (
+            <div className="flex flex-1 flex-col items-center justify-center px-8 text-center">
+              <span className="text-6xl mb-6">👜</span>
+              <h2 className="text-2xl font-extrabold text-gray-900 mb-2">Add your first wrap</h2>
+              <p className="text-gray-500 text-sm mb-8 leading-relaxed">
+                Start building your collection. Add photos, details, and track every wrap you own.
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  localStorage.setItem('wrapapp_onboarded', '1')
+                  setShowOnboarding(false)
+                  openNewWrapModal()
+                }}
+                className="w-full rounded-2xl bg-gradient-to-r from-pink-500 to-rose-500 py-4 text-base font-bold text-white shadow-lg mb-3"
+              >
+                Add my first wrap 🎉
+              </button>
+              <button
+                type="button"
+                onClick={() => { localStorage.setItem('wrapapp_onboarded', '1'); setShowOnboarding(false) }}
+                className="text-sm text-gray-400"
+              >
+                I'll do this later
+              </button>
+            </div>
+          )}
+
+          <div className="flex justify-center gap-2 pb-12">
+            {[1, 2, 3].map((step) => (
+              <div key={step} className={`h-2 rounded-full transition-all duration-300 ${step === onboardingStep ? 'w-6 bg-pink-500' : 'w-2 bg-gray-200'}`} />
+            ))}
+          </div>
+        </div>
+      )}
+
+    </AppLayout>
+  )
+}

@@ -1,5 +1,24 @@
 # Session Notes
 
+## 2026-11-10 — Navigation restructure: Explore = Home, Home = Profile (not committed yet)
+**Changed**
+- Nav (`app/components/AppLayout.tsx`): phone tabs Home (/explore) · WDYWT · ➕ · Messages · Profile (avatar, /dashboard). ➕ opens a Create sheet: Add a wrap (/dashboard?add=1 or `wrapapp:add-wrap` event), Post WDYWT (/wdywt?post=1 or `wrapapp:post-wdywt` event), Start a dip (/create-dip), Cancel. Desktop: Home, WDYWT, Messages, then ♡, ➕ and avatar. ♡ with unread badge in the phone top bar on every page (except message threads) and the desktop nav → /activity. The badge stays in sync via the `wrapapp:unread` event.
+- New `/activity` page: the old Activity column, same data/cache/logic. The dashboard code moved to `app/dashboard/ProfileDashboard.tsx` with `mode='profile'|'activity'`; `dashboard/page.tsx` and `activity/page.tsx` are thin wrappers. Push urls for likes/wishlists → /activity.
+- Login, Google sign-in, reset password, `/` when logged in and the PWA start_url all land on /explore.
+- Profile (/dashboard): header kept; segmented tabs Collection · For Sale · Dips · ISO. Dips = My Dips + Dip History (incl. unarchive, moved from Settings). ISO links to /wishlist. Collection/Activity switch and Activity column removed; single 960px column.
+- Other users' profiles (`app/user/[id]`): same header layout with Follow + Message, tabs Collection · For Sale · Dips (their active dips; tap opens the wrap). Wraps in an active dip get a "🎲 In a dip" badge. Follow updates the follower count instantly. Active dips are now cached. Opening your own /user/[id] redirects to /dashboard.
+- Public page (`app/[username]`): profile-style header (wrap/follower/following counts, server-side counts only), tabs Collection · For Sale, "Join WrapApp" + "Log in" at the top, small phone bottom banner "See more collections, join WrapApp". Private profiles unchanged. Logged-in visitors see "My profile".
+- Settings (`app/tools`): Dip History removed (now on Profile → Dips), replaced with a one-line pointer. Start a Dip stays.
+- `lib/usernames.ts`: 'activity' added to reserved usernames.
+
+**Decisions / notes**
+- The WDYWT tab on other people's profiles was dropped (spec listed Collection · For Sale · Dips only). Its data still loads, so it's easy to bring back.
+- DB `generate_username` reserved list doesn't include 'activity' yet. Nobody has it, and the risk is low. SQL to add it was given to Blair (optional).
+- Supabase Auth: add https://wrapapp.com.au/explore to the allowed redirect URLs (Google sign-in now returns there).
+
+**Untested**
+- Everything above on a real phone; ➕ options from each page; ♡ badge clearing; the public page logged out.
+
 ## 2026-11-10 — Phone fixes batch 4
 **Changed**
 - WDYWT: back to cards on phone (12px side margin from the page padding, rounded-2xl, light grey border, subtle shadow, photo with rounded top corners, 16px between posts).

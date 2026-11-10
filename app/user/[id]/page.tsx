@@ -111,7 +111,7 @@ export default function UserCollectionPage() {
   const [isViewWrapModalOpen, setIsViewWrapModalOpen] = useState(false)
   const [isImagePreviewOpen, setIsImagePreviewOpen] = useState(false)
   const [selectedWrapCounts, setSelectedWrapCounts] = useState<SocialCounts>({ likes: 0, wishlists: 0 })
-  const [activeTab, setActiveTab] = useState<'collection' | 'wdywt'>('collection')
+  const [activeTab, setActiveTab] = useState<'collection' | 'forsale' | 'dips'>('collection')
   const [wdywtPosts, setWdywtPosts] = useState<WDYWTPost[]>([])
   const [wdywtLoaded, setWdywtLoaded] = useState(false)
   const [stats, setStats] = useState<{ followers: number, following: number, wraps: number, bio: string | null, city: string | null, country: string | null }>({ followers: 0, following: 0, wraps: 0, bio: null, city: null, country: null })
@@ -145,6 +145,8 @@ export default function UserCollectionPage() {
         const parsed = JSON.parse(localStorage.getItem(supabaseKey) || '')
         const uid = parsed?.user?.id || null
         if (uid) {
+          // Your own /user/[id] → your profile
+          if (String(uid) === String(userId)) { router.replace('/dashboard'); return }
           setCurrentUserId(uid)
           setAuthChecked(true)
         }
@@ -166,12 +168,16 @@ export default function UserCollectionPage() {
     const cachedWdywt = localStorage.getItem(`dipdesk_user_wdywt_${userId}`)
     if (cachedWdywt) { try { setWdywtPosts(JSON.parse(cachedWdywt)); setWdywtLoaded(true) } catch {} }
 
+    const cachedDips = localStorage.getItem(`dipdesk_user_dips_${userId}`)
+    if (cachedDips) { try { setActiveDips(JSON.parse(cachedDips)) } catch {} }
+
     const savedTab = sessionStorage.getItem(`profile_tab_${userId}`)
-    if (savedTab === 'wdywt' || savedTab === 'collection') setActiveTab(savedTab)
+    if (savedTab === 'collection' || savedTab === 'forsale' || savedTab === 'dips') setActiveTab(savedTab)
 
     async function load() {
       const { data: { user } } = await supabase.auth.getUser()
       const loggedInUserId = user?.id || null
+      if (loggedInUserId && String(loggedInUserId) === String(userId)) { router.replace('/dashboard'); return }
       setCurrentUserId(loggedInUserId)
       setAuthChecked(true)
 
@@ -215,6 +221,7 @@ const { data: dipData } = await supabase
         .not('stage', 'in', '("drawn")')
         .eq('archived', false)
       setActiveDips((dipData as any[]) || [])
+      try { localStorage.setItem(`dipdesk_user_dips_${userId}`, JSON.stringify(dipData || [])) } catch {}
       setProfile(profileData || null)
       const avatarUrl = (profileData as any)?.avatar_url || null
       setProfileAvatar(avatarUrl)
@@ -238,6 +245,53 @@ const { data: dipData } = await supabase
 
   const collectionWraps = useMemo(() => wraps.filter(w => w.status === 'active' || w.status === 'holiday').sort((a, b) => { if (a.is_favourite !== b.is_favourite) return a.is_favourite ? -1 : 1; return a.name.localeCompare(b.name) }), [wraps])
   const departedWraps = useMemo(() => wraps.filter(w => w.status === 'departed').sort((a, b) => { if (a.is_favourite !== b.is_favourite) return a.is_favourite ? -1 : 1; return a.name.localeCompare(b.name) }), [wraps])
+
+  const forSaleWraps = useMemo(() => wraps.filter(w => w.for_sale && w.status !== 'departed').sort((a, b) => a.name.localeCompare(b.name)), [wraps])
+
+  function renderWrapTile(wrap: Wrap) {
+    return (
+      <button key={wrap.id} type="button" onClick={() => openViewWrapModal(wrap)} className="group flex h-auto cursor-pointer flex-col overflow-hidden rounded-xl border bg-white p-0 text-left shadow-none transition duration-200 hover:-translate-y-1 hover:shadow-md xl:rounded-2xl xl:shadow-sm">
+        <div className="relative aspect-[3/4] w-full bg-gray-100 pointer-events-none">
+          <img src={getPrimaryImage(wrap)} alt={wrap.name} className="h-full w-full object-cover object-[center_20%] transition duration-300 group-hover:scale-[1.03]" />
+          {wrap.for_sale && <div className="absolute left-3 top-3 rounded-xl bg-white/90 px-2 py-1 text-xs font-semibold text-amber-700 shadow"><div>🪓 For Sale</div><div className="text-[10px] font-medium text-gray-700">{wrap.for_sale_price_is_pm ? 'PM' : wrap.for_sale_price !== null ? formatCurrency(wrap.for_sale_price, wrap.for_sale_currency || 'AUD') : ''}</div></div>}
+          {wrap.is_favourite && <div className="absolute right-3 top-3 rounded-full bg-white/90 px-2 py-1 text-xs font-semibold text-pink-600 shadow">★ Perma</div>}
+          {activeDips.some(d => String(d.wrap_id) === String(wrap.id)) && <div className="absolute bottom-2 left-2 rounded-full bg-white/90 px-2 py-0.5 text-[11px] font-semibold text-fuchsia-700 shadow">🎲 In a dip</div>}
+        </div>
+        <div className="space-y-0.5 p-2 pointer-events-none xl:space-y-1 xl:p-5">
+          <h3 className="text-sm font-bold leading-tight text-gray-900 xl:text-base xl:leading-normal">{wrap.name}</h3>
+          <p className="text-xs leading-tight text-gray-600 xl:text-sm xl:leading-normal">{wrap.brand || 'No brand added'}</p>
+          {wrap.status === 'holiday' && wrap.on_loan_to && <div className="inline-flex rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 xl:px-2 xl:py-1 xl:text-xs">On loan to {wrap.on_loan_to}</div>}
+        </div>
+      </button>
+    )
+  }
+
+  // Message: open the existing conversation or start one
+  async function openConversation() {
+    if (!currentUserId) return
+    const { data: existing } = await supabase.from('conversations').select('id').or(`and(participant_1_id.eq.${currentUserId},participant_2_id.eq.${userId}),and(participant_1_id.eq.${userId},participant_2_id.eq.${currentUserId})`).maybeSingle()
+    if (existing) { router.push(`/messages/${existing.id}`); return }
+    const { data: newConv } = await supabase.from('conversations').insert({ participant_1_id: currentUserId, participant_2_id: userId, last_message: null, last_message_at: new Date().toISOString() }).select('id').single()
+    if (newConv) router.push(`/messages/${newConv.id}`)
+  }
+
+  async function toggleFollow() {
+    if (!currentUserId) return
+    const firstName = profile?.full_name?.split(' ')[0] || profile?.username || 'user'
+    if (isFollowing) {
+      await supabase.from('follows').delete().eq('follower_id', currentUserId).eq('following_id', userId)
+      setIsFollowing(false)
+      setStats(s => ({ ...s, followers: Math.max(0, s.followers - 1) }))
+      localStorage.setItem(getUserCollectionFollowKey(userId), 'false')
+      showToast(`Unfollowed ${firstName}`)
+    } else {
+      await supabase.from('follows').insert({ follower_id: currentUserId, following_id: userId, status: 'accepted' })
+      setIsFollowing(true)
+      setStats(s => ({ ...s, followers: s.followers + 1 }))
+      localStorage.setItem(getUserCollectionFollowKey(userId), 'true')
+      showToast(`Following ${firstName}`)
+    }
+  }
 
   async function openPostModal(post: WDYWTPost) {
     setSelectedPost(post)
@@ -331,7 +385,7 @@ const { data: dipData } = await supabase
             user_ids: [userId],
             title: `❤️ ${myName} liked your wrap`,
             body: selectedWrap.name,
-            url: '/dashboard',
+            url: '/activity',
           }),
         }).catch(() => {})
       }
@@ -360,7 +414,7 @@ const { data: dipData } = await supabase
             user_ids: [userId],
             title: `⭐ ${myName} wishlisted your wrap`,
             body: selectedWrap.name,
-            url: '/dashboard',
+            url: '/activity',
           }),
         }).catch(() => {})
       }
@@ -388,109 +442,159 @@ const { data: dipData } = await supabase
           </button>
         </div>
       )}
-      <div className="space-y-6">
-        <section className="rounded-3xl border bg-white p-2 shadow-sm xl:p-5">
-
-          {/* Profile header */}
-          <div className="mb-5 flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
-            <div className="flex items-start gap-3">
-              <div className="flex items-center gap-3">
+      <div className="space-y-4">
+        {/* Profile header — same layout as your own profile (Instagram-style) */}
+        {(() => {
+          const displayName = profile?.full_name || profile?.username || 'Collection'
+          const initials = displayName.trim().split(' ').filter(Boolean).slice(0, 2).map(w => w[0]?.toUpperCase() || '').join('')
+          const location = [stats.city, stats.country].filter(Boolean).join(', ')
+          const stat = (value: number, label: string) => (
+            <div className="text-center md:flex md:items-baseline md:gap-1 md:text-left">
+              <p className="text-base font-bold text-gray-900 md:text-lg">{value}</p>
+              <p className="text-xs text-gray-500 md:text-sm">{label}</p>
+            </div>
+          )
+          return (
+            <section className="px-1 pt-1 md:px-2">
+              <div className="flex items-center gap-4 md:gap-10">
                 {profileAvatar ? (
-                  <img src={profileAvatar} alt={collectionTitle} className="h-14 w-14 rounded-full object-cover ring-2 ring-pink-200 shrink-0" />
+                  <img src={profileAvatar} alt={displayName} className="h-20 w-20 shrink-0 rounded-full object-cover ring-2 ring-pink-100 md:h-32 md:w-32" />
                 ) : (
-                  <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-pink-500 to-rose-500 text-lg font-bold text-white ring-2 ring-pink-200">
-                    {profile?.full_name?.[0]?.toUpperCase() || profile?.username?.[0]?.toUpperCase() || '?'}
+                  <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-pink-500 to-rose-500 text-2xl font-bold text-white md:h-32 md:w-32 md:text-4xl">
+                    {initials || '?'}
                   </div>
                 )}
-                <div>
-                  <h1 className="text-xl font-bold text-gray-900">{collectionTitle}</h1>
-                  {stats.bio && <p className="text-sm text-gray-600 mt-0.5">{stats.bio}</p>}
-                  {(stats.city || stats.country) && (
-                    <p className="text-xs text-gray-400 mt-0.5">
-                      📍 {[stats.city, stats.country].filter(Boolean).join(', ')}
-                    </p>
-                  )}
-                  <div className="flex items-center gap-3 mt-1">
-                    <span className="text-xs text-gray-500"><span className="font-bold text-gray-900">{stats.wraps}</span> wraps</span>
-                    <span className="text-xs text-gray-500"><span className="font-bold text-gray-900">{stats.followers}</span> followers</span>
-                    <span className="text-xs text-gray-500"><span className="font-bold text-gray-900">{stats.following}</span> following</span>
+                <div className="min-w-0 flex-1 space-y-2 md:space-y-3">
+                  <div className="md:flex md:items-baseline md:gap-3">
+                    <h1 className="truncate text-lg font-bold text-gray-900 md:text-2xl">{displayName}</h1>
+                    {profile?.username && <p className="truncate text-sm text-gray-500">@{profile.username}</p>}
+                  </div>
+                  <div className="grid grid-cols-3 gap-1 md:flex md:gap-8">
+                    {stat(stats.wraps, stats.wraps === 1 ? 'Wrap' : 'Wraps')}
+                    {stat(stats.followers, 'Followers')}
+                    {stat(stats.following, 'Following')}
                   </div>
                 </div>
               </div>
-            </div>
 
-            {!authChecked && (
-              <div className="flex gap-2 xl:shrink-0">
-                <div className="h-9 w-24 animate-pulse rounded-xl bg-gray-100" />
-                <div className="h-9 w-20 animate-pulse rounded-xl bg-gray-100" />
-              </div>
-            )}
-            {authChecked && currentUserId && currentUserId !== userId && (
-              <div className="flex gap-2 xl:shrink-0">
-                <button
-                  type="button"
-                  onClick={async () => {
-                    if (!currentUserId) return
-                    const { data: existing } = await supabase.from('conversations').select('id').or(`and(participant_1_id.eq.${currentUserId},participant_2_id.eq.${userId}),and(participant_1_id.eq.${userId},participant_2_id.eq.${currentUserId})`).maybeSingle()
-                    if (existing) { router.push(`/messages/${existing.id}`); return }
-                    const { data: newConv } = await supabase.from('conversations').insert({ participant_1_id: currentUserId, participant_2_id: userId, last_message: null, last_message_at: new Date().toISOString() }).select('id').single()
-                    if (newConv) router.push(`/messages/${newConv.id}`)
-                  }}
-                  className="flex-1 xl:flex-none cursor-pointer rounded-xl px-4 py-2 text-sm font-semibold text-white shadow-sm bg-gray-800 hover:bg-gray-900"
-                >
-                  💬 Message
-                </button>
-                <button
-                  type="button"
-                  onClick={async () => {
-                    if (!currentUserId) return
-                    if (isFollowing) {
-                      await supabase.from('follows').delete().eq('follower_id', currentUserId).eq('following_id', userId)
-                      setIsFollowing(false)
-                      showToast(`Unfollowed ${profile?.full_name?.split(' ')[0] || 'user'}`)
-                    } else {
-                      await supabase.from('follows').insert({ follower_id: currentUserId, following_id: userId, status: 'accepted' })
-                      setIsFollowing(true)
-                      showToast(`Following ${profile?.full_name?.split(' ')[0] || 'user'}`)
-                    }
-                  }}
-                  className={`flex-1 xl:flex-none cursor-pointer rounded-xl px-4 py-2 text-sm font-semibold text-white shadow-sm ${isFollowing ? 'bg-gray-600' : 'bg-pink-600 hover:bg-pink-700'}`}
-                >
-                  {isFollowing ? 'Following ✓' : 'Follow'}
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* Tabs */}
-          <div className="grid grid-cols-2 rounded-xl border bg-white p-1 shadow-sm mb-5">
-            <button type="button" onClick={() => { setActiveTab('collection'); sessionStorage.setItem(`profile_tab_${userId}`, 'collection') }} className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${activeTab === 'collection' ? 'bg-gradient-to-r from-pink-500 to-rose-500 text-white shadow-sm' : 'text-gray-600'}`}>Collection</button>
-            <button type="button" onClick={() => { setActiveTab('wdywt'); sessionStorage.setItem(`profile_tab_${userId}`, 'wdywt') }} className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${activeTab === 'wdywt' ? 'bg-gradient-to-r from-pink-500 to-rose-500 text-white shadow-sm' : 'text-gray-600'}`}>WDYWT</button>
-          </div>
-
-          {/* WDYWT tab */}
-          {activeTab === 'wdywt' && (
-            <div>
-              {!wdywtLoaded ? (
-                <div className="grid grid-cols-3 gap-1.5">{[1,2,3,4,5,6].map(i => <div key={i} className="animate-pulse aspect-square rounded-xl bg-gray-200" />)}</div>
-              ) : wdywtPosts.length === 0 ? (
-                <div className="rounded-2xl border border-dashed p-8 text-center"><p className="text-gray-500">No WDYWT posts yet</p></div>
-              ) : (
-                <div className="grid grid-cols-3 gap-1.5">
-                  {wdywtPosts.map(post => (
-                    <button key={post.id} type="button" onClick={() => openPostModal(post)} className="relative aspect-square overflow-hidden rounded-xl bg-gray-100">
-                      <img src={post.photo_url} alt={post.caption || 'WDYWT'} loading="lazy" className="h-full w-full object-cover object-top" />
-                      <div className="absolute bottom-1.5 left-1.5 flex items-center gap-1.5">
-                        <span className="flex items-center gap-0.5 rounded-full bg-black/50 px-1.5 py-0.5 text-[10px] text-white">♥ {post.wdywt_likes?.length || 0}</span>
-                        <span className="flex items-center gap-0.5 rounded-full bg-black/50 px-1.5 py-0.5 text-[10px] text-white">💬 {post.wdywt_comments?.length || 0}</span>
-                      </div>
-                    </button>
-                  ))}
+              {(stats.bio || location) && (
+                <div className="mt-3 space-y-0.5 md:ml-[10.5rem] md:mt-0">
+                  {stats.bio && <p className="whitespace-pre-wrap break-words text-sm text-gray-800">{stats.bio}</p>}
+                  {location && <p className="text-sm text-gray-500">📍 {location}</p>}
                 </div>
               )}
-            </div>
-          )}
 
+              {/* Follow + Message (no Edit / Settings on other people's profiles) */}
+              {!authChecked && (
+                <div className="mt-3 grid grid-cols-2 gap-2 md:ml-[10.5rem] md:max-w-md">
+                  <div className="h-11 animate-pulse rounded-xl bg-gray-100" />
+                  <div className="h-11 animate-pulse rounded-xl bg-gray-100" />
+                </div>
+              )}
+              {authChecked && currentUserId && String(currentUserId) !== String(userId) && (
+                <div className="mt-3 grid grid-cols-2 gap-2 md:ml-[10.5rem] md:max-w-md">
+                  <button
+                    type="button"
+                    onClick={() => void toggleFollow()}
+                    className={isFollowing
+                      ? 'inline-flex min-h-[44px] items-center justify-center rounded-xl border border-gray-200 bg-white px-4 text-sm font-semibold text-gray-800 hover:bg-gray-50'
+                      : 'inline-flex min-h-[44px] items-center justify-center rounded-xl bg-gradient-to-r from-pink-500 to-rose-500 px-4 text-sm font-semibold text-white shadow-sm hover:opacity-90'}
+                  >
+                    {isFollowing ? 'Following' : 'Follow'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void openConversation()}
+                    className="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-gray-200 bg-white px-4 text-sm font-semibold text-gray-800 hover:bg-gray-50"
+                  >
+                    Message
+                  </button>
+                </div>
+              )}
+            </section>
+          )
+        })()}
+
+        {/* Tabs: segmented control, same as your own profile (no ISO here) */}
+        <div className="no-scrollbar mt-2! flex gap-1 overflow-x-auto rounded-xl bg-gray-100 p-1">
+          {([
+            { key: 'collection', label: 'Collection', icon: (<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-[18px] w-[18px]"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>) },
+            { key: 'forsale', label: 'For Sale', icon: (<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-[18px] w-[18px]"><path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z"/><circle cx="7.5" cy="7.5" r="1.5"/></svg>) },
+            { key: 'dips', label: 'Dips', icon: (<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-[18px] w-[18px]"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1"/><circle cx="15.5" cy="15.5" r="1"/><circle cx="12" cy="12" r="1"/></svg>) },
+          ] as const).map((tab) => {
+            const isActive = activeTab === tab.key
+            return (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => { setActiveTab(tab.key); try { sessionStorage.setItem(`profile_tab_${userId}`, tab.key) } catch {} }}
+                aria-current={isActive ? 'page' : undefined}
+                className={`flex min-h-[40px] min-w-max flex-1 items-center justify-center gap-1.5 rounded-lg px-2.5 text-sm transition ${
+                  isActive ? 'bg-white font-bold text-gray-900 shadow-sm' : 'font-semibold text-gray-500'
+                }`}
+              >
+                {tab.icon}
+                <span>{tab.label}</span>
+                {tab.key === 'dips' && activeDips.length > 0 && (
+                  <span className="rounded-full bg-fuchsia-100 px-1.5 text-[11px] font-bold text-fuchsia-700">{activeDips.length}</span>
+                )}
+              </button>
+            )
+          })}
+        </div>
+
+        {/* For Sale: their wraps marked for sale */}
+        {activeTab === 'forsale' && (
+          <section className="min-w-0">
+            {forSaleWraps.length === 0 ? (
+              <div className="rounded-2xl border border-dashed p-8 text-center text-sm text-gray-500">Nothing for sale</div>
+            ) : (
+              <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-2 xl:grid-cols-4 xl:gap-4">
+                {forSaleWraps.map((wrap) => renderWrapTile(wrap))}
+              </div>
+            )}
+          </section>
+        )}
+
+        {/* Dips: their active dips only (the same dips shown as "Currently being dipped") */}
+        {activeTab === 'dips' && (
+          <section className="min-w-0 space-y-2">
+            {activeDips.length === 0 ? (
+              <div className="rounded-2xl border border-dashed p-8 text-center text-sm text-gray-500">No active dips</div>
+            ) : (
+              activeDips.map((dip) => {
+                const stageLabel: Record<string, string> = { interest: 'Interest', queue: 'In queue', live: 'Live 🔥', payments: 'Full – collecting payments', closed: 'Ready to draw' }
+                const dipWrap = wraps.find(w => String(w.id) === String(dip.wrap_id))
+                const title = dip.wrap_name || dipWrap?.name || dip.title
+                const brand = dip.brand || dipWrap?.brand || null
+                return (
+                  <button
+                    key={dip.id}
+                    type="button"
+                    onClick={() => { if (dipWrap) openViewWrapModal(dipWrap) }}
+                    className="flex w-full items-center gap-3 rounded-2xl border border-purple-200 bg-purple-50/60 p-2.5 text-left"
+                  >
+                    {dipWrap ? (
+                      <img src={getPrimaryImage(dipWrap)} alt={title} className="h-16 w-16 shrink-0 rounded-xl object-cover" />
+                    ) : (
+                      <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl bg-white text-2xl">🎲</div>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-bold text-gray-900">{title}</p>
+                      {brand && <p className="truncate text-xs text-gray-600">{brand}</p>}
+                      <p className="mt-0.5 text-xs text-purple-700">
+                        {stageLabel[dip.stage || ''] || dip.stage || 'Active'} · {dip.total_spots} spots @ ${dip.price_per_spot}
+                      </p>
+                      {dip.facebook_group && <p className="truncate text-xs text-gray-500">On {dip.facebook_group}</p>}
+                    </div>
+                  </button>
+                )
+              })
+            )}
+          </section>
+        )}
+
+        <section className="min-w-0">
           {/* Collection tab */}
           {activeTab === 'collection' && (
             <div>
@@ -498,20 +602,7 @@ const { data: dipData } = await supabase
                 <div className="rounded-2xl border border-dashed p-8 text-center"><p className="text-gray-600">No wraps yet</p></div>
               ) : (
                 <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-2 xl:grid-cols-4 xl:gap-4">
-                  {collectionWraps.map((wrap) => (
-                    <button key={wrap.id} type="button" onClick={() => openViewWrapModal(wrap)} className="group flex h-auto cursor-pointer flex-col overflow-hidden rounded-xl border bg-white p-0 text-left shadow-none transition duration-200 hover:-translate-y-1 hover:shadow-md xl:rounded-2xl xl:shadow-sm">
-                      <div className="relative aspect-[3/4] w-full bg-gray-100 pointer-events-none">
-                        <img src={getPrimaryImage(wrap)} alt={wrap.name} className="h-full w-full object-cover object-[center_20%] transition duration-300 group-hover:scale-[1.03]" />
-                        {wrap.for_sale && <div className="absolute left-3 top-3 rounded-xl bg-white/90 px-2 py-1 text-xs font-semibold text-amber-700 shadow"><div>🪓 For Sale</div><div className="text-[10px] font-medium text-gray-700">{wrap.for_sale_price_is_pm ? 'PM' : wrap.for_sale_price !== null ? formatCurrency(wrap.for_sale_price, wrap.for_sale_currency || 'AUD') : ''}</div></div>}
-                        {wrap.is_favourite && <div className="absolute right-3 top-3 rounded-full bg-white/90 px-2 py-1 text-xs font-semibold text-pink-600 shadow">★ Perma</div>}
-                      </div>
-                      <div className="space-y-0.5 p-2 pointer-events-none xl:space-y-1 xl:p-5">
-                        <h3 className="text-sm font-bold leading-tight text-gray-900 xl:text-base xl:leading-normal">{wrap.name}</h3>
-                        <p className="text-xs leading-tight text-gray-600 xl:text-sm xl:leading-normal">{wrap.brand || 'No brand added'}</p>
-                        {wrap.status === 'holiday' && wrap.on_loan_to && <div className="inline-flex rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 xl:px-2 xl:py-1 xl:text-xs">On loan to {wrap.on_loan_to}</div>}
-                      </div>
-                    </button>
-                  ))}
+                  {collectionWraps.map((wrap) => renderWrapTile(wrap))}
                 </div>
               )}
 

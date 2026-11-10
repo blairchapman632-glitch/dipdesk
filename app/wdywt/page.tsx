@@ -452,6 +452,36 @@ export default function WDYWTPage() {
     }
   }
 
+  // ➕ → "Post WDYWT": from another page (/wdywt?post=1) or already here (event).
+  // Same rule as the + button: one post a day.
+  const postedTodayRef = useRef(hasPostedToday)
+  postedTodayRef.current = hasPostedToday
+  const openPostFromNav = () => {
+    if (postedTodayRef.current) {
+      setToast("You've already posted today. Come back tomorrow!")
+      setTimeout(() => setToast(''), 3000)
+      return
+    }
+    setIsPostModalOpen(true)
+  }
+  const postParamHandledRef = useRef(false)
+  useEffect(() => {
+    // Wait until posts have loaded so "posted today" is known
+    if (loading || postParamHandledRef.current) return
+    postParamHandledRef.current = true
+    if (new URLSearchParams(window.location.search).get('post') === '1') {
+      openPostFromNav()
+      router.replace('/wdywt')
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading])
+  useEffect(() => {
+    const onPost = () => openPostFromNav()
+    window.addEventListener('wrapapp:post-wdywt', onPost)
+    return () => window.removeEventListener('wrapapp:post-wdywt', onPost)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   // Split comments into top-level and replies
   const topLevelComments = comments.filter(c => !c.parent_id)
   const repliesByParent = comments.reduce<Record<string, Comment[]>>((acc, c) => {

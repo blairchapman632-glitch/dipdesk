@@ -3,7 +3,6 @@
 import AppLayout from '@/app/components/AppLayout'
 import { useRouter } from 'next/navigation'
 import UsernameSheet from '@/app/components/UsernameSheet'
-import { askConfirm } from '@/app/components/Toast'
 import { supabase } from '@/lib/supabase'
 import { useEffect, useState } from 'react'
 import imageCompression from 'browser-image-compression'
@@ -28,7 +27,6 @@ export default function Page() {
   const [feedbackHubLink, setFeedbackHubLink] = useState('')
   const [showFeedbackHubEdit, setShowFeedbackHubEdit] = useState(false)
   const [savingFeedbackHub, setSavingFeedbackHub] = useState(false)
-  const [archivedDips, setArchivedDips] = useState<any[]>([])
 const [city, setCity] = useState('')
 const [country, setCountry] = useState('')
 const [showLocationEdit, setShowLocationEdit] = useState(false)
@@ -100,13 +98,6 @@ const [editName, setEditName] = useState('')
           .eq('follower_id', user.id)
           .eq('status', 'accepted'),
       ])
-const { data: dipHistory } = await supabase
-        .from('my_dips') // own archived dips, every column (owner-only view)
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('archived', true)
-        .order('drawn_at', { ascending: false })
-      setArchivedDips(dipHistory || [])
       if (profileData) {
         const data = profileData as any
         setBio(data.bio || '')
@@ -367,79 +358,8 @@ const { data: dipHistory } = await supabase
           🎲 Start a Dip
         </button>
 
-{/* Dip History */}
-        <div className="rounded-2xl border bg-white shadow-sm overflow-hidden">
-          <div className="px-4 py-3 border-b">
-            <h2 className="font-bold text-gray-900">🎲 Dip History</h2>
-            <p className="text-xs text-gray-500 mt-0.5">Your completed and archived dips</p>
-          </div>
-          {archivedDips.length === 0 ? (
-            <div className="p-6 text-center text-sm text-gray-500">
-              No archived dips yet — complete a drawn dip to see it here.
-            </div>
-          ) : (
-            <div className="divide-y">
-              {archivedDips.map((dip) => {
-                const totalRaised = dip.total_raised || dip.total_spots * dip.price_per_spot
-                const drawnDate = dip.drawn_at ? new Date(dip.drawn_at).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'
-                return (
-                  <div key={dip.id} className="p-4 space-y-2">
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <p className="font-bold text-gray-900 text-sm">{dip.title}</p>
-                        <p className="text-xs text-gray-500">{drawnDate}</p>
-                      </div>
-                      <div className="flex flex-col items-end gap-1">
-                        <span className="rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-semibold text-green-700">Archived</span>
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            if (!(await askConfirm({ title: 'Unarchive this dip?', message: 'It will return to your active dips.', confirmLabel: 'Unarchive', danger: false }))) return
-                            await supabase.from('dips').update({ archived: false }).eq('id', dip.id)
-                            setArchivedDips(prev => prev.filter(d => d.id !== dip.id))
-                          }}
-                          className="min-h-[44px] px-1 text-xs text-gray-500 underline"
-                        >
-                          Unarchive
-                        </button>
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2 text-xs">
-                      <div className="rounded-xl bg-gray-50 px-3 py-2">
-                        <p className="text-gray-400">Winner</p>
-                        <p className="font-semibold text-gray-900">{dip.winner_name || '—'} {dip.winning_number ? `(#${dip.winning_number})` : ''}</p>
-                      </div>
-                      <div className="rounded-xl bg-gray-50 px-3 py-2">
-                        <p className="text-gray-400">Total raised</p>
-                        <p className="font-semibold text-gray-900">${totalRaised} USD</p>
-                      </div>
-                      <div className="rounded-xl bg-gray-50 px-3 py-2">
-                        <p className="text-gray-400">Spots</p>
-                        <p className="font-semibold text-gray-900">{dip.total_spots} @ ${dip.price_per_spot}</p>
-                      </div>
-                      <div className="rounded-xl bg-gray-50 px-3 py-2">
-                        <p className="text-gray-400">Condition</p>
-                        <p className="font-semibold text-gray-900">{dip.wrap_condition || '—'}</p>
-                      </div>
-                      {dip.wrap_size && (
-                        <div className="rounded-xl bg-gray-50 px-3 py-2">
-                          <p className="text-gray-400">Size</p>
-                          <p className="font-semibold text-gray-900">{dip.wrap_size}</p>
-                        </div>
-                      )}
-                      {dip.wrap_blend && (
-                        <div className="rounded-xl bg-gray-50 px-3 py-2 col-span-2">
-                          <p className="text-gray-400">Blend</p>
-                          <p className="font-semibold text-gray-900">{dip.wrap_blend}</p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          )}
-        </div>
+        {/* Dip History now lives on your profile (Dips tab) */}
+        <p className="px-1 text-xs text-gray-500">Your active dips and Dip History are on your profile, in the Dips tab.</p>
         </section>
         <div className="flex justify-center gap-4 pt-2 pb-4">
           <a href="/terms" className="text-xs text-gray-400 hover:text-pink-500">Terms</a>

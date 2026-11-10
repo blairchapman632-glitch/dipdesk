@@ -20,7 +20,7 @@ const [forgotMessage, setForgotMessage] = useState('')
     const checkSession = async () => {
       const { data } = await supabase.auth.getSession()
       if (data.session) {
-        router.replace('/dashboard')
+        router.replace('/explore')
       }
     }
     checkSession()
@@ -54,7 +54,7 @@ const [forgotMessage, setForgotMessage] = useState('')
       await supabase.from('profiles').insert({ id: user.id, email, full_name: fullName })
     }
     if (data.session) {
-      router.replace('/dashboard')
+      router.replace('/explore')
     } else {
       setMessage('Account created! Please check your email to verify.')
       setIsSignUp(false)
@@ -86,7 +86,7 @@ const handleForgotPassword = async () => {
     Object.keys(localStorage).forEach((key) => {
       if (key.startsWith('dipdesk_')) localStorage.removeItem(key)
     })
-    router.replace('/dashboard')
+    router.replace('/explore')
   }
 
   const scrollToAuth = (signup = false) => {
@@ -479,7 +479,7 @@ const handleForgotPassword = async () => {
                     await supabase.auth.signInWithOAuth({
                       provider: 'google',
                       options: {
-                        redirectTo: `${window.location.origin}/dashboard`,
+                        redirectTo: `${window.location.origin}/explore`,
                       },
                     })
                   }}
