@@ -1,5 +1,15 @@
 # Session Notes
 
+## 2026-11-10 — Phone fixes batch 4
+**Changed**
+- WDYWT: back to cards on phone (12px side margin from the page padding, rounded-2xl, light grey border, subtle shadow, photo with rounded top corners, 16px between posts).
+- Home filter row: pills h-[34px], text-sm, gap-1.5, px-2.5 (px-3 would total ~355px vs ~351px available at 375px, cutting off "Type"). The pills grow to share spare width but never shrink, so the row still scrolls when "Clear" appears. Inputs under the pills stay 16px.
+- Home tabs: iOS-style segmented control (gray-100 rounded-xl track, p-1; selected = white pill, soft shadow, bold dark text; unselected gray-500), grid/heart icons kept, Activity shows a pink count pill when unread > 0. Top-bar ♡ still opens Activity.
+- Bottom nav: padding-bottom is now max(6px, safe area) instead of 6px + safe area (that left a big empty white band on iPhones). Nav height = 48px + max(6px, safe), min 60px. Main bottom padding reduced to 5rem + safe area (still clears it). Message thread panel bottom updated to max(60px, 48px + safe area) so its input sits just above the nav. Install banner moved down to match.
+
+**To do**
+- Check on the live site on an iPhone: no white band under the nav, all five filter pills visible, Activity tab obvious, message input just above the nav.
+
 ## 2026-11-10 — Phone UI polish batch 3
 **Changed**
 - Top strip: the page didn't fill the screen (no `viewport-fit=cover`) and the html/body were grey (#f9fafb / bg-gray-200) while pages are white, so iOS showed a blurred grey strip behind the status bar. Now: `viewport` export in `app/layout.tsx` (viewportFit cover, themeColor white, colorScheme light), white html/body, manifest theme/background white (the old pink theme-color meta was removed). Safe-area insets are now real on iPhones, so everything padded with env(safe-area-*) now actually gets the padding.

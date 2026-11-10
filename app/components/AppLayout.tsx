@@ -388,7 +388,7 @@ const cachedUnread = localStorage.getItem('dipdesk_unread_count')
           {/* Install banner */}
           {showInstallBanner && (
             <div className="fixed inset-x-0 z-40 md:hidden"
-              style={{ bottom: 'calc(4.5rem + env(safe-area-inset-bottom))' }}>
+              style={{ bottom: 'calc(4rem + env(safe-area-inset-bottom))' }}>
               <div className="mx-3 mb-2 rounded-2xl border border-pink-100 bg-white p-3 shadow-lg">
                 <div className="flex items-center gap-3">
                   <img src="/icon-192.png" alt="WrapApp" className="h-10 w-10 rounded-xl" />
@@ -447,7 +447,7 @@ const cachedUnread = localStorage.getItem('dipdesk_unread_count')
           href={item.href}
           prefetch={true}
           aria-current={isActive ? 'page' : undefined}
-          style={{ paddingBottom: 'calc(6px + env(safe-area-inset-bottom))' }}
+          style={{ paddingBottom: 'max(6px, env(safe-area-inset-bottom))' }}
           className={`relative flex h-full w-full min-h-[60px] flex-col items-center justify-start gap-1 px-1 pt-1.5 text-xs leading-none ${
             isActive ? 'font-semibold text-pink-600' : 'font-medium text-gray-500 active:text-gray-700'
           }`}
@@ -476,7 +476,7 @@ const cachedUnread = localStorage.getItem('dipdesk_unread_count')
           <Link
             href="/tools"
             aria-current={pathname === '/tools' ? 'page' : undefined}
-            style={{ paddingBottom: 'calc(6px + env(safe-area-inset-bottom))' }}
+            style={{ paddingBottom: 'max(6px, env(safe-area-inset-bottom))' }}
             className="flex h-full w-full min-h-[60px] flex-col items-center justify-start gap-1 px-1 pt-1.5"
           >
             {avatar ? (
@@ -501,7 +501,8 @@ const cachedUnread = localStorage.getItem('dipdesk_unread_count')
 
       <main
   className={`flex-1 px-3 pt-3 md:px-10 md:pt-10 ${
-    !hideHeader ? 'pb-[calc(7rem+env(safe-area-inset-bottom))] md:pb-10' : ''
+    // Nav is 48px + max(6px, safe area), min 60px — this clears it with room to spare
+    !hideHeader ? 'pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-10' : ''
   }`}
 >
         {children}

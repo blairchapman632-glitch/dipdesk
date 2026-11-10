@@ -350,8 +350,8 @@ const sendImage = async (file: File) => {
   return (
     <AppLayout hideHeader={false}>
       {/* Phone: full screen between the iPhone status bar and the bottom nav
-          (nav = 60px, or 54px + home-indicator safe area, whichever is taller) */}
-      <div className="fixed inset-x-0 top-[env(safe-area-inset-top)] bottom-[max(60px,calc(54px+env(safe-area-inset-bottom)))] md:bottom-0 md:static md:h-[calc(100vh-80px)] max-w-lg md:mx-auto flex flex-col bg-gray-50">
+          (nav = 60px, or 48px + home-indicator safe area, whichever is taller) */}
+      <div className="fixed inset-x-0 top-[env(safe-area-inset-top)] bottom-[max(60px,calc(48px+env(safe-area-inset-bottom)))] md:bottom-0 md:static md:h-[calc(100vh-80px)] max-w-lg md:mx-auto flex flex-col bg-gray-50">
 
         {/* Header */}
         <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-100 bg-white flex-shrink-0 sticky top-0 z-10 mt-0">

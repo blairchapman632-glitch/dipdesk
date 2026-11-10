@@ -2031,8 +2031,9 @@ function exportReportCsv() {
           )
         })()}
 
-        <div className="-mx-3 mt-4! border-b border-gray-200 xl:hidden">
-          <div className="grid grid-cols-2">
+        {/* iOS-style segmented control: grey track, selected = white pill */}
+        <div className="mt-4! xl:hidden">
+          <div className="grid grid-cols-2 gap-1 rounded-xl bg-gray-100 p-1">
             {([
               { key: 'collection', label: 'Collection', icon: (<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>) },
               { key: 'activity', label: 'Activity', icon: (<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1 1.1L12 21l7.8-7.5 1-1.1a5.5 5.5 0 0 0 0-7.8z"/></svg>) },
@@ -2044,14 +2045,14 @@ function exportReportCsv() {
                   type="button"
                   onClick={() => setMobileTab(tab.key)}
                   aria-current={isActive ? 'page' : undefined}
-                  className={`-mb-px flex min-h-[44px] items-center justify-center gap-1.5 border-b-2 text-sm font-semibold transition ${
-                    isActive ? 'border-pink-600 text-pink-600' : 'border-transparent text-gray-500'
+                  className={`flex min-h-[40px] items-center justify-center gap-1.5 rounded-lg text-sm transition ${
+                    isActive ? 'bg-white font-bold text-gray-900 shadow-sm' : 'font-semibold text-gray-500'
                   }`}
                 >
                   {tab.icon}
                   <span>{tab.label}</span>
                   {tab.key === 'activity' && unreadNotificationCount > 0 && (
-                    <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-pink-600 px-1 text-[9px] font-bold text-white">
+                    <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-pink-600 px-1.5 text-[11px] font-bold text-white">
                       {unreadNotificationCount > 9 ? '9+' : unreadNotificationCount}
                     </span>
                   )}
@@ -2081,7 +2082,9 @@ function exportReportCsv() {
 
 <div className="mb-4 space-y-2 px-1">
   
-  <div className="no-scrollbar -mx-1 flex gap-2 overflow-x-auto px-1 pb-0.5">
+  {/* All five pills fit across a 375px phone; they share spare width (grow) but never shrink,
+      so the row scrolls once 'Clear' is added */}
+  <div className="no-scrollbar -mx-1 flex gap-1.5 overflow-x-auto pb-0.5">
     {[
       { label: collectionFilterBrand ? 'Brand ✓' : 'Brand', key: 'brand', active: !!collectionFilterBrand },
       { label: (collectionSizeMin || collectionSizeMax) ? 'Length ✓' : 'Length', key: 'length', active: !!(collectionSizeMin || collectionSizeMax) },
@@ -2099,7 +2102,7 @@ function exportReportCsv() {
           setShowCollectionBlendFilter(key === 'blend' ? !showCollectionBlendFilter : false)
           setShowCollectionTypeFilter(key === 'type' ? !showCollectionTypeFilter : false)
         }}
-        className={`min-h-[36px] shrink-0 whitespace-nowrap rounded-full border px-3.5 text-sm font-semibold transition ${active ? 'border-pink-500 bg-pink-50 text-pink-700' : 'border-gray-200 bg-white text-gray-600'}`}
+        className={`h-[34px] shrink-0 grow whitespace-nowrap rounded-full border px-2.5 text-sm font-semibold transition ${active ? 'border-pink-500 bg-pink-50 text-pink-700' : 'border-gray-200 bg-white text-gray-600'}`}
       >
         {label}
       </button>
@@ -2115,7 +2118,7 @@ function exportReportCsv() {
           setCollectionFilterBlend([])
           setCollectionFilterType([])
         }}
-        className="min-h-[36px] shrink-0 whitespace-nowrap rounded-full border border-red-200 bg-white px-3.5 text-sm font-semibold text-red-500"
+        className="h-[34px] shrink-0 whitespace-nowrap rounded-full border border-red-200 bg-white px-2.5 text-sm font-semibold text-red-500"
       >
         Clear
       </button>

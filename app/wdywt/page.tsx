@@ -513,12 +513,13 @@ export default function WDYWTPage() {
             <p className="text-sm text-gray-400 mt-1">Be the first to share what you wore today</p>
           </div>
         ) : (
-          <div className="-mx-3 divide-y divide-gray-100 sm:mx-0 sm:space-y-4 sm:divide-y-0">
+          <div className="space-y-4">
+            {/* Cards on every screen size: 12px side margin (from the page padding), 16px apart */}
             {posts.map((post) => (
               <article
                 id={`wdywt-post-${post.id}`}
                 key={post.id}
-                className="overflow-hidden bg-white pb-1 sm:rounded-2xl sm:border sm:border-gray-200 sm:pb-0 sm:shadow-sm"
+                className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm"
               >
                 {/* Header */}
                 <div className="flex items-center gap-3 px-3 py-2.5 sm:p-4 sm:pb-3">
@@ -543,7 +544,7 @@ export default function WDYWTPage() {
                 </div>
 
                 {/* Photo */}
-                <div className="relative aspect-[4/5] w-full bg-gray-100">
+                <div className="relative aspect-[4/5] w-full overflow-hidden rounded-t-xl bg-gray-100">
                   <img src={post.photo_url} alt={post.caption || 'WDYWT post'} loading="lazy" className="h-full w-full object-cover object-top" />
                 </div>
 
