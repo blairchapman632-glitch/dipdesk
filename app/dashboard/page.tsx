@@ -1935,7 +1935,33 @@ function exportReportCsv() {
   }
 
   return (
-        <AppLayout>
+        <AppLayout
+          phoneTopRight={
+            <>
+              <button
+                type="button"
+                onClick={() => { setMobileTab('activity'); window.scrollTo({ top: 0, behavior: 'smooth' }) }}
+                aria-label={unreadNotificationCount > 0 ? `Activity, ${unreadNotificationCount} unread` : 'Activity'}
+                className="relative flex h-11 w-11 items-center justify-center text-gray-800"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-[26px] w-[26px]"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1 1.1L12 21l7.8-7.5 1-1.1a5.5 5.5 0 0 0 0-7.8z"/></svg>
+                {unreadNotificationCount > 0 && (
+                  <span className="absolute right-1 top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-pink-600 px-1 text-[9px] font-bold text-white">
+                    {unreadNotificationCount > 9 ? '9+' : unreadNotificationCount}
+                  </span>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={openNewWrapModal}
+                aria-label="Add Wrap"
+                className="flex h-11 w-11 items-center justify-center text-gray-800"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-[26px] w-[26px]"><rect x="3" y="3" width="18" height="18" rx="5"/><path d="M12 8v8M8 12h8"/></svg>
+              </button>
+            </>
+          }
+        >
       {/* Centred with a max width (wider than Explore because Home has the Activity column on desktop) */}
       <div className="mx-auto max-w-6xl space-y-6 bg-white min-h-screen">
 
@@ -1996,68 +2022,54 @@ function exportReportCsv() {
                   type="button"
                   onClick={() => router.push('/tools')}
                   aria-label="Settings"
-                  className={`${BTN_SECONDARY} min-h-[44px] min-w-[44px] px-0 text-lg`}
+                  className={`${BTN_SECONDARY} min-h-[44px] min-w-[44px] px-0`}
                 >
-                  ⚙
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
                 </button>
               </div>
             </section>
           )
         })()}
 
-        <div className="xl:hidden">
-          <div className="grid grid-cols-2 rounded-xl border bg-white p-1 shadow-sm">
-            <button
-              type="button"
-              onClick={() => setMobileTab('collection')}
-              className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${
-                mobileTab === 'collection'
-                  ? 'bg-gradient-to-r from-pink-500 to-rose-500 text-white shadow-sm'
-                  : 'text-gray-600'
-              }`}
-            >
-              Collection
-            </button>
-
-            <button
-  type="button"
-  onClick={() => setMobileTab('activity')}
-  className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${
-    mobileTab === 'activity'
-      ? 'bg-gradient-to-r from-pink-500 to-rose-500 text-white shadow-sm'
-      : 'text-gray-600'
-  }`}
->
-  <span className="flex items-center justify-center gap-2">
-    <span>Activity</span>
-    {unreadNotificationCount > 0 && (
-      <span
-        className={`rounded-full px-2 py-0.5 text-xs font-bold ${
-          mobileTab === 'activity'
-            ? 'bg-white text-pink-600'
-            : 'bg-pink-600 text-white'
-        }`}
-      >
-        {unreadNotificationCount}
-      </span>
-    )}
-  </span>
-</button>
+        <div className="-mx-3 mt-4! border-b border-gray-200 xl:hidden">
+          <div className="grid grid-cols-2">
+            {([
+              { key: 'collection', label: 'Collection', icon: (<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>) },
+              { key: 'activity', label: 'Activity', icon: (<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1 1.1L12 21l7.8-7.5 1-1.1a5.5 5.5 0 0 0 0-7.8z"/></svg>) },
+            ] as const).map((tab) => {
+              const isActive = mobileTab === tab.key
+              return (
+                <button
+                  key={tab.key}
+                  type="button"
+                  onClick={() => setMobileTab(tab.key)}
+                  aria-current={isActive ? 'page' : undefined}
+                  className={`-mb-px flex min-h-[44px] items-center justify-center gap-1.5 border-b-2 text-sm font-semibold transition ${
+                    isActive ? 'border-pink-600 text-pink-600' : 'border-transparent text-gray-500'
+                  }`}
+                >
+                  {tab.icon}
+                  <span>{tab.label}</span>
+                  {tab.key === 'activity' && unreadNotificationCount > 0 && (
+                    <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-pink-600 px-1 text-[9px] font-bold text-white">
+                      {unreadNotificationCount > 9 ? '9+' : unreadNotificationCount}
+                    </span>
+                  )}
+                </button>
+              )
+            })}
           </div>
         </div>
 
         {/* grid-cols-1 = minmax(0,1fr): lets the column shrink to the screen. Without it the
             single auto column grew to the full width of the no-wrap filter row → sideways scroll. */}
-        <div className="grid grid-cols-1 gap-4 xl:grid-cols-[3fr_1fr]">
+        <div className="mt-3! grid grid-cols-1 gap-4 xl:mt-6! xl:grid-cols-[3fr_1fr]">
                     <section
             className={`order-2 min-w-0 rounded-3xl border-0 bg-transparent p-0 shadow-none xl:order-1 xl:rounded-3xl xl:border xl:bg-white xl:p-5 xl:shadow-sm ${
               mobileTab === 'activity' ? 'hidden xl:block' : 'block'
             }`}
           >
-<div className="mb-4 flex items-center justify-between gap-3 px-1">
-  <h2 className="text-xl font-bold text-gray-900">
-    Your Collection
-  </h2>
+<div className="mb-3 hidden items-center justify-end px-1 md:flex">
   <button
     type="button"
     onClick={openNewWrapModal}
@@ -2337,19 +2349,20 @@ function exportReportCsv() {
               </div>
 
               {notifications.length > 0 && (
-                <div className="flex shrink-0 flex-col gap-1">
+                <div className="flex shrink-0 items-center gap-1 text-xs font-semibold">
                   <button
                     type="button"
                     onClick={markAllNotificationsRead}
-                    className="rounded-lg border px-2 py-1 text-xs font-semibold text-gray-600 hover:bg-gray-50"
+                    className="min-h-[36px] px-1.5 text-gray-600 hover:text-gray-900"
                   >
                     Mark all read
                   </button>
+                  <span className="text-gray-300">·</span>
                   <button
                     type="button"
                     onClick={clearAllNotifications}
                     disabled={isClearingNotifications}
-                    className="rounded-lg border border-red-200 px-2 py-1 text-xs font-semibold text-red-500 hover:bg-red-50 disabled:opacity-50"
+                    className="min-h-[36px] px-1.5 text-red-500 hover:text-red-600 disabled:opacity-50"
                   >
                     {isClearingNotifications ? 'Clearing...' : 'Clear all'}
                   </button>
@@ -2472,17 +2485,21 @@ function exportReportCsv() {
                       )}
 
                       <div className="min-w-0 flex-1">
-                        <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">
-                          {notification.type === 'for_sale' ? 'FOR SALE' : 'ACTIVITY'}
-                        </p>
+                        {notification.type === 'for_sale' && (
+                          <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">FOR SALE</p>
+                        )}
 
                         <p className="line-clamp-2 text-sm font-semibold text-gray-900">
                           {title}
                         </p>
 
                         <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-gray-500">
-                          <span className="truncate">{meta}</span>
-                          <span>•</span>
+                          {notification.type === 'for_sale' && (
+                            <>
+                              <span className="truncate">{meta}</span>
+                              <span>•</span>
+                            </>
+                          )}
                           <span>{formatTimeAgo(notification.created_at)}</span>
                         </div>
                       </div>

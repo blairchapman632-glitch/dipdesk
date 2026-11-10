@@ -10,9 +10,12 @@ import { FeedbackHost } from './Toast'
 export default function AppLayout({
   children,
   hideHeader = false,
+  phoneTopRight,
 }: {
   children: React.ReactNode
   hideHeader?: boolean
+  // Optional icons on the right of the phone top bar (Home: ♡ + Add Wrap)
+  phoneTopRight?: React.ReactNode
 }) {
   const router = useRouter()
   const pathname = usePathname()
@@ -310,6 +313,19 @@ const cachedUnread = localStorage.getItem('dipdesk_unread_count')
     <div className="flex min-h-dvh flex-col overflow-x-clip bg-white">
       {!hideHeader && (
         <>
+          {/* Phone top bar: slim, white, light grey line, padded for the iPhone notch.
+              Not on message threads — they have their own full-screen header. */}
+          {!(pathname || '').startsWith('/messages/') && (
+            <header className="sticky top-0 z-40 border-b border-gray-200 bg-white pt-[env(safe-area-inset-top)] md:hidden">
+              <div className="flex h-12 items-center justify-between px-3">
+                <Link href="/dashboard" className="text-xl font-extrabold tracking-tight text-pink-600">
+                  WrapApp
+                </Link>
+                {phoneTopRight && <div className="flex items-center gap-1">{phoneTopRight}</div>}
+              </div>
+            </header>
+          )}
+
           {/* Desktop top nav */}
           <header className="hidden border-b bg-white md:block">
             <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
@@ -484,7 +500,7 @@ const cachedUnread = localStorage.getItem('dipdesk_unread_count')
       )}
 
       <main
-  className={`flex-1 px-3 pt-4 md:px-10 md:pt-10 ${
+  className={`flex-1 px-3 pt-3 md:px-10 md:pt-10 ${
     !hideHeader ? 'pb-[calc(7rem+env(safe-area-inset-bottom))] md:pb-10' : ''
   }`}
 >

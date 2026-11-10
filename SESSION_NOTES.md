@@ -1,5 +1,20 @@
 # Session Notes
 
+## 2026-11-10 — Phone UI polish batch 3
+**Changed**
+- Top strip: the page didn't fill the screen (no `viewport-fit=cover`) and the html/body were grey (#f9fafb / bg-gray-200) while pages are white, so iOS showed a blurred grey strip behind the status bar. Now: `viewport` export in `app/layout.tsx` (viewportFit cover, themeColor white, colorScheme light), white html/body, manifest theme/background white (the old pink theme-color meta was removed). Safe-area insets are now real on iPhones, so everything padded with env(safe-area-*) now actually gets the padding.
+- Phone top bar (AppLayout, md:hidden): sticky, white, grey bottom line, 48px + safe area, "WrapApp" wordmark. New `phoneTopRight` prop; Home passes ♡ (opens Activity, unread badge) and + (Add Wrap). Hidden on message threads (they have their own full-screen header). Message thread panel now sits between the safe-area top and the real nav height. Explore's sticky search bar sticks just below the top bar on phone.
+- Home: Instagram tabs (Collection / Activity, icon + text, pink underline, grey divider) replace the gradient pill. "Your Collection" heading removed; "+ Add Wrap" only from md up (phone uses the top-bar +). Activity: "Mark all read · Clear all" small text buttons (Clear all red, confirm sheet). No "ACTIVITY" label (FOR SALE kept). Rows show just the date (for-sale keeps price • date). Line-style gear SVG in the profile buttons.
+- Explore: "🎲 Being dipped" is now a small white badge (fuchsia text) top-left like For Sale, stacked above it when both apply. Follow pills smaller and lighter (pink-50 / pink-200 border / pink-600 text, h-7 text-xs); Following = grey.
+- WDYWT: title text-xl + small grey subtitle; + Post is a small round pink icon button (✓ when posted today). Posts edge to edge on phone (no rounded card or side margins, thin dividers), card style from sm up.
+- Messages list: same title style and round pink + button; plain Instagram-DM rows (no borders/shadows/chevrons), 52px avatars, full name bold, one-line grey preview, small grey date on the right; unread = bold preview + pink dot. Leading/trailing quote marks stripped from previews.
+
+**Not done**
+- WDYWT wrap tag: posts have no linked wrap (wdywt_posts has only id, user_id, photo_url, thumbnail_url, caption, created_at), so there's nothing to tag. It needs a wrap_id column + a wrap picker when posting — a separate (DB) change if wanted.
+
+**To do**
+- Test on the live site on a phone (incl. installed-to-home-screen mode): no grey strip, top bar under the notch, nothing scrolls sideways at 375px, message thread composer above the nav.
+
 ## 2026-11-10 — Phone fixes: Home sideways scroll + easier bottom nav
 **Changed**
 - Home sideways scroll. Culprit: the Home layout grid (`grid gap-4 xl:grid-cols-[3fr_1fr]`) had a single *auto* column on phones. Auto grid columns grow to the widest unshrinkable content, and the new no-wrap filter-pill row (horizontal scroller) made the column as wide as all the pills together → the page was wider than the screen. Fix: `grid-cols-1` (= minmax(0,1fr)) + `min-w-0` on both sections (`app/dashboard/page.tsx`).

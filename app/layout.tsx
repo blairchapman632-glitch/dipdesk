@@ -1,4 +1,4 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
@@ -14,6 +14,17 @@ export const metadata: Metadata = {
 
 
 
+// The page fills the whole screen (viewport-fit=cover); the phone top bar and bottom nav
+// pad themselves with the iPhone safe areas. White everywhere, so iOS never shows a
+// grey/blurred strip behind the status bar.
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
+  themeColor: '#ffffff',
+  colorScheme: 'light',
+}
+
 export default function RootLayout({
   children,
 }: {
@@ -21,8 +32,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className="bg-gray-200">
-        <meta name="theme-color" content="#db2777" />
+      <body className="bg-white">
         <script dangerouslySetInnerHTML={{
           __html: `
             if ('serviceWorker' in navigator) {

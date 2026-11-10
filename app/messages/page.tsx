@@ -107,6 +107,10 @@ export default function MessagesPage() {
     setLoading(false)
   }
 
+  // Message preview without a leading/trailing quote mark (straight or curly)
+  const cleanPreview = (text: string | null | undefined) =>
+    (text || '').trim().replace(/^["'“”‘’]+/, '').replace(/["'“”‘’]+$/, '').trim()
+
   const formatTime = (timestamp: string) => {
     const date = new Date(timestamp)
     const now = new Date()
@@ -123,21 +127,22 @@ export default function MessagesPage() {
     <AppLayout>
       <div className="max-w-lg mx-auto">
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+        <div className="flex items-center justify-between pb-2">
           <h1 className="text-xl font-bold text-gray-900">Messages</h1>
+          {/* Same small round pink icon button as WDYWT's + Post */}
           <button
             type="button"
             onClick={() => setShowNewMessage(true)}
-            className="w-8 h-8 bg-pink-500 rounded-full flex items-center justify-center"
+            aria-label="New message"
+            title="New message"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-r from-pink-500 to-rose-500 text-white shadow-sm"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5"><path d="M12 5v14M5 12h14"/></svg>
           </button>
         </div>
 
         {/* Search */}
-        <div className="px-4 py-2 border-b border-gray-100">
+        <div className="pb-2">
           <input
             type="text"
             value={searchTerm}
@@ -248,21 +253,17 @@ export default function MessagesPage() {
             </p>
           </div>
         ) : (
-          <div className="flex flex-col gap-3 p-4">
+          <div className="-mx-3 flex flex-col sm:mx-0">
             {conversations
               .filter(conv => !searchTerm.trim() || conv.other_user?.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) || conv.last_message?.toLowerCase().includes(searchTerm.toLowerCase()))
               .map((conv) => (
               <Link
                 key={conv.id}
                 href={`/messages/${conv.id}`}
-                className={`flex items-center gap-3 p-3 rounded-2xl border transition-all shadow-sm cursor-pointer hover:border-pink-300 hover:bg-pink-50 active:bg-pink-100 ${
-                  conv.has_unread
-                    ? 'bg-pink-50 border-pink-200'
-                    : 'bg-white border-gray-200'
-                }`}
+                className="flex cursor-pointer items-center gap-3 px-3 py-2.5 transition hover:bg-gray-50 active:bg-gray-100"
               >
                 {/* Avatar */}
-                <div className="w-12 h-12 rounded-full bg-pink-100 flex-shrink-0 overflow-hidden">
+                <div className="h-[52px] w-[52px] rounded-full bg-pink-100 flex-shrink-0 overflow-hidden">
                   {conv.other_user?.avatar_url ? (
                     <img
                       src={conv.other_user.avatar_url}
@@ -276,29 +277,24 @@ export default function MessagesPage() {
                   )}
                 </div>
 
-                {/* Text */}
+                {/* Text: name bold, preview one grey line, date small grey on the right */}
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between">
-                    <span className={`text-sm ${conv.has_unread ? 'font-bold text-gray-900' : 'font-semibold text-gray-900'}`}>
-                      {conv.other_user?.full_name?.split(' ')[0] || 'Unknown user'}
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="truncate text-[15px] font-bold text-gray-900">
+                      {conv.other_user?.full_name || 'Unknown user'}
                     </span>
-                    <span className="text-xs text-gray-400 flex-shrink-0 ml-2">
+                    <span className="flex-shrink-0 text-xs text-gray-400">
                       {formatTime(conv.last_message_at)}
                     </span>
                   </div>
-                  <p className="text-sm text-gray-500 truncate mt-0.5">
-                    {conv.last_message || 'No messages yet'}
-                  </p>
+                  <div className="mt-0.5 flex items-center gap-2">
+                    <p className={`min-w-0 flex-1 truncate text-sm ${conv.has_unread ? 'font-semibold text-gray-900' : 'text-gray-500'}`}>
+                      {cleanPreview(conv.last_message) || 'No messages yet'}
+                    </p>
+                    {/* Unread: pink dot */}
+                    {conv.has_unread && <span className="h-2.5 w-2.5 flex-shrink-0 rounded-full bg-pink-600" aria-label="Unread" />}
+                  </div>
                 </div>
-
-                {/* Unread dot or arrow */}
-                {conv.has_unread ? (
-                  <div className="w-3 h-3 rounded-full bg-pink-500 flex-shrink-0" />
-                ) : (
-                  <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                  </svg>
-                )}
               </Link>
             ))}
           </div>

@@ -1027,8 +1027,8 @@ const filteredWraps = (
               event.stopPropagation()
               void toggleFollowUser(user)
             }}
-            className={`mt-1.5 min-h-[28px] rounded-full px-3 text-[11px] font-semibold ${
-              isFollowingUser ? 'bg-gray-100 text-gray-600' : 'bg-pink-600 text-white'
+            className={`mt-1.5 h-7 rounded-full border px-3 text-xs font-semibold ${
+              isFollowingUser ? 'border-gray-200 bg-gray-100 text-gray-600' : 'border-pink-200 bg-pink-50 text-pink-600'
             }`}
           >
             {isFollowingUser ? 'Following' : 'Follow'}
@@ -1049,7 +1049,7 @@ const filteredWraps = (
     <AppLayout>
       <div className="mx-auto max-w-[960px] space-y-2">
         {/* Solid white, full width, light grey line under it — cards never peek around it */}
-        <section className="sticky top-0 z-40 -mx-3 border-b border-gray-200 bg-white px-3 py-2 md:-mx-4 md:px-4">
+        <section className="sticky top-[calc(3rem+env(safe-area-inset-top))] z-30 -mx-3 border-b border-gray-200 bg-white px-3 py-2 md:top-0 md:-mx-4 md:px-4">
           <div className="flex items-center gap-2">
             <div className="relative flex-1">
               <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 leading-none">
@@ -1294,16 +1294,19 @@ const filteredWraps = (
                       className="h-full w-full object-cover object-[center_20%] transition duration-300 group-hover:scale-[1.03] pointer-events-none"
                     />
 
-                    {/* Dip banner: same wording and height on every card */}
-                    {activeDipWrapIds.has(wrap.id) && (
-                      <div className="absolute inset-x-0 top-0 flex h-7 items-center justify-center bg-purple-600/95 px-2 text-xs font-bold text-white shadow pointer-events-none">
-                        🎲 Being dipped
-                      </div>
-                    )}
-                    {/* For Sale badge sits under the banner when there is one */}
-                    {wrap.for_sale && (
-                      <div className={`absolute left-2 rounded-lg bg-white/90 px-2 py-1 text-[10px] font-semibold text-amber-700 shadow pointer-events-none ${activeDipWrapIds.has(wrap.id) ? 'top-9' : 'top-2'}`}>
-                        🪓 For Sale
+                    {/* Small badges, top-left; stacked (dip first) when both apply */}
+                    {(activeDipWrapIds.has(wrap.id) || wrap.for_sale) && (
+                      <div className="pointer-events-none absolute left-2 top-2 flex flex-col items-start gap-1">
+                        {activeDipWrapIds.has(wrap.id) && (
+                          <div className="rounded-lg bg-white/90 px-2 py-1 text-[10px] font-semibold text-fuchsia-700 shadow">
+                            🎲 Being dipped
+                          </div>
+                        )}
+                        {wrap.for_sale && (
+                          <div className="rounded-lg bg-white/90 px-2 py-1 text-[10px] font-semibold text-amber-700 shadow">
+                            🪓 For Sale
+                          </div>
+                        )}
                       </div>
                     )}
 

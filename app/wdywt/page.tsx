@@ -467,7 +467,7 @@ export default function WDYWTPage() {
 
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-lg font-bold text-gray-900">WDYWT</h1>
+            <h1 className="text-xl font-bold text-gray-900">WDYWT</h1>
             <p className="text-xs text-gray-400">What did you wear today?</p>
           </div>
           <button
@@ -480,9 +480,15 @@ export default function WDYWTPage() {
               }
               setIsPostModalOpen(true)
             }}
-            className="rounded-xl bg-gradient-to-r from-pink-500 to-rose-500 px-4 py-2 text-sm font-semibold text-white shadow-sm"
+            aria-label={hasPostedToday ? 'Posted today' : 'New post'}
+            title={hasPostedToday ? 'Posted today' : 'New post'}
+            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full shadow-sm ${hasPostedToday ? 'bg-pink-50 text-pink-600' : 'bg-gradient-to-r from-pink-500 to-rose-500 text-white'}`}
           >
-            {hasPostedToday ? '✓ Posted' : '+ Post'}
+            {hasPostedToday ? (
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5"><path d="M20 6 9 17l-5-5"/></svg>
+            ) : (
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5"><path d="M12 5v14M5 12h14"/></svg>
+            )}
           </button>
         </div>
 
@@ -507,15 +513,15 @@ export default function WDYWTPage() {
             <p className="text-sm text-gray-400 mt-1">Be the first to share what you wore today</p>
           </div>
         ) : (
-          <div className="space-y-4">
+          <div className="-mx-3 divide-y divide-gray-100 sm:mx-0 sm:space-y-4 sm:divide-y-0">
             {posts.map((post) => (
               <article
                 id={`wdywt-post-${post.id}`}
                 key={post.id}
-                className="overflow-hidden rounded-2xl bg-white shadow-sm"
+                className="overflow-hidden bg-white pb-1 sm:rounded-2xl sm:border sm:border-gray-200 sm:pb-0 sm:shadow-sm"
               >
                 {/* Header */}
-                <div className="flex items-center gap-3 p-4 pb-3">
+                <div className="flex items-center gap-3 px-3 py-2.5 sm:p-4 sm:pb-3">
                   <button type="button" onClick={() => router.push(`/user/${post.user_id}`)} className="shrink-0 group">
                     {post.profiles?.avatar_url ? (
                       <img src={post.profiles.avatar_url} alt={getDisplayName(post)} className="h-10 w-10 rounded-full object-cover ring-2 ring-pink-100 group-hover:ring-pink-400 transition duration-200" />
@@ -542,7 +548,7 @@ export default function WDYWTPage() {
                 </div>
 
                 {/* Like + Comment */}
-                <div className="flex items-center gap-4 px-4 pt-3 pb-1">
+                <div className="flex items-center gap-4 px-3 pt-3 pb-1 sm:px-4">
                   <button
                     type="button"
                     onClick={async () => {
@@ -597,7 +603,7 @@ export default function WDYWTPage() {
 
                 {/* Caption */}
                 {post.caption && (
-                  <div className="px-4 pt-1 pb-3">
+                  <div className="px-3 pt-1 pb-3 sm:px-4">
                     <p className="text-sm text-gray-700">
                       <span className="font-semibold text-gray-900 mr-1">{getDisplayName(post)}</span>
                       {post.caption}
