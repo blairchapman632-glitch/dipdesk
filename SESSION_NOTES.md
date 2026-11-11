@@ -1,5 +1,52 @@
 # Session Notes
 
+## 2026-11-11 — Improvements batch: WDYWT tabs, Following feed, wrap tags, thumbnails, pull-to-refresh, double-tap (not committed yet)
+**Changed**
+- **WDYWT tabs.**
+  - Other people's profiles: Collection · For Sale · Dips · WDYWT.
+  - Your profile: Collection · For Sale · Dips · ISO · WDYWT. The tab row scrolls on phones.
+  - New shared `WdywtGrid` (3-column square grid, cache-first) and `WdywtPostSheet` (photo, likes, comments, owner delete). The sheet was moved out of the user page, whose old WDYWT state, load and modal were removed.
+  - Your WDYWT tab only loads when first tapped (like ISO). The comment notification now includes the post id.
+- **Home: Everyone / Following switch** (Featured section, logged in, not searching), remembered in localStorage `wrapapp_home_feed`.
+  - Following mixes newest wraps from people you follow (from the already-loaded list, same filters) with their WDYWT posts, sorted by date.
+  - The posts come from one extra query, added to the existing parallel following queries. They're cached and hidden while a wrap filter is on.
+  - WDYWT cards look like wrap cards with a 📸 badge, and open the post sheet.
+  - Empty: "Follow collectors to see their wraps here" plus the Suggested row (the top Suggested row is hidden then, so it isn't shown twice).
+- **WDYWT wrap tag.**
+  - New post sheet has an optional "Which wrap?" picker (`WrapPicker`: your collection as small tiles, cache-first from your profile wraps). It saves `wrap_id`.
+  - Posts show "🏷 Name · Brand" under the caption, which opens `/explore?wrap=<id>`. That's a new Explore handler: it opens the usual wrap view, or says "That wrap isn't available" if it's deleted or private.
+  - The tag is hidden if the wrap is deleted or private (the owner still sees their own).
+  - Owners get a 🏷 button on their posts to add, change or remove the wrap. **Needs the UPDATE policy SQL below**; until it's run, saving shows "Couldn't update the wrap".
+- **WDYWT like bug fixed.** The feed never loaded which posts you'd liked, so the heart always started empty and a second tap tried to insert a duplicate like. Likes now load with `user_id`. The heart and count update straight away and are put back if the save fails. Like logic is shared in `lib/wdywtLikes.ts` (same notification and push as before).
+- **Thumbnails.**
+  - New `lib/wrapThumbnail.ts`: on upload or replace in the wrap form, it makes a JPEG with longest side 800px (portrait ≈ 600px wide, ~150KB max) and uploads it next to the photo as `…-thumb.jpg`. The URL is saved in `wrap_images.thumbnail_url` (insert and update). The onboarding first wrap uses the same form.
+  - Tiles pick through `getCoverThumb` / `getImageThumb` in `lib/wrapCover.ts`, falling back to `image_url`. Used by: profile Collection / For Sale / dips / activity rows, ISO list, Explore cards and collector tiles, Following feed, user profile tiles, the public `/username` page (server sends `thumbs`), the WrapPicker, and the small photo strips in wrap views. Big wrap photos always use `image_url`.
+  - `thumbnail_url` was added to all wrap_images selects (not the dip pages).
+  - Deleting thumbnails follows the full photo exactly: replacing a photo uploaded this session deletes both straight away; replacing a saved photo deletes both only after the wrap saves. Removing a photo doesn't delete either file (same as before; messages can hold image URLs).
+- **Pull to refresh** (`PullToRefresh`, phones only) on Home, WDYWT, Activity and Profile. Pull down at the top, release past the threshold, and a spinner shows under the top bar while the page's normal background load runs.
+  - It's passive (never blocks scrolling). It ignores sideways swipes, any scroll position below the top, and open sheets.
+  - The browser's own overscroll is turned off on `<html>` only while those pages are open.
+  - Profile/Activity refresh also re-fetches the ISO and WDYWT tabs.
+- **Double-tap to like** (`DoubleTapLike`): WDYWT feed photos, the post sheet photo, and the big photo in the wrap view (Explore, other profiles, ISO). It only ever likes, with a heart pop. In the wrap view a single tap still opens the larger view (it now waits 0.3s to rule out a double-tap). It's off for your own wraps and when logged out.
+
+**SQL for Blair (owner can change the wrap on their own WDYWT posts)**
+```sql
+create policy "users can update own posts" on public.wdywt_posts
+  for update to authenticated
+  using (auth.uid() = user_id)
+  with check (
+    auth.uid() = user_id
+    and (wrap_id is null or exists (select 1 from public.wraps w where w.id = wrap_id and w.user_id = auth.uid()))
+  );
+```
+
+**Notes / decisions**
+- Backfill for old photos: none of the 628 existing photos have thumbnails. The 164 cover photos average ~570KB. Worth doing the covers at least (grids show only covers). Suggested approach: a one-off Node script run locally with the service role key and `sharp`, outside the app. It would read wrap_images where thumbnail_url is null, download each, resize to 800px JPEG q75, upload `<path>-thumb.jpg`, and update the row. Not built.
+- Lint flags "setState in effect" in the new cache-first components. It's the same cache-read pattern used across the app.
+- Deleting a whole wrap still leaves its photo files in storage (unchanged).
+
+**Untested** — all of it on a real phone, especially pull-to-refresh vs the sticky search bar, double-tap timing, and the 5-tab row at 375px.
+
 ## 2026-11-11 — Onboarding shows on first launch again (+ step 4)
 **Changed**
 - New `app/components/Onboarding.tsx`, mounted by `AppLayout` on every main page. Removed the old onboarding overlay, state, trigger and upload function from `ProfileDashboard.tsx` (it can't show twice).

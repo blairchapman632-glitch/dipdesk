@@ -6,10 +6,13 @@ import { useRouter } from 'next/navigation'
 import imageCompression from 'browser-image-compression'
 import AppLayout from '@/app/components/AppLayout'
 import IsoList from '@/app/components/IsoList'
+import WdywtGrid from '@/app/components/WdywtGrid'
+import PullToRefresh from '@/app/components/PullToRefresh'
 import { askConfirm, showToast } from '@/app/components/Toast'
 import { useLockBodyScroll } from '@/app/components/useLockBodyScroll'
 import { fullSheetOverlay, fullSheetPanel, SheetTopBar } from '@/app/components/Sheet'
-import { getCoverImage, sortWrapImages } from '@/lib/wrapCover'
+import { getCoverImage, getCoverThumb, sortWrapImages } from '@/lib/wrapCover'
+import { uploadWrapThumbnail } from '@/lib/wrapThumbnail'
 import { getDipStageLabel, isDipLiveOrLater } from '@/lib/dipStages'
 
 type CurrencyCode = 'AUD' | 'USD' | 'EUR'
@@ -17,6 +20,7 @@ type CurrencyCode = 'AUD' | 'USD' | 'EUR'
 type WrapImage = {
   id: string
   image_url: string
+  thumbnail_url?: string | null
   is_primary: boolean
   sort_order: number
 }
@@ -93,6 +97,10 @@ type WrapFormImage = {
   file_name: string | null
   // Saved photo URL this image replaced; its file is deleted only after save succeeds
   replaced_url: string | null
+  // Small copy for grids (null for older photos, or if making it failed)
+  thumbnail_url: string | null
+  thumb_storage_path: string | null
+  replaced_thumb_url: string | null
 }
 type ReportRow = {
   id: string
@@ -269,6 +277,13 @@ function getPrimaryImage(wrap?: Wrap) {
   return `${url}?width=400&quality=60`
 }
 
+// Grids and tiles: the small copy when there is one (same check as getPrimaryImage)
+function getPrimaryThumb(wrap?: Wrap) {
+  const full = getPrimaryImage(wrap)
+  if (full === WRAP_PLACEHOLDER) return full
+  return getCoverThumb(wrap?.wrap_images) || full
+}
+
 // The first photo is always the cover, and positions run 0, 1, 2... with no gaps
 function renumberFormImages(images: WrapFormImage[]): WrapFormImage[] {
   return images.map((image, index) => ({
@@ -315,9 +330,12 @@ export default function ProfileDashboard({ mode = 'profile' }: { mode?: 'profile
   const [wraps, setWraps] = useState<Wrap[]>([])
   const [loading, setLoading] = useState(true)
     // Profile tabs (Instagram-style)
-    const [profileTab, setProfileTab] = useState<'collection' | 'forsale' | 'dips' | 'iso'>('collection')
-    // ISO list mounts the first time its tab is opened (keeps the profile fast)
+    const [profileTab, setProfileTab] = useState<'collection' | 'forsale' | 'dips' | 'iso' | 'wdywt'>('collection')
+    // ISO list and WDYWT grid mount the first time their tab is opened (keeps the profile fast)
     const [isoOpened, setIsoOpened] = useState(false)
+    const [wdywtOpened, setWdywtOpened] = useState(false)
+    // Bumped by pull-to-refresh so the mounted tabs re-fetch too
+    const [refreshKey, setRefreshKey] = useState(0)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [isAdmin, setIsAdmin] = useState(false)
 const [profile, setProfile] = useState<{ full_name: string | null; username: string | null; avatar_url: string | null; bio?: string | null; city?: string | null; country?: string | null } | null>(null)
@@ -598,7 +616,7 @@ localStorage.setItem(DASHBOARD_EMAIL_KEY, userEmail)
   supabase
     .from('my_wraps')
     .select(
-'id, name, brand, description, size, material, colour, wrap_type, is_private, dibs_names, purchase_date, purchase_price, purchase_currency, purchased_from, purchase_country, status, on_loan_to, sold_to, sold_price, sold_currency, sold_date, is_favourite, for_sale, for_sale_price, for_sale_currency, for_sale_price_is_pm, created_at, wrap_images(id, image_url, is_primary, sort_order)'
+'id, name, brand, description, size, material, colour, wrap_type, is_private, dibs_names, purchase_date, purchase_price, purchase_currency, purchased_from, purchase_country, status, on_loan_to, sold_to, sold_price, sold_currency, sold_date, is_favourite, for_sale, for_sale_price, for_sale_currency, for_sale_price_is_pm, created_at, wrap_images(id, image_url, thumbnail_url, is_primary, sort_order)'
 )
     .eq('user_id', user.id)
     .order('is_favourite', { ascending: false })
@@ -717,7 +735,7 @@ if (!notificationError && notificationData) {
     const { data: notificationWrapData } = await supabase
       .from('wraps')
       .select(
-        'id, user_id, name, brand, description, colour, size, material, wrap_type, status, sold_date, is_favourite, for_sale, for_sale_price, for_sale_currency, for_sale_price_is_pm, created_at, wrap_images(id, image_url, is_primary, sort_order)'
+        'id, user_id, name, brand, description, colour, size, material, wrap_type, status, sold_date, is_favourite, for_sale, for_sale_price, for_sale_currency, for_sale_price_is_pm, created_at, wrap_images(id, image_url, thumbnail_url, is_primary, sort_order)'
       )
       .in('id', wrapIds)
       .order('sort_order', { referencedTable: 'wrap_images' })
@@ -1172,6 +1190,9 @@ purchase_date: wrap.purchase_date || '',
       storage_path: null,
       file_name: null,
       replaced_url: null,
+      thumbnail_url: image.thumbnail_url || null,
+      thumb_storage_path: null,
+      replaced_thumb_url: null,
     }))
   ),
   on_loan_to: wrap.on_loan_to || '',
@@ -1310,6 +1331,9 @@ async function uploadWrapImages(files: FileList | File[]) {
     storage_path: null,
     file_name: file.name,
     replaced_url: null,
+    thumbnail_url: null,
+    thumb_storage_path: null,
+    replaced_thumb_url: null,
   }))
 
   setWrapForm((previous) => ({
@@ -1357,6 +1381,9 @@ async function uploadWrapImages(files: FileList | File[]) {
       .from('wrap-images')
       .getPublicUrl(fileName)
 
+    // Small copy for grids, saved next to the full photo
+    const thumb = await uploadWrapThumbnail(file, fileName)
+
     setWrapForm((previous) => ({
       ...previous,
       images: previous.images.map((image) =>
@@ -1367,6 +1394,8 @@ async function uploadWrapImages(files: FileList | File[]) {
               status: 'uploaded',
               storage_path: fileName,
               file_name: file.name,
+              thumbnail_url: thumb?.url || null,
+              thumb_storage_path: thumb?.path || null,
             }
           : image
       ),
@@ -1429,6 +1458,8 @@ async function replaceWrapImage(imageId: string, incomingFile: File) {
               status: existingImage.status,
               storage_path: existingImage.storage_path,
               file_name: existingImage.file_name,
+              thumbnail_url: existingImage.thumbnail_url,
+              thumb_storage_path: existingImage.thumb_storage_path,
             }
           : image
       ),
@@ -1442,12 +1473,17 @@ async function replaceWrapImage(imageId: string, incomingFile: File) {
     .from('wrap-images')
     .getPublicUrl(fileName)
 
-  // A photo uploaded in this session was never saved, so it can go now.
+  const thumb = await uploadWrapThumbnail(file, fileName)
+
+  // A photo uploaded in this session was never saved, so it (and its thumbnail) can go now.
   // A saved photo is only deleted after the wrap saves (see saveWrap).
   if (existingImage.storage_path) {
+    const sessionPaths = [existingImage.storage_path, existingImage.thumb_storage_path].filter(
+      (path): path is string => !!path
+    )
     const { error: removeOldImageError } = await supabase.storage
       .from('wrap-images')
-      .remove([existingImage.storage_path])
+      .remove(sessionPaths)
 
     if (removeOldImageError) {
       console.error('old image cleanup error', removeOldImageError)
@@ -1458,6 +1494,12 @@ async function replaceWrapImage(imageId: string, incomingFile: File) {
     existingImage.replaced_url ||
     (existingImage.status === 'uploaded' && !existingImage.storage_path
       ? existingImage.image_url
+      : null)
+  // The saved photo's thumbnail goes at the same time as the saved photo
+  const replacedThumbUrl =
+    existingImage.replaced_thumb_url ||
+    (existingImage.status === 'uploaded' && !existingImage.storage_path
+      ? existingImage.thumbnail_url
       : null)
 
   setWrapForm((previous) => ({
@@ -1471,6 +1513,9 @@ async function replaceWrapImage(imageId: string, incomingFile: File) {
             storage_path: fileName,
             file_name: file.name,
             replaced_url: replacedUrl,
+            thumbnail_url: thumb?.url || null,
+            thumb_storage_path: thumb?.path || null,
+            replaced_thumb_url: replacedThumbUrl,
           }
         : image
     ),
@@ -1497,6 +1542,7 @@ async function replaceWrapImage(imageId: string, incomingFile: File) {
       id: String(image.id),
       wrap_id: wrapId,
       image_url: image.image_url,
+      thumbnail_url: image.thumbnail_url || null,
       sort_order: index,
       is_primary: index === 0,
     }))
@@ -1529,6 +1575,7 @@ async function replaceWrapImage(imageId: string, incomingFile: File) {
           .from('wrap_images')
           .update({
             image_url: row.image_url,
+            thumbnail_url: row.thumbnail_url,
             sort_order: row.sort_order,
             is_primary: row.is_primary,
           })
@@ -1550,6 +1597,7 @@ async function replaceWrapImage(imageId: string, incomingFile: File) {
           newRows.map((row) => ({
             wrap_id: row.wrap_id,
             image_url: row.image_url,
+            thumbnail_url: row.thumbnail_url,
             sort_order: row.sort_order,
             is_primary: row.is_primary,
           }))
@@ -1695,9 +1743,12 @@ const wrapPayload = {
       }
 
       // Now the save has worked, delete the files of saved photos that were replaced
-      const savedUrls = new Set(savedImages.map((image) => image.image_url))
+      // (and their thumbnails, at the same time)
+      const savedUrls = new Set(
+        savedImages.flatMap((image) => [image.image_url, image.thumbnail_url]).filter(Boolean)
+      )
       const replacedPaths = savedImages
-        .map((image) => image.replaced_url)
+        .flatMap((image) => [image.replaced_url, image.replaced_thumb_url])
         .filter((url): url is string => !!url && !savedUrls.has(url))
         .map(getWrapImageStoragePath)
         .filter((path): path is string => !!path)
@@ -1935,7 +1986,7 @@ function exportReportCsv() {
 
   // One collection tile (used by the Collection and For Sale tabs)
   function renderCollectionTile(wrap: Wrap) {
-                  const imageUrl = getPrimaryImage(wrap)
+                  const imageUrl = getPrimaryThumb(wrap)
 
                   return (
                     <button
@@ -2020,6 +2071,13 @@ function exportReportCsv() {
 
   return (
         <AppLayout>
+      {/* Phone: pull down at the top to re-fetch (same background refresh as on open) */}
+      <PullToRefresh
+        onRefresh={async () => {
+          await loadData()
+          setRefreshKey((key) => key + 1)
+        }}
+      />
       {/* Single centred column on desktop (~960px), like the other profile pages */}
       <div className="mx-auto max-w-[960px] space-y-4 bg-white min-h-screen">
 
@@ -2097,13 +2155,18 @@ function exportReportCsv() {
               { key: 'forsale', label: 'For Sale', icon: (<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-[18px] w-[18px]"><path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z"/><circle cx="7.5" cy="7.5" r="1.5"/></svg>) },
               { key: 'dips', label: 'Dips', icon: (<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-[18px] w-[18px]"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1"/><circle cx="15.5" cy="15.5" r="1"/><circle cx="12" cy="12" r="1"/></svg>) },
               { key: 'iso', label: 'ISO', icon: (<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-[18px] w-[18px]"><path d="m12 3 2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.4 6.8 19.1l1-5.8L3.5 9.2l5.9-.9z"/></svg>) },
+              { key: 'wdywt', label: 'WDYWT', icon: (<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-[18px] w-[18px]"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>) },
             ] as const).map((tab) => {
               const isActive = profileTab === tab.key
               return (
                 <button
                   key={tab.key}
                   type="button"
-                  onClick={() => { setProfileTab(tab.key); if (tab.key === 'iso') setIsoOpened(true) }}
+                  onClick={() => {
+                    setProfileTab(tab.key)
+                    if (tab.key === 'iso') setIsoOpened(true)
+                    if (tab.key === 'wdywt') setWdywtOpened(true)
+                  }}
                   aria-current={isActive ? 'page' : undefined}
                   className={`flex min-h-[40px] min-w-max flex-1 items-center justify-center gap-1.5 rounded-lg px-2.5 text-sm transition ${
                     isActive ? 'bg-white font-bold text-gray-900 shadow-sm' : 'font-semibold text-gray-500'
@@ -2282,7 +2345,7 @@ function exportReportCsv() {
                     >
                       <div className="relative aspect-[4/5] w-full bg-gray-100 pointer-events-none">
                         <img
-  src={getPrimaryImage(wrap)}
+  src={getPrimaryThumb(wrap)}
   loading="lazy"
   alt={wrap.name}
   className="h-full w-full object-cover object-[center_20%] opacity-60 grayscale-[30%] transition duration-300 group-hover:opacity-80"
@@ -2354,7 +2417,7 @@ function exportReportCsv() {
                 )}
               {dips.filter(d => !d.archived).map((dip) => {
                 const linkedWrap = dip.wrap_id ? wrapsById[dip.wrap_id] : undefined
-                const imageUrl = getPrimaryImage(linkedWrap)
+                const imageUrl = getPrimaryThumb(linkedWrap)
                 const progress = getDipProgress(dip)
 
                 return (
@@ -2471,7 +2534,19 @@ function exportReportCsv() {
             switching tabs back is instant. */}
         {mode === 'profile' && isoOpened && (
           <section className={`mt-3! min-w-0 ${profileTab === 'iso' ? '' : 'hidden'}`}>
-            <IsoList layout="profile" />
+            <IsoList layout="profile" key={`iso-${refreshKey}`} />
+          </section>
+        )}
+
+        {/* WDYWT: your posts as a 3-column photo grid (tap to open, likes / comments / delete) */}
+        {mode === 'profile' && wdywtOpened && currentUserId && (
+          <section className={`mt-3! min-w-0 ${profileTab === 'wdywt' ? '' : 'hidden'}`}>
+            <WdywtGrid
+              userId={currentUserId}
+              currentUserId={currentUserId}
+              ownerName={profile?.full_name?.split(' ')[0] || profile?.username || 'You'}
+              refreshKey={refreshKey}
+            />
           </section>
         )}
 
@@ -2515,7 +2590,7 @@ function exportReportCsv() {
               {notifications.map((notification) => {
                 const wrap = notification.wrap
                 const wrapName = wrap?.name || 'Wrap'
-                const imageUrl = getPrimaryImage(wrap || undefined)
+                const imageUrl = getPrimaryThumb(wrap || undefined)
 
                 const title =
                   notification.type === 'like' && notification.wrap

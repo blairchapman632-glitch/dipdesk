@@ -4,8 +4,20 @@ import AppLayout from '@/app/components/AppLayout'
 import { supabase } from '@/lib/supabase'
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { likeWdywtPost, unlikeWdywtPost } from '@/lib/wdywtLikes'
+import DoubleTapLike from '@/app/components/DoubleTapLike'
+import PullToRefresh from '@/app/components/PullToRefresh'
+import WrapPicker from '@/app/components/WrapPicker'
+import { useLockBodyScroll } from '@/app/components/useLockBodyScroll'
 
 const WDYWT_CACHE_KEY = 'dipdesk_wdywt_posts'
+
+type TaggedWrap = {
+  id: string
+  name: string
+  brand: string | null
+  is_private: boolean | null
+}
 
 type WDYWTPost = {
   id: string
@@ -14,12 +26,16 @@ type WDYWTPost = {
   thumbnail_url: string | null
   caption: string | null
   created_at: string
+  // Optional wrap tag ("Which wrap?"); null if none, or the wrap was deleted
+  wrap_id?: string | null
+  wrap?: TaggedWrap | null
   profiles: {
     full_name: string | null
     username: string | null
     avatar_url: string | null
   } | null
-  wdywt_likes: { id: string }[]
+  // user_id tells us whether you've liked it (older caches only have id)
+  wdywt_likes: { id: string; user_id?: string }[]
   wdywt_comments: { id: string }[]
 }
 
@@ -54,24 +70,31 @@ function getDisplayName(post: WDYWTPost) {
 async function fetchPosts(): Promise<WDYWTPost[]> {
   const { data, error } = await supabase
     .from('wdywt_posts')
-    .select(`id, user_id, photo_url, thumbnail_url, caption, created_at, wdywt_likes ( id ), wdywt_comments ( id )`)
+    .select(`id, user_id, photo_url, thumbnail_url, caption, created_at, wrap_id, wdywt_likes ( id, user_id ), wdywt_comments ( id )`)
     .order('created_at', { ascending: false })
     .limit(30)
 
   if (error || !data || data.length === 0) return []
 
   const userIds = [...new Set(data.map((p: any) => p.user_id))]
-  const { data: profileData } = await supabase
-    .from('profiles')
-    .select('id, full_name, username, avatar_url')
-    .in('id', userIds)
+  const wrapIds = [...new Set(data.map((p: any) => p.wrap_id).filter(Boolean))]
+  // Owners and tagged wraps, in parallel (no join syntax)
+  const [{ data: profileData }, { data: wrapData }] = await Promise.all([
+    supabase.from('profiles').select('id, full_name, username, avatar_url').in('id', userIds),
+    wrapIds.length > 0
+      ? supabase.from('wraps').select('id, name, brand, is_private').in('id', wrapIds)
+      : Promise.resolve({ data: [] as TaggedWrap[] }),
+  ])
 
   const profileMap: Record<string, any> = {}
   ;(profileData || []).forEach((p: any) => { profileMap[p.id] = p })
+  const wrapMap: Record<string, TaggedWrap> = {}
+  ;((wrapData as TaggedWrap[]) || []).forEach((w) => { wrapMap[String(w.id)] = w })
 
   return data.map((post: any) => ({
     ...post,
     profiles: profileMap[post.user_id] || null,
+    wrap: post.wrap_id ? wrapMap[String(post.wrap_id)] || null : null,
     wdywt_likes: post.wdywt_likes || [],
     wdywt_comments: post.wdywt_comments || [],
   }))
@@ -92,7 +115,14 @@ export default function WDYWTPage() {
   const [hasPostedToday, setHasPostedToday] = useState(false)
   const [toast, setToast] = useState('')
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
-  const [likedPosts, setLikedPosts] = useState<Set<string>>(new Set())
+  // Wrap tag: picked when posting, or changed later by the post's owner
+  const [postWrapId, setPostWrapId] = useState<string | null>(null)
+  const [tagEditPost, setTagEditPost] = useState<WDYWTPost | null>(null)
+  const [tagEditValue, setTagEditValue] = useState<string | null>(null)
+  const [savingTag, setSavingTag] = useState(false)
+  useLockBodyScroll(!!tagEditPost)
+  // Pull-to-refresh runs the same load as opening the page
+  const loadRef = useRef<() => Promise<void>>(async () => {})
 
   // Comment sheet state
   const [commentSheet, setCommentSheet] = useState<WDYWTPost | null>(null)
@@ -256,6 +286,7 @@ export default function WDYWTPage() {
     }
 
     load()
+    loadRef.current = load
 
     return () => {
       window.removeEventListener('scroll', handleScroll)
@@ -320,6 +351,7 @@ export default function WDYWTPage() {
       photo_url: urlData.publicUrl,
       thumbnail_url: thumbUrl,
       caption: caption.trim() || null,
+      wrap_id: postWrapId,
     })
 
     if (insertError) {
@@ -331,6 +363,7 @@ export default function WDYWTPage() {
     setCaption('')
     setPhotoFile(null)
     setPhotoPreview(null)
+    setPostWrapId(null)
     setIsPostModalOpen(false)
     setIsPosting(false)
     setHasPostedToday(true)
@@ -452,6 +485,59 @@ export default function WDYWTPage() {
     }
   }
 
+  function saveFeed(update: (prev: WDYWTPost[]) => WDYWTPost[]) {
+    setPosts((prev) => {
+      const next = update(prev)
+      try { localStorage.setItem(WDYWT_CACHE_KEY, JSON.stringify(next)) } catch {}
+      return next
+    })
+  }
+
+  const isLikedByMe = (post: WDYWTPost) =>
+    !!currentUserId && post.wdywt_likes.some((like) => String(like.user_id) === String(currentUserId))
+
+  // Heart button toggles; double-tap only ever likes. The heart and count change straight away
+  // and are put back if the save fails.
+  async function setPostLiked(post: WDYWTPost, liked: boolean) {
+    if (!currentUserId || liked === isLikedByMe(post)) return
+    const uid = currentUserId
+    const withoutMe = (p: WDYWTPost) => ({ ...p, wdywt_likes: p.wdywt_likes.filter((l) => String(l.user_id) !== String(uid)) })
+    const withMe = (p: WDYWTPost) => ({ ...withoutMe(p), wdywt_likes: [...withoutMe(p).wdywt_likes, { id: `me-${Date.now()}`, user_id: uid }] })
+    saveFeed((prev) => prev.map((p) => (p.id === post.id ? (liked ? withMe(p) : withoutMe(p)) : p)))
+    const ok = liked ? (await likeWdywtPost(post, uid)) !== 'failed' : await unlikeWdywtPost(post.id, uid)
+    if (!ok) {
+      saveFeed((prev) => prev.map((p) => (p.id === post.id ? (liked ? withoutMe(p) : withMe(p)) : p)))
+      setToast('Couldn’t save that like — try again')
+      setTimeout(() => setToast(''), 3000)
+    }
+  }
+
+  // Owner: add / change / remove the wrap on a post
+  async function saveTag() {
+    if (!tagEditPost || savingTag) return
+    setSavingTag(true)
+    const { data, error } = await supabase
+      .from('wdywt_posts')
+      .update({ wrap_id: tagEditValue })
+      .eq('id', tagEditPost.id)
+      .select('id')
+    setSavingTag(false)
+    // No row back = the update wasn't allowed (needs the owner UPDATE policy)
+    if (error || !data || data.length === 0) {
+      setToast('Couldn’t update the wrap — please try again')
+      setTimeout(() => setToast(''), 3000)
+      return
+    }
+    let wrap: TaggedWrap | null = null
+    if (tagEditValue) {
+      const { data: wrapRow } = await supabase.from('wraps').select('id, name, brand, is_private').eq('id', tagEditValue).maybeSingle()
+      wrap = (wrapRow as TaggedWrap) || null
+    }
+    const postId = tagEditPost.id
+    saveFeed((prev) => prev.map((p) => (p.id === postId ? { ...p, wrap_id: tagEditValue, wrap } : p)))
+    setTagEditPost(null)
+  }
+
   // ➕ → "Post WDYWT": from another page (/wdywt?post=1) or already here (event).
   // Same rule as the + button: one post a day.
   const postedTodayRef = useRef(hasPostedToday)
@@ -493,6 +579,8 @@ export default function WDYWTPage() {
 
   return (
     <AppLayout>
+      {/* Phone: pull down at the top to re-fetch */}
+      <PullToRefresh onRefresh={() => loadRef.current()} />
       <div className="mx-auto max-w-lg space-y-4">
 
         <div className="flex items-center justify-between">
@@ -567,60 +655,44 @@ export default function WDYWTPage() {
                     <p className="text-xs text-pink-400">View collection →</p>
                   </button>
                   {post.user_id === currentUserId && (
+                    <button
+                      type="button"
+                      onClick={() => { setTagEditValue(post.wrap_id || null); setTagEditPost(post) }}
+                      aria-label={post.wrap_id ? 'Change wrap' : 'Tag a wrap'}
+                      title={post.wrap_id ? 'Change wrap' : 'Tag a wrap'}
+                      className="shrink-0 rounded-full p-1.5 text-gray-400 hover:text-pink-500 hover:bg-pink-50 transition"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4"><path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z"/><circle cx="7.5" cy="7.5" r="1.5"/></svg>
+                    </button>
+                  )}
+                  {post.user_id === currentUserId && (
                     <button type="button" onClick={() => setConfirmDelete(post.id)} className="shrink-0 rounded-full p-1.5 text-gray-300 hover:text-red-400 hover:bg-red-50 transition">
                       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
                     </button>
                   )}
                 </div>
 
-                {/* Photo */}
-                <div className="relative aspect-[4/5] w-full overflow-hidden rounded-t-xl bg-gray-100">
+                {/* Photo — double-tap to like */}
+                <DoubleTapLike
+                  enabled={!!currentUserId}
+                  onDoubleTap={() => void setPostLiked(post, true)}
+                  className="aspect-[4/5] w-full overflow-hidden rounded-t-xl bg-gray-100"
+                >
                   <img src={post.photo_url} alt={post.caption || 'WDYWT post'} loading="lazy" className="h-full w-full object-cover object-top" />
-                </div>
+                </DoubleTapLike>
 
                 {/* Like + Comment */}
                 <div className="flex items-center gap-4 px-3 pt-3 pb-1 sm:px-4">
                   <button
                     type="button"
-                    onClick={async () => {
-                      if (!currentUserId) return
-                      const isLiked = likedPosts.has(post.id)
-                      if (isLiked) {
-                        await supabase.from('wdywt_likes').delete().eq('post_id', post.id).eq('user_id', currentUserId)
-                        setLikedPosts(prev => { const next = new Set(prev); next.delete(post.id); return next })
-                        setPosts(prev => prev.map(p => p.id === post.id ? { ...p, wdywt_likes: p.wdywt_likes.filter(l => l.id !== currentUserId) } : p))
-                      } else {
-                        const { data } = await supabase.from('wdywt_likes').insert({ post_id: post.id, user_id: currentUserId }).select('id').single()
-                        if (data) {
-                          setLikedPosts(prev => new Set(prev).add(post.id))
-                          setPosts(prev => prev.map(p => p.id === post.id ? { ...p, wdywt_likes: [...p.wdywt_likes, { id: data.id }] } : p))
-                          if (post.user_id !== currentUserId) {
-                            await supabase.from('notifications').insert({
-                              recipient_user_id: post.user_id,
-                              actor_user_id: currentUserId,
-                              type: 'like',
-                              wdywt_post_id: post.id,
-                            })
-                            const myProfile = localStorage.getItem('dipdesk_dashboard_profile')
-                            const myName = myProfile ? JSON.parse(myProfile)?.full_name?.split(' ')[0] || 'Someone' : 'Someone'
-                            fetch('/api/push', {
-                              method: 'POST',
-                              headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify({
-                                user_ids: [post.user_id],
-                                title: `❤️ ${myName} liked your WDYWT post`,
-                                body: post.caption || 'Check it out',
-                                url: '/wdywt',
-                              }),
-                            }).catch(() => {})
-                          }
-                        }
-                      }
-                    }}
+                    onClick={() => void setPostLiked(post, !isLikedByMe(post))}
+                    disabled={!currentUserId}
+                    aria-pressed={isLikedByMe(post)}
+                    aria-label={isLikedByMe(post) ? 'Unlike' : 'Like'}
                     className="flex items-center gap-1.5 text-sm transition"
                   >
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill={likedPosts.has(post.id) ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`h-5 w-5 ${likedPosts.has(post.id) ? 'text-pink-500' : 'text-gray-600'}`}><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
-                    <span className={likedPosts.has(post.id) ? 'text-pink-500 font-semibold' : 'text-gray-600'}>{post.wdywt_likes?.length || 0}</span>
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill={isLikedByMe(post) ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`h-5 w-5 ${isLikedByMe(post) ? 'text-pink-500' : 'text-gray-600'}`}><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+                    <span className={isLikedByMe(post) ? 'text-pink-500 font-semibold' : 'text-gray-600'}>{post.wdywt_likes?.length || 0}</span>
                   </button>
                   <button
                     type="button"
@@ -634,13 +706,29 @@ export default function WDYWTPage() {
 
                 {/* Caption */}
                 {post.caption && (
-                  <div className="px-3 pt-1 pb-3 sm:px-4">
-                    <p className="text-sm text-gray-700">
+                  <div className="px-3 pt-1 pb-1 sm:px-4">
+                    <p className="text-sm text-gray-700 break-words">
                       <span className="font-semibold text-gray-900 mr-1">{getDisplayName(post)}</span>
                       {post.caption}
                     </p>
                   </div>
                 )}
+
+                {/* Wrap tag → that wrap's details. Hidden if the wrap was deleted, or is private
+                    (the owner still sees their own tag so they can change it). */}
+                {post.wrap && (!post.wrap.is_private || post.user_id === currentUserId) && (
+                  <div className="px-3 pt-1 sm:px-4">
+                    <button
+                      type="button"
+                      onClick={() => router.push(`/explore?wrap=${post.wrap!.id}`)}
+                      className="inline-flex max-w-full items-center gap-1 rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-700 hover:bg-pink-50 hover:text-pink-700"
+                    >
+                      <span aria-hidden>🏷</span>
+                      <span className="truncate">{post.wrap.name}{post.wrap.brand ? ` · ${post.wrap.brand}` : ''}</span>
+                    </button>
+                  </div>
+                )}
+                <div className="pb-3" />
               </article>
             ))}
           </div>
@@ -674,6 +762,11 @@ export default function WDYWTPage() {
               )}
               <textarea value={caption} onChange={(e) => setCaption(e.target.value)} placeholder="What are you wearing today? Add details about your wrap..." rows={3} maxLength={300} className="mt-4 w-full rounded-2xl border border-gray-200 px-4 py-3 text-[16px] text-gray-700 outline-none focus:border-pink-300 focus:ring-2 focus:ring-pink-100 resize-none" />
               <p className="mt-1 text-right text-xs text-gray-400">{caption.length}/300</p>
+              {/* Optional wrap tag */}
+              <div className="mt-2">
+                <p className="mb-2 text-sm font-semibold text-gray-700">Which wrap? <span className="font-normal text-gray-400">(optional)</span></p>
+                <WrapPicker value={postWrapId} onChange={setPostWrapId} />
+              </div>
               {postError && <p className="mt-2 rounded-xl bg-red-50 px-4 py-2 text-sm font-medium text-red-600">{postError}</p>}
               <button type="button" disabled={!photoFile || isPosting} onClick={handlePost} className="mt-4 w-full rounded-2xl bg-gradient-to-r from-pink-500 to-rose-500 py-3 text-sm font-bold text-white shadow-sm disabled:opacity-50 transition">
                 {isPosting ? 'Posting...' : 'Share WDYWT'}
@@ -857,6 +950,30 @@ export default function WDYWTPage() {
             </div>
           </div>
         </>
+      )}
+
+      {/* Owner: add / change the wrap on a post */}
+      {tagEditPost && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center sm:p-4" onClick={() => { if (!savingTag) setTagEditPost(null) }}>
+          <div
+            className="animate-sheet-up w-full max-w-lg rounded-t-3xl bg-white p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] shadow-2xl sm:rounded-3xl sm:pb-5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-lg font-bold text-gray-900">Which wrap?</h3>
+              <button type="button" onClick={() => setTagEditPost(null)} disabled={savingTag} className="text-sm text-gray-500">Cancel</button>
+            </div>
+            <WrapPicker value={tagEditValue} onChange={setTagEditValue} />
+            <button
+              type="button"
+              onClick={() => void saveTag()}
+              disabled={savingTag || (tagEditValue || null) === (tagEditPost.wrap_id || null)}
+              className="mt-4 min-h-[48px] w-full rounded-2xl bg-gradient-to-r from-pink-500 to-rose-500 text-sm font-bold text-white shadow-sm disabled:opacity-50"
+            >
+              {savingTag ? 'Saving...' : 'Save'}
+            </button>
+          </div>
+        </div>
       )}
 
       {/* Delete confirm */}

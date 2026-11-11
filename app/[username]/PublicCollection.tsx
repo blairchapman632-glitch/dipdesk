@@ -30,7 +30,8 @@ export type PublicWrap = {
   forSalePrice: number | null
   forSaleCurrency: string | null
   forSalePm: boolean
-  images: string[]
+  images: string[] // full photos (detail sheet)
+  thumbs: string[] // small copies, same order (tiles)
 }
 
 export type PublicDip = {
@@ -42,8 +43,8 @@ export type PublicDip = {
   stage: string
 }
 
-// Smaller images for tiles (same approach as the Dashboard)
-const thumb = (url: string) => `${url}?width=400&quality=60`
+// Tile image: the small copy when the wrap has one, else the full photo
+const tileImage = (wrap: PublicWrap) => wrap.thumbs?.[0] || wrap.images[0]
 
 export default function PublicCollection({
   profile,
@@ -144,11 +145,11 @@ export default function PublicCollection({
           <section className="space-y-2">
             {dips.map(d => {
               const wrap = d.wrapId ? wrapsById[d.wrapId] : undefined
-              const img = wrap?.images[0]
+              const img = wrap ? tileImage(wrap) : undefined
               return (
                 <div key={d.id} className="flex items-center gap-3 rounded-2xl border border-purple-200 bg-purple-50/60 p-2.5">
                   {img ? (
-                    <img src={thumb(img)} alt={d.title} loading="lazy" className="h-14 w-14 shrink-0 rounded-xl object-cover object-[center_30%]" />
+                    <img src={img} alt={d.title} loading="lazy" className="h-14 w-14 shrink-0 rounded-xl object-cover object-[center_30%]" />
                   ) : (
                     <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-white text-2xl">🎲</div>
                   )}
@@ -196,7 +197,7 @@ export default function PublicCollection({
                 >
                   <div className="relative aspect-[3/4] w-full bg-gray-100">
                     {w.images[0] ? (
-                      <img src={thumb(w.images[0])} alt={w.name} loading="lazy" className="h-full w-full object-cover object-[center_20%]" />
+                      <img src={tileImage(w)} alt={w.name} loading="lazy" className="h-full w-full object-cover object-[center_20%]" />
                     ) : (
                       <div className="flex h-full w-full items-center justify-center bg-pink-50 text-3xl">🧣</div>
                     )}

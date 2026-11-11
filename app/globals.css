@@ -108,6 +108,27 @@ span[onClick] {
   }
 }
 
+/* Double-tap to like: heart pops over the photo, then fades */
+@keyframes heart-pop {
+  0% { transform: scale(0.3); opacity: 0; }
+  15% { transform: scale(1.15); opacity: 1; }
+  30% { transform: scale(0.95); opacity: 1; }
+  45% { transform: scale(1); opacity: 1; }
+  80% { transform: scale(1); opacity: 1; }
+  100% { transform: scale(1.1); opacity: 0; }
+}
+.animate-heart-pop {
+  animation: heart-pop 0.8s ease-out forwards;
+}
+
+/* Pull-to-refresh spinner */
+@keyframes ptr-spin {
+  to { transform: rotate(360deg); }
+}
+.animate-ptr-spin {
+  animation: ptr-spin 0.7s linear infinite;
+}
+
 input,
 select,
 textarea {

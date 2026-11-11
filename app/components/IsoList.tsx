@@ -5,14 +5,16 @@
 import { supabase } from '@/lib/supabase'
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { getCoverImage, sortWrapImages } from '@/lib/wrapCover'
+import { getCoverImage, getCoverThumb, getImageThumb, sortWrapImages } from '@/lib/wrapCover'
 import { fullSheetOverlay, fullSheetPanel, SheetTopBar } from '@/app/components/Sheet'
 import { useLockBodyScroll } from '@/app/components/useLockBodyScroll'
 import { showToast } from '@/app/components/Toast'
+import DoubleTapLike from '@/app/components/DoubleTapLike'
 
 type WrapImage = {
   id: string
   image_url: string
+  thumbnail_url?: string | null
   is_primary: boolean
   sort_order: number
 }
@@ -181,6 +183,7 @@ export default function IsoList({ layout = 'page' }: { layout?: 'page' | 'profil
             wrap_images (
               id,
               image_url,
+              thumbnail_url,
               is_primary,
               sort_order
             )
@@ -497,8 +500,9 @@ export default function IsoList({ layout = 'page' }: { layout?: 'page' | 'profil
                 >
                   <div className="relative aspect-[3/4] w-full bg-gray-100 pointer-events-none">
                     <img
-                      src={getPrimaryImage(wrap)}
+                      src={getCoverThumb(wrap.wrap_images) || WRAP_PLACEHOLDER}
                       alt={wrap.name}
+                      loading="lazy"
                       className="h-full w-full object-cover object-[center_20%] transition duration-300 group-hover:scale-[1.03]"
                     />
 
@@ -673,9 +677,11 @@ export default function IsoList({ layout = 'page' }: { layout?: 'page' | 'profil
                 </div>
 
                 <div className="mb-4 overflow-hidden rounded-3xl bg-gray-100 shadow-sm">
-                  <button
-                    type="button"
-                    onClick={() => setIsImagePreviewOpen(true)}
+                  {/* Tap = view larger; double-tap = like (never unlikes) */}
+                  <DoubleTapLike
+                    enabled={!!currentUserId && currentUserId !== selectedWrap.user_id}
+                    onSingleTap={() => setIsImagePreviewOpen(true)}
+                    onDoubleTap={() => { if (!hasLikedSelectedWrap) void handleToggleLike() }}
                     className="block w-full cursor-zoom-in bg-black"
                   >
                     <img
@@ -683,11 +689,11 @@ export default function IsoList({ layout = 'page' }: { layout?: 'page' | 'profil
                       alt={selectedWrap.name}
                       className="h-[440px] w-full object-cover transition duration-300 hover:scale-[1.01]"
                     />
-                  </button>
+                  </DoubleTapLike>
                 </div>
 
                 <p className="mb-4 text-xs text-gray-500">
-                  Click the main image to view larger
+                  Tap the photo to view larger{currentUserId && currentUserId !== selectedWrap.user_id ? ' · double-tap to like' : ''}
                 </p>
 
                 {sortedImages.length > 0 && (
@@ -704,8 +710,9 @@ export default function IsoList({ layout = 'page' }: { layout?: 'page' | 'profil
                         }`}
                       >
                         <img
-                          src={image.image_url}
+                          src={getImageThumb(image) || image.image_url}
                           alt={selectedWrap.name}
+                          loading="lazy"
                           className="h-20 w-full object-cover transition duration-200 hover:scale-[1.02]"
                         />
                       </button>

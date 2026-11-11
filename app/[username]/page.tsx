@@ -4,7 +4,7 @@ import { notFound } from 'next/navigation'
 import { cache } from 'react'
 import { createClient } from '@supabase/supabase-js'
 import { RESERVED_USERNAMES, USERNAME_PATTERN } from '@/lib/usernames'
-import { sortWrapImages } from '@/lib/wrapCover'
+import { getImageThumb, sortWrapImages } from '@/lib/wrapCover'
 import PublicCollection, { type PublicDip, type PublicProfile, type PublicWrap } from './PublicCollection'
 
 // Public, logged-out collection page: wrapapp.com.au/[username]
@@ -41,7 +41,7 @@ const loadPage = cache(async (rawUsername: string): Promise<PageData | null> => 
   const [{ data: wraps }, { data: dips }, { count: followers }, { count: following }] = await Promise.all([
     db
       .from('wraps')
-      .select('id, name, brand, colour, size, material, wrap_type, description, for_sale, for_sale_price, for_sale_currency, for_sale_price_is_pm, is_favourite, created_at, wrap_images(id, image_url, sort_order)')
+      .select('id, name, brand, colour, size, material, wrap_type, description, for_sale, for_sale_price, for_sale_currency, for_sale_price_is_pm, is_favourite, created_at, wrap_images(id, image_url, thumbnail_url, sort_order)')
       .eq('user_id', profile.id)
       .eq('is_private', false)
       .in('status', ['active', 'holiday'])
@@ -71,7 +71,10 @@ const loadPage = cache(async (rawUsername: string): Promise<PageData | null> => 
       followers: followers || 0,
       following: following || 0,
     },
-    wraps: ((wraps as any[]) || []).map(w => ({
+    wraps: ((wraps as any[]) || []).map(w => {
+      // Same photo order as the rest of the app (first photo = cover)
+      const sorted = sortWrapImages((w.wrap_images as { id: string; sort_order: number; image_url: string; thumbnail_url: string | null }[]) || [])
+      return {
       id: w.id,
       name: w.name,
       brand: w.brand,
@@ -84,10 +87,11 @@ const loadPage = cache(async (rawUsername: string): Promise<PageData | null> => 
       forSalePrice: w.for_sale_price,
       forSaleCurrency: w.for_sale_currency,
       forSalePm: !!w.for_sale_price_is_pm,
-      // Same photo order as the rest of the app (first photo = cover)
-      images: sortWrapImages((w.wrap_images as { id: string; sort_order: number; image_url: string }[]) || [])
-        .map(i => i.image_url),
-    })),
+      images: sorted.map(i => i.image_url),
+      // Small copies for tiles (falls back to the full photo for older uploads)
+      thumbs: sorted.map(i => getImageThumb(i) || i.image_url),
+      }
+    }),
     dips: ((dips as any[]) || []).map(d => ({
       id: d.id,
       title: d.title,

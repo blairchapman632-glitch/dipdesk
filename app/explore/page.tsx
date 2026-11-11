@@ -4,14 +4,18 @@ import AppLayout from '@/app/components/AppLayout'
 import { supabase } from '@/lib/supabase'
 import React, { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { getCoverImage, sortWrapImages } from '@/lib/wrapCover'
+import { getCoverImage, getCoverThumb, getImageThumb, sortWrapImages } from '@/lib/wrapCover'
 import { fullSheetOverlay, fullSheetPanel, SheetTopBar } from '@/app/components/Sheet'
 import { useLockBodyScroll } from '@/app/components/useLockBodyScroll'
 import { showToast } from '@/app/components/Toast'
+import DoubleTapLike from '@/app/components/DoubleTapLike'
+import PullToRefresh from '@/app/components/PullToRefresh'
+import WdywtPostSheet, { type WdywtSheetPost } from '@/app/components/WdywtPostSheet'
 
 type WrapImage = {
   id: string
   image_url: string
+  thumbnail_url?: string | null
   is_primary: boolean
   sort_order: number
 }
@@ -67,6 +71,8 @@ const EXPLORE_USERS_KEY = 'dipdesk_explore_users'
 const EXPLORE_FOLLOWING_KEY = 'dipdesk_explore_following'
 const EXPLORE_PROFILES_KEY = 'dipdesk_explore_profiles'
 const EXPLORE_AVATARS_KEY = 'dipdesk_explore_avatars'
+const EXPLORE_FOLLOWING_POSTS_KEY = 'dipdesk_explore_following_posts'
+const HOME_FEED_KEY = 'wrapapp_home_feed' // 'everyone' | 'following'
 
 function getPrimaryImage(wrap?: Wrap) {
   const primary = getCoverImage(wrap?.wrap_images)
@@ -74,6 +80,11 @@ function getPrimaryImage(wrap?: Wrap) {
   return primary?.image_url
   ? `${primary.image_url}?width=400&quality=60`
   : WRAP_PLACEHOLDER
+}
+
+// Cards and collector tiles: the small copy when the photo has one
+function getPrimaryThumb(wrap?: Wrap) {
+  return getCoverThumb(wrap?.wrap_images) || WRAP_PLACEHOLDER
 }
 
 function getDisplayName(profile?: Profile) {
@@ -403,8 +414,49 @@ const [followedThisVisit, setFollowedThisVisit] = useState<Set<string>>(() => ne
 const [activeDips, setActiveDips] = useState<{id: string, wrap_id: string | null, total_spots: number, price_per_spot: number, stage: string | null, facebook_group: string | null}[]>([])
 const [allActiveDips, setAllActiveDips] = useState<{id: string, wrap_id: string | null, total_spots: number, price_per_spot: number, stage: string | null, facebook_group: string | null}[]>([])
 const allActiveDipsRef = React.useRef<string[]>([])
+// Home feed switch: Everyone (ranked, as before) or Following (newest wraps + WDYWT from people you follow)
+const [feedMode, setFeedMode] = useState<'everyone' | 'following'>('everyone')
+const [followingPosts, setFollowingPosts] = useState<WdywtSheetPost[]>([])
+const [openFollowingPostId, setOpenFollowingPostId] = useState<string | null>(null)
+// Pull-to-refresh calls the same loaders the page runs on open
+const refreshRef = React.useRef<() => Promise<void>>(async () => {})
+
+// Opened from a WDYWT wrap tag: /explore?wrap=<id> opens that wrap's details (the usual view)
+useEffect(() => {
+  const wrapId = new URLSearchParams(window.location.search).get('wrap')
+  if (!wrapId) return
+  router.replace('/explore')
+  ;(async () => {
+    const [{ data: wrapRow }, { data: { session } }] = await Promise.all([
+      supabase
+        .from('wraps')
+        .select('id, user_id, name, brand, colour, size, material, wrap_type, description, status, sold_date, is_favourite, is_private, for_sale, for_sale_price, for_sale_currency, for_sale_price_is_pm, created_at, wrap_images(id, image_url, thumbnail_url, is_primary, sort_order)')
+        .eq('id', wrapId)
+        .order('sort_order', { referencedTable: 'wrap_images' })
+        .maybeSingle(),
+      supabase.auth.getSession(),
+    ])
+    const viewerId = session?.user?.id || null
+    // Deleted, or private to its owner
+    if (!wrapRow || (wrapRow.is_private && String(wrapRow.user_id) !== String(viewerId))) {
+      showToast('That wrap isn’t available')
+      return
+    }
+    const { data: owner } = await supabase.from('profiles').select('id, full_name, username').eq('id', wrapRow.user_id).maybeSingle()
+    if (owner) setProfilesMap((prev) => ({ ...prev, [owner.id]: owner }))
+    void openViewWrapModal(wrapRow as unknown as Wrap)
+  })()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [])
 
   useEffect(() => {
+  try {
+    const savedFeed = localStorage.getItem(HOME_FEED_KEY)
+    if (savedFeed === 'following' || savedFeed === 'everyone') setFeedMode(savedFeed)
+    const cachedFollowingPosts = localStorage.getItem(EXPLORE_FOLLOWING_POSTS_KEY)
+    if (cachedFollowingPosts) setFollowingPosts(JSON.parse(cachedFollowingPosts))
+  } catch {}
+
   const cachedWraps = localStorage.getItem(EXPLORE_WRAPS_KEY)
   const cachedProfiles = localStorage.getItem(EXPLORE_PROFILES_KEY)
   const cachedUsers = localStorage.getItem(EXPLORE_USERS_KEY)
@@ -484,7 +536,7 @@ async function loadActiveDips() {
       const { data: wrapData, error: wrapError } = await supabase
         .from('wraps')
                 .select(
-          'id, user_id, name, brand, colour, size, material, wrap_type, description, status, sold_date, is_favourite, for_sale, for_sale_price, for_sale_currency, for_sale_price_is_pm, created_at, wrap_images(id, image_url, is_primary, sort_order)'
+          'id, user_id, name, brand, colour, size, material, wrap_type, description, status, sold_date, is_favourite, for_sale, for_sale_price, for_sale_currency, for_sale_price_is_pm, created_at, wrap_images(id, image_url, thumbnail_url, is_primary, sort_order)'
         )
         .order('created_at', { ascending: false })
         .order('sort_order', { referencedTable: 'wrap_images' })
@@ -601,7 +653,7 @@ const usersFromWraps: ExploreUser[] = uniqueUserIds
     return {
       id: userId,
       name: getDisplayName(profileMap[userId]),
-      image_url: getPrimaryImage(latestUserWrap),
+      image_url: getPrimaryThumb(latestUserWrap),
       wrap_count: wrapCount,
       score,
     }
@@ -620,11 +672,26 @@ if (currentUserId) {
   const followingIds = (followsData || []).map((f) => f.following_id)
 
   if (followingIds.length > 0) {
-    const [{ data: followingProfiles }, { data: followingWrapData }, { data: followingCounts }] = await Promise.all([
+    const [{ data: followingProfiles }, { data: followingWrapData }, { data: followingCounts }, { data: followingPostData }] = await Promise.all([
       supabase.from('profiles').select('id, full_name, username, avatar_url').in('id', followingIds),
-      supabase.from('wraps').select('id, user_id, wrap_images(id, image_url, is_primary, sort_order)').in('user_id', followingIds).eq('status', 'active').order('created_at', { ascending: false }).order('sort_order', { referencedTable: 'wrap_images' }),
+      supabase.from('wraps').select('id, user_id, wrap_images(id, image_url, thumbnail_url, is_primary, sort_order)').in('user_id', followingIds).eq('status', 'active').order('created_at', { ascending: false }).order('sort_order', { referencedTable: 'wrap_images' }),
       supabase.from('wraps').select('user_id').in('user_id', followingIds),
+      // Following feed: newest WDYWT posts from people you follow (their wraps are already in latestWraps)
+      supabase
+        .from('wdywt_posts')
+        .select('id, user_id, photo_url, thumbnail_url, caption, created_at, wdywt_likes(id, user_id), wdywt_comments(id)')
+        .in('user_id', followingIds)
+        .order('created_at', { ascending: false })
+        .limit(40),
     ])
+
+    const nextFollowingPosts: WdywtSheetPost[] = (followingPostData || []).map((p) => ({
+      ...p,
+      wdywt_likes: p.wdywt_likes || [],
+      wdywt_comments: p.wdywt_comments || [],
+    }))
+    setFollowingPosts(nextFollowingPosts)
+    localStorage.setItem(EXPLORE_FOLLOWING_POSTS_KEY, JSON.stringify(nextFollowingPosts))
 
     const followingProfileMap: Record<string, any> = {}
     ;(followingProfiles || []).forEach((p: any) => { followingProfileMap[p.id] = p })
@@ -651,7 +718,7 @@ if (currentUserId) {
       return {
         id,
         name: getDisplayName(followingProfileMap[id]),
-        image_url: getPrimaryImage(userWraps[0]),
+        image_url: getPrimaryThumb(userWraps[0]),
         wrap_count: followingRealCounts[id] || 0,
       }
     }).filter((u) => followingProfileMap[u.id])
@@ -668,11 +735,14 @@ if (currentUserId) {
     localStorage.setItem(EXPLORE_USERS_KEY, JSON.stringify(mergedUsers))
   } else {
     setFollowingUsers([])
+    setFollowingPosts([])
+    localStorage.removeItem(EXPLORE_FOLLOWING_POSTS_KEY)
     setUsers(usersFromWraps)
     localStorage.setItem(EXPLORE_USERS_KEY, JSON.stringify(usersFromWraps))
   }
 } else {
   setFollowingUsers([])
+  setFollowingPosts([])
   setUsers(usersFromWraps)
   localStorage.setItem(EXPLORE_USERS_KEY, JSON.stringify(usersFromWraps))
 }
@@ -681,6 +751,9 @@ setLoading(false)
     }
 
     loadExploreData()
+    refreshRef.current = async () => {
+      await Promise.all([loadActiveDips(), loadExploreData()])
+    }
 async function loadFilterOptions() {
   const { data } = await supabase
     .from('wraps')
@@ -759,7 +832,7 @@ return () => {
           const { data: searchUserWrapData } = await supabase
             .from('wraps')
             .select(
-              'id, user_id, name, brand, description, colour, wrap_type, status, sold_date, is_favourite, for_sale, for_sale_price, for_sale_currency, for_sale_price_is_pm, created_at, wrap_images(id, image_url, is_primary, sort_order)'
+              'id, user_id, name, brand, description, colour, wrap_type, status, sold_date, is_favourite, for_sale, for_sale_price, for_sale_currency, for_sale_price_is_pm, created_at, wrap_images(id, image_url, thumbnail_url, is_primary, sort_order)'
             )
             .in('user_id', matchedUserIds)
             .order('created_at', { ascending: false })
@@ -785,7 +858,7 @@ matchedUsers = matchedProfiles.map((profile) => {
   return {
     id: profile.id,
     name: getDisplayName(profile),
-    image_url: getPrimaryImage(latestUserWrap),
+    image_url: getPrimaryThumb(latestUserWrap),
     wrap_count: searchRealCounts[profile.id] || userWraps.length,
   }
 })
@@ -797,7 +870,7 @@ matchedUsers = matchedProfiles.map((profile) => {
       const { data: wrapData, error: wrapError } = await supabase
         .from('wraps')
         .select(
-          'id, user_id, name, brand, description, colour, wrap_type, status, sold_date, is_favourite, for_sale, for_sale_price, for_sale_currency, for_sale_price_is_pm, created_at, wrap_images(id, image_url, is_primary, sort_order)'
+          'id, user_id, name, brand, description, colour, wrap_type, status, sold_date, is_favourite, for_sale, for_sale_price, for_sale_currency, for_sale_price_is_pm, created_at, wrap_images(id, image_url, thumbnail_url, is_primary, sort_order)'
         )
         .or(`name.ilike.%${term}%,brand.ilike.%${term}%,colour.ilike.%${term}%,description.ilike.%${term}%`)
         .order('created_at', { ascending: false })
@@ -1045,8 +1118,144 @@ const filteredWraps = (
     hasSearch &&
     filteredUsers.length === 0 &&
     filteredWraps.length === 0
+
+  // ── Following feed ──
+  // Newest wraps (already loaded, same filters as Everyone) and WDYWT posts from people you follow,
+  // mixed by date. Posts are left out while a wrap filter is on (they have no brand/size etc.).
+  const wrapFiltersOn = !!(filterBrand || sizeMin || sizeMax || sizeRingSling || filterColour || selectedBlends.length > 0 || selectedTypes.length > 0 || resultType !== 'all')
+  const showFollowingFeed = !!currentUserId && feedMode === 'following' && !hasSearch
+  const followingNameById: Record<string, string> = {}
+  followingUsers.forEach((u) => { followingNameById[u.id] = u.name })
+  const followingFeed = showFollowingFeed
+    ? [
+        ...filteredWraps
+          .filter((wrap) => followedIdSet.has(wrap.user_id))
+          .map((wrap) => ({ kind: 'wrap' as const, id: `w-${wrap.id}`, date: wrap.created_at, wrap })),
+        ...(wrapFiltersOn ? [] : followingPosts)
+          .filter((post) => followedIdSet.has(post.user_id))
+          .map((post) => ({ kind: 'post' as const, id: `p-${post.id}`, date: post.created_at, post })),
+      ]
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+        .slice(0, 80)
+    : []
+  const openFollowingPost = followingPosts.find((post) => post.id === openFollowingPostId) || null
+
+  function changeFeedMode(mode: 'everyone' | 'following') {
+    setFeedMode(mode)
+    try { localStorage.setItem(HOME_FEED_KEY, mode) } catch {}
+  }
+
+  function updateFollowingPost(updated: WdywtSheetPost) {
+    setFollowingPosts((prev) => {
+      const next = prev.map((post) => (post.id === updated.id ? updated : post))
+      try { localStorage.setItem(EXPLORE_FOLLOWING_POSTS_KEY, JSON.stringify(next)) } catch {}
+      return next
+    })
+  }
+
+  // One wrap card (Everyone grid and Following feed)
+  const renderWrapCard = (wrap: Wrap) => (
+    <button
+      key={wrap.id}
+      type="button"
+      onClick={() => openViewWrapModal(wrap)}
+      className="group flex h-full cursor-pointer flex-col overflow-hidden rounded-xl border border-gray-200 bg-white text-left shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-md hover:cursor-pointer"
+      style={{ cursor: 'pointer' }}
+      title="Open wrap"
+    >
+      <div className="relative aspect-[3/4] w-full bg-gray-100" style={{ cursor: 'pointer' }}>
+        <img style={{ cursor: 'pointer' }}
+          src={getPrimaryThumb(wrap)}
+          loading="lazy"
+          alt={wrap.name}
+          className="h-full w-full object-cover object-[center_20%] transition duration-300 group-hover:scale-[1.03] pointer-events-none"
+        />
+
+        {/* Small badges, top-left; stacked (dip first) when both apply */}
+        {(activeDipWrapIds.has(wrap.id) || wrap.for_sale) && (
+          <div className="pointer-events-none absolute left-2 top-2 flex flex-col items-start gap-1">
+            {activeDipWrapIds.has(wrap.id) && (
+              <div className="rounded-lg bg-white/90 px-2 py-1 text-[10px] font-semibold text-fuchsia-700 shadow">
+                🎲 Being dipped
+              </div>
+            )}
+            {wrap.for_sale && (
+              <div className="rounded-lg bg-white/90 px-2 py-1 text-[10px] font-semibold text-amber-700 shadow">
+                🪓 For Sale
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Fixed-height text area so every card in a row lines up */}
+      <div className="flex flex-1 flex-col items-start px-2 py-1.5">
+        <h3 className="w-full truncate text-sm font-bold leading-5 text-gray-900 pointer-events-none">
+          {wrap.name}
+        </h3>
+        <p className="h-4 w-full truncate text-xs leading-4 text-gray-500 pointer-events-none">
+          {wrap.brand || ' '}
+        </p>
+        <span
+          onClick={(event) => {
+            event.stopPropagation()
+            router.push(`/user/${wrap.user_id}`)
+          }}
+          className="mt-1 inline-flex max-w-full cursor-pointer items-center truncate rounded-full bg-pink-50 px-2 py-0.5 text-xs font-semibold text-pink-600 hover:bg-pink-100"
+        >
+          {getDisplayName(profilesMap[wrap.user_id])}
+        </span>
+      </div>
+    </button>
+  )
+
+  // One WDYWT post in the Following feed — same card shape as a wrap
+  const renderPostCard = (post: WdywtSheetPost) => {
+    const ownerName = followingNameById[post.user_id] || getDisplayName(profilesMap[post.user_id])
+    const liked = !!currentUserId && post.wdywt_likes.some((like) => String(like.user_id) === String(currentUserId))
+    return (
+      <button
+        key={`post-${post.id}`}
+        type="button"
+        onClick={() => setOpenFollowingPostId(post.id)}
+        className="group flex h-full cursor-pointer flex-col overflow-hidden rounded-xl border border-gray-200 bg-white text-left shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-md"
+      >
+        <div className="relative aspect-[3/4] w-full bg-gray-100">
+          <img
+            src={post.thumbnail_url || post.photo_url}
+            loading="lazy"
+            alt={post.caption || 'WDYWT'}
+            className="h-full w-full object-cover object-top pointer-events-none"
+          />
+          <div className="pointer-events-none absolute left-2 top-2 rounded-lg bg-white/90 px-2 py-1 text-[10px] font-semibold text-pink-600 shadow">
+            📸 WDYWT
+          </div>
+        </div>
+        <div className="flex flex-1 flex-col items-start px-2 py-1.5">
+          <h3 className="w-full truncate text-sm font-bold leading-5 text-gray-900 pointer-events-none">
+            {post.caption || 'What they wore today'}
+          </h3>
+          <p className="h-4 w-full truncate text-xs leading-4 text-gray-500 pointer-events-none">
+            <span className={liked ? 'text-pink-600' : ''}>♥ {post.wdywt_likes.length}</span> · 💬 {post.wdywt_comments.length}
+          </p>
+          <span
+            onClick={(event) => {
+              event.stopPropagation()
+              router.push(`/user/${post.user_id}`)
+            }}
+            className="mt-1 inline-flex max-w-full cursor-pointer items-center truncate rounded-full bg-pink-50 px-2 py-0.5 text-xs font-semibold text-pink-600 hover:bg-pink-100"
+          >
+            {ownerName}
+          </span>
+        </div>
+      </button>
+    )
+  }
+
   return (
     <AppLayout>
+      {/* Phone: pull down at the top to re-fetch */}
+      <PullToRefresh onRefresh={() => refreshRef.current()} />
       <div className="mx-auto max-w-[960px] space-y-2">
         {/* Solid white, full width, light grey line under it — cards never peek around it */}
         <section className="sticky top-[calc(3rem+env(safe-area-inset-top))] z-30 -mx-3 border-b border-gray-200 bg-white px-3 py-2 md:top-0 md:-mx-4 md:px-4">
@@ -1223,7 +1432,7 @@ const filteredWraps = (
 
         {/* Suggested collectors (browsing) — or the users results (searching / Users view) */}
         {!hasSearch && resultType !== 'users' ? (
-          resultType === 'all' && suggestedCollectors.length > 0 && (
+          resultType === 'all' && suggestedCollectors.length > 0 && !(showFollowingFeed && followingFeed.length === 0) && (
             <section className="py-1">
               <div className="mb-2 flex items-center justify-between">
                 <h2 className="text-sm font-bold text-gray-500 uppercase tracking-wide">Suggested collectors</h2>
@@ -1263,13 +1472,60 @@ const filteredWraps = (
         )}
 
         <section className="px-0 py-1">
-          <div className="mb-2">
-            <h2 className="text-sm font-bold text-gray-500 uppercase tracking-wide">Featured Wraps</h2>
+          {/* Heading + Everyone / Following switch (logged in, not searching) */}
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <h2 className="min-w-0 truncate text-sm font-bold text-gray-500 uppercase tracking-wide">
+              {showFollowingFeed ? 'Following' : 'Featured Wraps'}
+            </h2>
+            {currentUserId && !hasSearch && (
+              <div className="flex shrink-0 gap-0.5 rounded-lg bg-gray-100 p-0.5" role="tablist" aria-label="Home feed">
+                {([
+                  { key: 'everyone', label: 'Everyone' },
+                  { key: 'following', label: 'Following' },
+                ] as const).map((option) => (
+                  <button
+                    key={option.key}
+                    type="button"
+                    role="tab"
+                    aria-selected={feedMode === option.key}
+                    onClick={() => changeFeedMode(option.key)}
+                    className={`min-h-[32px] rounded-md px-3 text-xs transition ${
+                      feedMode === option.key ? 'bg-white font-bold text-gray-900 shadow-sm' : 'font-semibold text-gray-500'
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
-          {loading && latestWraps.length === 0 ? (
+          {showFollowingFeed ? (
+            followingFeed.length === 0 ? (
+              loading && latestWraps.length === 0 ? (
+                <p className="text-sm text-gray-500">Loading...</p>
+              ) : (
+                <div className="space-y-3 rounded-2xl border border-dashed px-3 py-5">
+                  <p className="text-center text-sm font-semibold text-gray-700">
+                    {wrapFiltersOn && followingUsers.length > 0
+                      ? 'Nothing from people you follow matches these filters'
+                      : 'Follow collectors to see their wraps here'}
+                  </p>
+                  {suggestedCollectors.length > 0 && (
+                    <div className="no-scrollbar -mx-3 flex gap-3 overflow-x-auto px-3 pb-1">
+                      {suggestedCollectors.map((user) => renderCollector(user))}
+                    </div>
+                  )}
+                </div>
+              )
+            ) : (
+              <div className="grid grid-cols-2 gap-2 md:grid-cols-3 md:gap-3">
+                {followingFeed.map((item) => (item.kind === 'wrap' ? renderWrapCard(item.wrap) : renderPostCard(item.post)))}
+              </div>
+            )
+          ) : loading && latestWraps.length === 0 ? (
             <p className="text-sm text-gray-500">Loading wraps...</p>
-                    ) : filteredWraps.length === 0 ? (
+          ) : filteredWraps.length === 0 ? (
             !hasSearch && (
               <div className="rounded-lg border border-dashed px-3 py-4 text-center">
                 <p className="text-sm text-gray-500">No wraps found</p>
@@ -1277,65 +1533,21 @@ const filteredWraps = (
             )
           ) : (
             <div className="grid grid-cols-2 gap-2 md:grid-cols-3 md:gap-3">
-              {filteredWraps.map((wrap) => (
-                <button
-                  key={wrap.id}
-                  type="button"
-                                    onClick={() => openViewWrapModal(wrap)}
-                  className="group flex h-full cursor-pointer flex-col overflow-hidden rounded-xl border border-gray-200 bg-white text-left shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-md hover:cursor-pointer"
-                  style={{ cursor: 'pointer' }}
-                  title="Open wrap"
-                >
-                  <div className="relative aspect-[3/4] w-full bg-gray-100" style={{ cursor: 'pointer' }}>
-                    <img style={{ cursor: 'pointer' }}
-  src={getPrimaryImage(wrap)}
-  loading="lazy"
-                      alt={wrap.name}
-                      className="h-full w-full object-cover object-[center_20%] transition duration-300 group-hover:scale-[1.03] pointer-events-none"
-                    />
-
-                    {/* Small badges, top-left; stacked (dip first) when both apply */}
-                    {(activeDipWrapIds.has(wrap.id) || wrap.for_sale) && (
-                      <div className="pointer-events-none absolute left-2 top-2 flex flex-col items-start gap-1">
-                        {activeDipWrapIds.has(wrap.id) && (
-                          <div className="rounded-lg bg-white/90 px-2 py-1 text-[10px] font-semibold text-fuchsia-700 shadow">
-                            🎲 Being dipped
-                          </div>
-                        )}
-                        {wrap.for_sale && (
-                          <div className="rounded-lg bg-white/90 px-2 py-1 text-[10px] font-semibold text-amber-700 shadow">
-                            🪓 For Sale
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    
-                  </div>
-
-                  {/* Fixed-height text area so every card in a row lines up */}
-                  <div className="flex flex-1 flex-col items-start px-2 py-1.5">
-                    <h3 className="w-full truncate text-sm font-bold leading-5 text-gray-900 pointer-events-none">
-                      {wrap.name}
-                    </h3>
-                    <p className="h-4 w-full truncate text-xs leading-4 text-gray-500 pointer-events-none">
-                      {wrap.brand || '\u00a0'}
-                    </p>
-                    <span
-                      onClick={(event) => {
-                        event.stopPropagation()
-                        router.push(`/user/${wrap.user_id}`)
-                      }}
-                      className="mt-1 inline-flex max-w-full cursor-pointer items-center truncate rounded-full bg-pink-50 px-2 py-0.5 text-xs font-semibold text-pink-600 hover:bg-pink-100"
-                    >
-                      {getDisplayName(profilesMap[wrap.user_id])}
-                    </span>
-                  </div>
-                </button>
-              ))}
+              {filteredWraps.map((wrap) => renderWrapCard(wrap))}
             </div>
           )}
         </section>
+
+        {/* A WDYWT post opened from the Following feed */}
+        {openFollowingPost && (
+          <WdywtPostSheet
+            post={openFollowingPost}
+            ownerName={followingNameById[openFollowingPost.user_id] || getDisplayName(profilesMap[openFollowingPost.user_id])}
+            currentUserId={currentUserId}
+            onClose={() => setOpenFollowingPostId(null)}
+            onUpdate={updateFollowingPost}
+          />
+        )}
                 {isViewWrapModalOpen && selectedWrap && (() => {
           const sortedImages = sortWrapImages(selectedWrap.wrap_images)
 
@@ -1446,9 +1658,11 @@ const filteredWraps = (
                 </div>
 
                 <div className="mb-4 overflow-hidden rounded-3xl bg-gray-100 shadow-sm">
-                  <button
-                    type="button"
-                    onClick={() => setIsImagePreviewOpen(true)}
+                  {/* Tap = view larger; double-tap = like (never unlikes) */}
+                  <DoubleTapLike
+                    enabled={!!currentUserId && currentUserId !== selectedWrap.user_id}
+                    onSingleTap={() => setIsImagePreviewOpen(true)}
+                    onDoubleTap={() => { if (!hasLikedSelectedWrap) void handleToggleLike() }}
                     className="block w-full cursor-zoom-in bg-black"
                   >
                     <img
@@ -1457,11 +1671,11 @@ const filteredWraps = (
                       alt={selectedWrap.name}
                       className="h-[440px] w-full object-cover transition duration-300 hover:scale-[1.01]"
                     />
-                  </button>
+                  </DoubleTapLike>
                 </div>
 
                 <p className="mb-4 text-xs text-gray-500">
-                  Click the main image to view larger
+                  Tap the photo to view larger{currentUserId && currentUserId !== selectedWrap.user_id ? ' · double-tap to like' : ''}
                 </p>
 
                 {sortedImages.length > 0 && (
@@ -1478,8 +1692,9 @@ const filteredWraps = (
                         }`}
                       >
                         <img
-                          src={image.image_url}
+                          src={getImageThumb(image) || image.image_url}
                           alt={selectedWrap.name}
+                          loading="lazy"
                           className="h-20 w-full object-cover transition duration-200 hover:scale-[1.02]"
                         />
                       </button>

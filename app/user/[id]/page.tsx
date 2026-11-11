@@ -4,14 +4,17 @@ import { useEffect, useMemo, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import AppLayout from '@/app/components/AppLayout'
-import { getCoverImage, sortWrapImages } from '@/lib/wrapCover'
+import { getCoverImage, getCoverThumb, getImageThumb, sortWrapImages } from '@/lib/wrapCover'
 import { fullSheetOverlay, fullSheetPanel, SheetTopBar } from '@/app/components/Sheet'
 import { useLockBodyScroll } from '@/app/components/useLockBodyScroll'
 import { showToast } from '@/app/components/Toast'
+import WdywtGrid from '@/app/components/WdywtGrid'
+import DoubleTapLike from '@/app/components/DoubleTapLike'
 
 type WrapImage = {
   id: string
   image_url: string
+  thumbnail_url?: string | null
   is_primary: boolean
   sort_order: number
 }
@@ -52,24 +55,6 @@ type SocialCounts = {
   wishlists: number
 }
 
-type WDYWTPost = {
-  id: string
-  user_id: string
-  photo_url: string
-  caption: string | null
-  created_at: string
-  wdywt_likes: { id: string }[]
-  wdywt_comments: { id: string }[]
-}
-
-type Comment = {
-  id: string
-  user_id: string
-  content: string
-  created_at: string
-  profiles: { full_name: string | null, username: string | null, avatar_url: string | null } | null
-}
-
 const WRAP_PLACEHOLDER = 'https://placehold.co/800x800/fdf2f8/be185d?text=Wrap'
 
 const getUserCollectionWrapsKey = (userId: string) => `dipdesk_user_collection_wraps_${userId}`
@@ -87,12 +72,9 @@ function getPrimaryImage(wrap?: Wrap) {
   return getCoverImage(wrap?.wrap_images)?.image_url || WRAP_PLACEHOLDER
 }
 
-function timeAgo(dateString: string) {
-  const diff = Math.max(1, Math.floor((Date.now() - new Date(dateString).getTime()) / 1000))
-  if (diff < 60) return 'Just now'
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
-  return `${Math.floor(diff / 86400)}d ago`
+// Grids and tiles use the small copy when there is one
+function getPrimaryThumb(wrap?: Wrap) {
+  return getCoverThumb(wrap?.wrap_images) || WRAP_PLACEHOLDER
 }
 
 export default function UserCollectionPage() {
@@ -111,9 +93,7 @@ export default function UserCollectionPage() {
   const [isViewWrapModalOpen, setIsViewWrapModalOpen] = useState(false)
   const [isImagePreviewOpen, setIsImagePreviewOpen] = useState(false)
   const [selectedWrapCounts, setSelectedWrapCounts] = useState<SocialCounts>({ likes: 0, wishlists: 0 })
-  const [activeTab, setActiveTab] = useState<'collection' | 'forsale' | 'dips'>('collection')
-  const [wdywtPosts, setWdywtPosts] = useState<WDYWTPost[]>([])
-  const [wdywtLoaded, setWdywtLoaded] = useState(false)
+  const [activeTab, setActiveTab] = useState<'collection' | 'forsale' | 'dips' | 'wdywt'>('collection')
   const [stats, setStats] = useState<{ followers: number, following: number, wraps: number, bio: string | null, city: string | null, country: string | null }>({ followers: 0, following: 0, wraps: 0, bio: null, city: null, country: null })
   const [hasLikedSelectedWrap, setHasLikedSelectedWrap] = useState(false)
   const [hasWishlistedSelectedWrap, setHasWishlistedSelectedWrap] = useState(false)
@@ -121,15 +101,8 @@ export default function UserCollectionPage() {
   const [activeDips, setActiveDips] = useState<{id: string, title: string, wrap_id: string | null, total_spots: number, price_per_spot: number, stage: string | null, wrap_name: string | null, brand: string | null, facebook_group: string | null}[]>([])
   const [authChecked, setAuthChecked] = useState(false)
 
-  // WDYWT post modal
-  const [selectedPost, setSelectedPost] = useState<WDYWTPost | null>(null)
-  // Lock the page behind any open sheet/modal
-  useLockBodyScroll(isViewWrapModalOpen || isImagePreviewOpen || !!selectedPost)
-  const [postComments, setPostComments] = useState<Comment[]>([])
-  const [postCommentsLoading, setPostCommentsLoading] = useState(false)
-  const [postCommentText, setPostCommentText] = useState('')
-  const [postCommentSending, setPostCommentSending] = useState(false)
-  const [likedPosts, setLikedPosts] = useState<Set<string>>(new Set())
+  // Lock the page behind any open sheet/modal (the WDYWT post sheet locks itself)
+  useLockBodyScroll(isViewWrapModalOpen || isImagePreviewOpen)
 
   useEffect(() => {
     if (!userId) return
@@ -165,14 +138,11 @@ export default function UserCollectionPage() {
     const cachedStats = localStorage.getItem(getUserCollectionStatsKey(userId))
     if (cachedStats) { try { setStats(JSON.parse(cachedStats)) } catch {} }
 
-    const cachedWdywt = localStorage.getItem(`dipdesk_user_wdywt_${userId}`)
-    if (cachedWdywt) { try { setWdywtPosts(JSON.parse(cachedWdywt)); setWdywtLoaded(true) } catch {} }
-
     const cachedDips = localStorage.getItem(`dipdesk_user_dips_${userId}`)
     if (cachedDips) { try { setActiveDips(JSON.parse(cachedDips)) } catch {} }
 
     const savedTab = sessionStorage.getItem(`profile_tab_${userId}`)
-    if (savedTab === 'collection' || savedTab === 'forsale' || savedTab === 'dips') setActiveTab(savedTab)
+    if (savedTab === 'collection' || savedTab === 'forsale' || savedTab === 'dips' || savedTab === 'wdywt') setActiveTab(savedTab)
 
     async function load() {
       const { data: { user } } = await supabase.auth.getUser()
@@ -186,8 +156,8 @@ export default function UserCollectionPage() {
         // Own profile: all fields from the owner-only my_wraps view.
         // Other people: public columns only (purchase, loan and sale details are private).
         loggedInUserId && String(loggedInUserId) === String(userId)
-          ? supabase.from('my_wraps').select('id, name, brand, size, material, colour, purchase_date, purchased_from, status, on_loan_to, sold_to, sold_price, sold_currency, sold_date, is_favourite, for_sale, for_sale_price, for_sale_currency, for_sale_price_is_pm, wrap_images(id, image_url, is_primary, sort_order)').eq('user_id', userId).order('is_favourite', { ascending: false }).order('purchase_date', { ascending: false }).order('sort_order', { referencedTable: 'wrap_images' })
-          : supabase.from('wraps').select('id, name, brand, size, material, colour, status, sold_date, is_favourite, for_sale, for_sale_price, for_sale_currency, for_sale_price_is_pm, wrap_images(id, image_url, is_primary, sort_order)').eq('user_id', userId).order('is_favourite', { ascending: false }).order('created_at', { ascending: false }).order('sort_order', { referencedTable: 'wrap_images' }),
+          ? supabase.from('my_wraps').select('id, name, brand, size, material, colour, purchase_date, purchased_from, status, on_loan_to, sold_to, sold_price, sold_currency, sold_date, is_favourite, for_sale, for_sale_price, for_sale_currency, for_sale_price_is_pm, wrap_images(id, image_url, thumbnail_url, is_primary, sort_order)').eq('user_id', userId).order('is_favourite', { ascending: false }).order('purchase_date', { ascending: false }).order('sort_order', { referencedTable: 'wrap_images' })
+          : supabase.from('wraps').select('id, name, brand, size, material, colour, status, sold_date, is_favourite, for_sale, for_sale_price, for_sale_currency, for_sale_price_is_pm, wrap_images(id, image_url, thumbnail_url, is_primary, sort_order)').eq('user_id', userId).order('is_favourite', { ascending: false }).order('created_at', { ascending: false }).order('sort_order', { referencedTable: 'wrap_images' }),
       ])
 
       let nextIsFollowing = false
@@ -208,13 +178,8 @@ export default function UserCollectionPage() {
       setStats(nextStats)
       localStorage.setItem(getUserCollectionStatsKey(userId), JSON.stringify(nextStats))
 
-      const { data: wdywtData } = await supabase.from('wdywt_posts').select('id, photo_url, caption, created_at, wdywt_likes(id), wdywt_comments(id)').eq('user_id', userId).order('created_at', { ascending: false })
-      if (wdywtData) {
-        setWdywtPosts(wdywtData as WDYWTPost[])
-        setWdywtLoaded(true)
-        localStorage.setItem(`dipdesk_user_wdywt_${userId}`, JSON.stringify(wdywtData))
-      }
-const { data: dipData } = await supabase
+      // WDYWT posts load in <WdywtGrid> (same cache key, mounted with the page)
+      const { data: dipData } = await supabase
         .from('dips')
         .select('id, title, wrap_id, total_spots, price_per_spot, stage, wrap_name, brand, facebook_group')
         .eq('user_id', userId)
@@ -252,7 +217,7 @@ const { data: dipData } = await supabase
     return (
       <button key={wrap.id} type="button" onClick={() => openViewWrapModal(wrap)} className="group flex h-auto cursor-pointer flex-col overflow-hidden rounded-xl border bg-white p-0 text-left shadow-none transition duration-200 hover:-translate-y-1 hover:shadow-md xl:rounded-2xl xl:shadow-sm">
         <div className="relative aspect-[3/4] w-full bg-gray-100 pointer-events-none">
-          <img src={getPrimaryImage(wrap)} alt={wrap.name} className="h-full w-full object-cover object-[center_20%] transition duration-300 group-hover:scale-[1.03]" />
+          <img src={getPrimaryThumb(wrap)} alt={wrap.name} loading="lazy" className="h-full w-full object-cover object-[center_20%] transition duration-300 group-hover:scale-[1.03]" />
           {wrap.for_sale && <div className="absolute left-3 top-3 rounded-xl bg-white/90 px-2 py-1 text-xs font-semibold text-amber-700 shadow"><div>🪓 For Sale</div><div className="text-[10px] font-medium text-gray-700">{wrap.for_sale_price_is_pm ? 'PM' : wrap.for_sale_price !== null ? formatCurrency(wrap.for_sale_price, wrap.for_sale_currency || 'AUD') : ''}</div></div>}
           {wrap.is_favourite && <div className="absolute right-3 top-3 rounded-full bg-white/90 px-2 py-1 text-xs font-semibold text-pink-600 shadow">★ Perma</div>}
           {activeDips.some(d => String(d.wrap_id) === String(wrap.id)) && <div className="absolute bottom-2 left-2 rounded-full bg-white/90 px-2 py-0.5 text-[11px] font-semibold text-fuchsia-700 shadow">🎲 In a dip</div>}
@@ -291,48 +256,6 @@ const { data: dipData } = await supabase
       localStorage.setItem(getUserCollectionFollowKey(userId), 'true')
       showToast(`Following ${firstName}`)
     }
-  }
-
-  async function openPostModal(post: WDYWTPost) {
-    setSelectedPost(post)
-    setPostCommentText('')
-    setPostCommentsLoading(true)
-
-    const cached = sessionStorage.getItem(`wdywt_comments_${post.id}`)
-    if (cached) { try { setPostComments(JSON.parse(cached)); setPostCommentsLoading(false) } catch {} }
-
-    const { data } = await supabase.from('wdywt_comments').select('id, user_id, content, created_at').eq('post_id', post.id).order('created_at', { ascending: true })
-    if (data && data.length > 0) {
-      const userIds = [...new Set(data.map((c: any) => c.user_id))]
-      const { data: profileData } = await supabase.from('profiles').select('id, full_name, username, avatar_url').in('id', userIds)
-      const profileMap: Record<string, any> = {}
-      ;(profileData || []).forEach((p: any) => { profileMap[p.id] = p })
-      const normalized = data.map((c: any) => ({ ...c, profiles: profileMap[c.user_id] || null }))
-      setPostComments(normalized)
-      sessionStorage.setItem(`wdywt_comments_${post.id}`, JSON.stringify(normalized))
-    } else {
-      setPostComments([])
-    }
-    setPostCommentsLoading(false)
-  }
-
-  async function handlePostComment() {
-    if (!postCommentText.trim() || !currentUserId || !selectedPost || postCommentSending) return
-    setPostCommentSending(true)
-
-    const { data, error } = await supabase.from('wdywt_comments').insert({ post_id: selectedPost.id, user_id: currentUserId, content: postCommentText.trim() }).select('id, user_id, content, created_at').single()
-    if (!error && data) {
-      const { data: pd } = await supabase.from('profiles').select('id, full_name, username, avatar_url').eq('id', currentUserId).single()
-      const newComments = [...postComments, { ...data, profiles: pd || null }]
-      setPostComments(newComments)
-      sessionStorage.setItem(`wdywt_comments_${selectedPost.id}`, JSON.stringify(newComments))
-      setPostCommentText('')
-      setWdywtPosts(prev => prev.map(p => p.id === selectedPost.id ? { ...p, wdywt_comments: [...p.wdywt_comments, { id: data.id }] } : p))
-      if (selectedPost.user_id !== currentUserId) {
-        await supabase.from('notifications').insert({ recipient_user_id: userId, actor_user_id: currentUserId, type: 'comment' })
-      }
-    }
-    setPostCommentSending(false)
   }
 
   async function loadWrapSocialData(wrapId: string) {
@@ -521,6 +444,7 @@ const { data: dipData } = await supabase
             { key: 'collection', label: 'Collection', icon: (<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-[18px] w-[18px]"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>) },
             { key: 'forsale', label: 'For Sale', icon: (<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-[18px] w-[18px]"><path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z"/><circle cx="7.5" cy="7.5" r="1.5"/></svg>) },
             { key: 'dips', label: 'Dips', icon: (<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-[18px] w-[18px]"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1"/><circle cx="15.5" cy="15.5" r="1"/><circle cx="12" cy="12" r="1"/></svg>) },
+            { key: 'wdywt', label: 'WDYWT', icon: (<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-[18px] w-[18px]"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>) },
           ] as const).map((tab) => {
             const isActive = activeTab === tab.key
             return (
@@ -556,6 +480,16 @@ const { data: dipData } = await supabase
           </section>
         )}
 
+        {/* WDYWT: 3-column photo grid; tap opens the post. Mounted with the page so it loads
+            alongside everything else (as before), shown only on its tab. */}
+        <section className={`min-w-0 ${activeTab === 'wdywt' ? '' : 'hidden'}`}>
+          <WdywtGrid
+            userId={userId}
+            currentUserId={currentUserId}
+            ownerName={profile?.full_name?.split(' ')[0] || profile?.username || 'User'}
+          />
+        </section>
+
         {/* Dips: their active dips only (the same dips shown as "Currently being dipped") */}
         {activeTab === 'dips' && (
           <section className="min-w-0 space-y-2">
@@ -575,7 +509,7 @@ const { data: dipData } = await supabase
                     className="flex w-full items-center gap-3 rounded-2xl border border-purple-200 bg-purple-50/60 p-2.5 text-left"
                   >
                     {dipWrap ? (
-                      <img src={getPrimaryImage(dipWrap)} alt={title} className="h-16 w-16 shrink-0 rounded-xl object-cover" />
+                      <img src={getPrimaryThumb(dipWrap)} alt={title} className="h-16 w-16 shrink-0 rounded-xl object-cover" />
                     ) : (
                       <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl bg-white text-2xl">🎲</div>
                     )}
@@ -615,7 +549,7 @@ const { data: dipData } = await supabase
                     {departedWraps.map((wrap) => (
                       <button key={wrap.id} type="button" onClick={() => openViewWrapModal(wrap)} className="group flex cursor-pointer flex-col overflow-hidden rounded-2xl border bg-gray-50 p-0 text-left shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-md">
                         <div className="relative aspect-[4/5] w-full bg-gray-100 pointer-events-none">
-                          <img src={getPrimaryImage(wrap)} alt={wrap.name} className="h-full w-full object-cover object-[center_20%] opacity-90 transition duration-300 group-hover:scale-[1.03]" />
+                          <img src={getPrimaryThumb(wrap)} alt={wrap.name} loading="lazy" className="h-full w-full object-cover object-[center_20%] opacity-90 transition duration-300 group-hover:scale-[1.03]" />
                           {wrap.for_sale && <div className="absolute left-3 top-3 rounded-xl bg-white/90 px-2 py-1 text-xs font-semibold text-amber-700 shadow"><div>🪓 For Sale</div><div className="text-[10px] font-medium text-gray-700">{wrap.for_sale_price_is_pm ? 'PM' : wrap.for_sale_price !== null ? formatCurrency(wrap.for_sale_price, wrap.for_sale_currency || 'AUD') : ''}</div></div>}
                           {wrap.is_favourite && <div className="absolute right-3 top-3 rounded-full bg-white/90 px-2 py-1 text-xs font-semibold text-pink-600 shadow">★ Perma</div>}
                         </div>
@@ -631,106 +565,6 @@ const { data: dipData } = await supabase
             </div>
           )}
         </section>
-
-        {/* WDYWT post modal */}
-        {selectedPost && (
-          <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center p-0 sm:p-4" onClick={() => setSelectedPost(null)}>
-            <div className="animate-sheet-up w-full max-w-lg rounded-t-3xl sm:rounded-3xl bg-white shadow-2xl max-h-[90dvh] flex flex-col pb-[env(safe-area-inset-bottom)] sm:pb-0" onClick={e => e.stopPropagation()}>
-              <div className="flex items-center justify-between px-5 py-4 border-b shrink-0">
-                <h3 className="font-bold text-gray-900">Post</h3>
-                <div className="flex items-center gap-3">
-                  {selectedPost && currentUserId === userId && (
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        const id = selectedPost.id
-                        setSelectedPost(null)
-                        await supabase.from('wdywt_posts').delete().eq('id', id)
-                        setWdywtPosts(prev => prev.filter(p => p.id !== id))
-                        localStorage.setItem(`dipdesk_user_wdywt_${userId}`, JSON.stringify(wdywtPosts.filter(p => p.id !== id)))
-                      }}
-                      className="text-sm font-semibold text-red-500"
-                    >
-                      Delete
-                    </button>
-                  )}
-                  <button type="button" onClick={() => setSelectedPost(null)} className="text-sm text-gray-500">Close</button>
-                </div>
-              </div>
-              <div className="overflow-y-auto flex-1">
-                <img src={selectedPost.photo_url} alt={selectedPost.caption || 'WDYWT'} className="w-full aspect-square object-cover object-top" />
-                <div className="px-5 py-3">
-                  <div className="flex items-center gap-4 mb-3">
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        if (!currentUserId) return
-                        const isLiked = likedPosts.has(selectedPost.id)
-                        if (isLiked) {
-                          await supabase.from('wdywt_likes').delete().eq('post_id', selectedPost.id).eq('user_id', currentUserId)
-                          setLikedPosts(prev => { const n = new Set(prev); n.delete(selectedPost.id); return n })
-                          setWdywtPosts(prev => prev.map(p => p.id === selectedPost.id ? { ...p, wdywt_likes: p.wdywt_likes.slice(1) } : p))
-                        } else {
-                          const { data } = await supabase.from('wdywt_likes').insert({ post_id: selectedPost.id, user_id: currentUserId }).select('id').single()
-                          if (data) {
-                            setLikedPosts(prev => new Set(prev).add(selectedPost.id))
-                            setWdywtPosts(prev => prev.map(p => p.id === selectedPost.id ? { ...p, wdywt_likes: [...p.wdywt_likes, { id: data.id }] } : p))
-                            if (userId !== currentUserId) await supabase.from('notifications').insert({ recipient_user_id: userId, actor_user_id: currentUserId, type: 'like' })
-                          }
-                        }
-                      }}
-                      className="flex items-center gap-1.5 text-sm"
-                    >
-                      <svg viewBox="0 0 24 24" fill={likedPosts.has(selectedPost.id) ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" className={`h-5 w-5 ${likedPosts.has(selectedPost.id) ? 'text-pink-500' : 'text-gray-600'}`}><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
-                      <span className={likedPosts.has(selectedPost.id) ? 'text-pink-500 font-semibold' : 'text-gray-600'}>{wdywtPosts.find(p => p.id === selectedPost.id)?.wdywt_likes?.length || 0}</span>
-                    </button>
-                    <span className="flex items-center gap-1.5 text-sm text-gray-600">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-                      {wdywtPosts.find(p => p.id === selectedPost.id)?.wdywt_comments?.length || 0}
-                    </span>
-                  </div>
-                  {selectedPost.caption && (
-                    <p className="text-sm text-gray-700 mb-3">
-                      <span className="font-semibold text-gray-900 mr-1">{profile?.full_name?.split(' ')[0] || profile?.username || 'User'}</span>
-                      {selectedPost.caption}
-                    </p>
-                  )}
-                  <p className="text-xs text-gray-400 mb-4">{timeAgo(selectedPost.created_at)}</p>
-                  <div className="border-t pt-3 space-y-3">
-                    {postCommentsLoading ? (
-                      <p className="text-sm text-gray-400 text-center py-2">Loading comments...</p>
-                    ) : postComments.length === 0 ? (
-                      <p className="text-sm text-gray-400 text-center py-2">No comments yet</p>
-                    ) : (
-                      postComments.map(comment => {
-                        const name = comment.profiles?.full_name?.split(' ')[0] || comment.profiles?.username || 'Someone'
-                        return (
-                          <div key={comment.id} className="flex items-start gap-2">
-                            {comment.profiles?.avatar_url ? (
-                              <img src={comment.profiles.avatar_url} alt={name} className="h-7 w-7 rounded-full object-cover shrink-0" />
-                            ) : (
-                              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-pink-500 to-rose-500 text-xs font-bold text-white">{name[0]?.toUpperCase() || '?'}</div>
-                            )}
-                            <div>
-                              <p className="text-sm text-gray-900"><span className="font-semibold mr-1">{name}</span>{comment.content}</p>
-                              <p className="text-xs text-gray-400">{timeAgo(comment.created_at)}</p>
-                            </div>
-                          </div>
-                        )
-                      })
-                    )}
-                  </div>
-                </div>
-              </div>
-              {currentUserId && (
-                <div className="border-t px-4 py-3 flex items-center gap-3 shrink-0">
-                  <input type="text" value={postCommentText} onChange={e => setPostCommentText(e.target.value)} placeholder="Add a comment..." className="flex-1 rounded-full border border-gray-200 px-4 py-2 text-[16px] outline-none focus:border-pink-300" onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handlePostComment() } }} />
-                  <button type="button" disabled={!postCommentText.trim() || postCommentSending} onClick={handlePostComment} className="rounded-full bg-pink-500 px-4 py-2 text-sm font-semibold text-white disabled:opacity-40">Post</button>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
 
         {/* Wrap modal */}
         {isViewWrapModalOpen && selectedWrap && (() => {
@@ -775,17 +609,23 @@ const { data: dipData } = await supabase
                 </div>
 
                 <div className="mb-4 overflow-hidden rounded-3xl bg-gray-100 shadow-sm">
-                  <button type="button" onClick={() => setIsImagePreviewOpen(true)} className="block w-full cursor-zoom-in bg-black">
+                  {/* Tap = view larger; double-tap = like (never unlikes) */}
+                  <DoubleTapLike
+                    enabled={!!currentUserId && String(currentUserId) !== String(userId)}
+                    onSingleTap={() => setIsImagePreviewOpen(true)}
+                    onDoubleTap={() => { if (!hasLikedSelectedWrap) void handleToggleLike() }}
+                    className="block w-full cursor-zoom-in bg-black"
+                  >
                     <img src={selectedViewImage || getPrimaryImage(selectedWrap)} alt={selectedWrap.name} className="h-[440px] w-full object-cover transition duration-300 hover:scale-[1.01]" />
-                  </button>
+                  </DoubleTapLike>
                 </div>
-                <p className="mb-4 text-xs text-gray-500">Click the main image to view larger</p>
+                <p className="mb-4 text-xs text-gray-500">Tap the photo to view larger{currentUserId && String(currentUserId) !== String(userId) ? ' · double-tap to like' : ''}</p>
 
                 {sortedImages.length > 0 && (
                   <div className="mb-6 grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-6">
                     {sortedImages.map(image => (
                       <button key={image.id} type="button" onClick={() => setSelectedViewImage(image.image_url)} className={`overflow-hidden rounded-xl border transition duration-200 ${selectedViewImage === image.image_url ? 'border-pink-500 ring-2 ring-pink-200 shadow-sm' : 'border-gray-200 hover:border-pink-300 hover:shadow-sm'}`}>
-                        <img src={image.image_url} alt={selectedWrap.name} className="h-20 w-full object-cover transition duration-200 hover:scale-[1.02]" />
+                        <img src={getImageThumb(image) || image.image_url} alt={selectedWrap.name} loading="lazy" className="h-20 w-full object-cover transition duration-200 hover:scale-[1.02]" />
                       </button>
                     ))}
                   </div>
