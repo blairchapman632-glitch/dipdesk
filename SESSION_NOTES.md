@@ -1,5 +1,21 @@
 # Session Notes
 
+## 2026-11-11 — Profile tabs that always fit + filter sheet
+**Changed**
+- New `app/components/ProfileTabs.tsx`: equal-width segmented tabs (CSS grid, `minmax(0,1fr)`), so there's never sideways scrolling. Each tab has a 22px icon on top and a text-xs label under it. Active = white pill, dark; inactive = gray-500. Counts are a small pink badge on the icon corner. Shared `TAB_ICONS`.
+  - Your profile: Collection · For Sale · Dips · ISO · WDYWT. Dips badge = your active (not archived) dips.
+  - Other users: Collection · For Sale · Dips · WDYWT. Dips badge = their active dips (was a pill beside the label).
+  - Public page: Collection · For Sale (For Sale badge = count).
+  - Labels use one weight for every tab (active shown by colour + pill, not bold) and tabs have no side padding. At 320px each tab is ~56px and "Collection" is ~53px, so it fits; labels truncate as a last resort.
+- New `app/components/CollectionFilters.tsx`: `useCollectionFilters()` (state + the same matching rules as the old pills, moved from ProfileDashboard), `CollectionFilterBar` and `CollectionFilterSheet`.
+  - The bar shows "16 wraps" / "3 of 16 wraps" with the Explore filter icon. The button goes pink with the number of active filter groups.
+  - The sheet (Explore look: handle, Filter / Done header) has Brand, Length min–max, Colour, Blend, Type, with Clear + Done at the bottom. Inputs are 16px.
+- Your profile: the always-visible pill row and its inline panels are removed. The bar sits above the grid; on desktop it also holds "+ Add Wrap". Filters still apply to Departed Wraps too.
+- Other users' profiles: now have the same filter bar and sheet (they had none before). Added `wrap_type` to their wrap selects so Type works.
+- New "No wraps match these filters" + Clear filters message instead of an empty grid.
+
+**Untested** — the tab row at 320/375px on a real phone; the filter sheet on iOS (keyboard over the Brand input).
+
 ## 2026-11-11 — Improvements batch: WDYWT tabs, Following feed, wrap tags, thumbnails, pull-to-refresh, double-tap (not committed yet)
 **Changed**
 - **WDYWT tabs.**

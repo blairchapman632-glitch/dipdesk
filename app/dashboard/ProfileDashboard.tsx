@@ -8,6 +8,8 @@ import AppLayout from '@/app/components/AppLayout'
 import IsoList from '@/app/components/IsoList'
 import WdywtGrid from '@/app/components/WdywtGrid'
 import PullToRefresh from '@/app/components/PullToRefresh'
+import ProfileTabs, { TAB_ICONS } from '@/app/components/ProfileTabs'
+import { CollectionFilterBar, CollectionFilterSheet, useCollectionFilters } from '@/app/components/CollectionFilters'
 import { askConfirm, showToast } from '@/app/components/Toast'
 import { useLockBodyScroll } from '@/app/components/useLockBodyScroll'
 import { fullSheetOverlay, fullSheetPanel, SheetTopBar } from '@/app/components/Sheet'
@@ -383,22 +385,9 @@ const [selectedWrapCounts, setSelectedWrapCounts] = useState({
 })
 const [isClearingNotifications, setIsClearingNotifications] = useState(false)
 
-// Collection filters
-const [collectionSearch, setCollectionSearch] = useState('')
-const [showCollectionBrandFilter, setShowCollectionBrandFilter] = useState(false)
-const [showCollectionLengthFilter, setShowCollectionLengthFilter] = useState(false)
-const [showCollectionColourFilter, setShowCollectionColourFilter] = useState(false)
-const [showCollectionBlendFilter, setShowCollectionBlendFilter] = useState(false)
-const [showCollectionTypeFilter, setShowCollectionTypeFilter] = useState(false)
-const [collectionFilterBrand, setCollectionFilterBrand] = useState('')
-const [collectionFilterColour, setCollectionFilterColour] = useState('')
-const [collectionFilterBlend, setCollectionFilterBlend] = useState<string[]>([])
-const [collectionFilterType, setCollectionFilterType] = useState<string[]>([])
-const [collectionSizeMin, setCollectionSizeMin] = useState('')
-const [collectionSizeMax, setCollectionSizeMax] = useState('')
-const COLLECTION_COLOUR_TAGS = ['White/Cream', 'Grey', 'Black', 'Brown/Tan', 'Pink/Blush', 'Red/Burgundy', 'Orange/Rust', 'Yellow/Mustard', 'Green', 'Teal/Petrol', 'Blue', 'Navy', 'Purple', 'Rainbow', 'Multi/Variegated', 'Natural/Undyed']
-const COLLECTION_BLEND_TAGS = ['Cotton', 'Linen', 'Silk', 'Hemp', 'Wool/Merino', 'Seacell', 'Tencel', 'Chenille', 'Camel', 'Bamboo', 'Cashmere']
-const COLLECTION_TYPE_TAGS = ['Hand Woven', 'Machine Woven', 'Ring Sling', 'Carrier']
+// Collection filters (shared with other collectors' profiles): Brand, Length, Colour, Blend, Type
+const [collectionSearch] = useState('')
+const collectionFilters = useCollectionFilters()
     const router = useRouter()
 
   const handleLogout = async () => {
@@ -432,40 +421,16 @@ const updateWrapForm = <K extends keyof WrapFormState>(
       })
   }, [wraps])
 
-  const filteredCollectionWraps = useMemo(() => {
-    return collectionWraps.filter((wrap) => {
-      if (collectionSearch.trim()) {
-        const term = collectionSearch.toLowerCase()
-        const matchesName = wrap.name.toLowerCase().includes(term)
-        const matchesBrand = (wrap.brand || '').toLowerCase().includes(term)
-        if (!matchesName && !matchesBrand) return false
-      }
-      if (collectionFilterBrand) {
-        const wrapBrand = (wrap.brand || '').toLowerCase()
-        if (!wrapBrand.includes(collectionFilterBrand.toLowerCase())) return false
-      }
-      if (collectionSizeMin || collectionSizeMax) {
-        const wrapSize = parseFloat((wrap.size || ''))
-        if (isNaN(wrapSize)) return false
-        if (collectionSizeMin && wrapSize < parseFloat(collectionSizeMin)) return false
-        if (collectionSizeMax && wrapSize > parseFloat(collectionSizeMax)) return false
-      }
-      if (collectionFilterColour) {
-        const selected = collectionFilterColour.split(',').map(c => c.trim().toLowerCase()).filter(Boolean)
-        const wrapColour = ((wrap as any).colour || '').toLowerCase()
-        if (!selected.some(c => wrapColour.includes(c.split('/')[0].trim()))) return false
-      }
-      if (collectionFilterBlend.length > 0) {
-        const wrapMaterial = ((wrap as any).material || '').toLowerCase()
-        if (!collectionFilterBlend.some(b => wrapMaterial.includes(b.toLowerCase().split('/')[0].trim()))) return false
-      }
-      if (collectionFilterType.length > 0) {
-        const wrapType = ((wrap as any).wrap_type || '').toLowerCase()
-        if (!collectionFilterType.some(t => wrapType === t.toLowerCase())) return false
-      }
-      return true
-    })
-  }, [collectionWraps, collectionSearch, collectionFilterBrand, collectionSizeMin, collectionSizeMax, collectionFilterColour, collectionFilterBlend, collectionFilterType])
+  // Same rules as before, now from the shared filter hook (also applied to Departed Wraps)
+  const filteredCollectionWraps = collectionWraps.filter((wrap) => {
+    if (collectionSearch.trim()) {
+      const term = collectionSearch.toLowerCase()
+      const matchesName = wrap.name.toLowerCase().includes(term)
+      const matchesBrand = (wrap.brand || '').toLowerCase().includes(term)
+      if (!matchesName && !matchesBrand) return false
+    }
+    return collectionFilters.matches(wrap as Parameters<typeof collectionFilters.matches>[0])
+  })
 
   const departedWraps = useMemo(() => {
     return wraps
@@ -476,34 +441,9 @@ const updateWrapForm = <K extends keyof WrapFormState>(
       })
   }, [wraps])
 
-  const filteredDepartedWraps = useMemo(() => {
-    return departedWraps.filter((wrap) => {
-      if (collectionFilterBrand) {
-        const wrapBrand = (wrap.brand || '').toLowerCase()
-        if (!wrapBrand.includes(collectionFilterBrand.toLowerCase())) return false
-      }
-      if (collectionSizeMin || collectionSizeMax) {
-        const wrapSize = parseFloat((wrap.size || ''))
-        if (isNaN(wrapSize)) return false
-        if (collectionSizeMin && wrapSize < parseFloat(collectionSizeMin)) return false
-        if (collectionSizeMax && wrapSize > parseFloat(collectionSizeMax)) return false
-      }
-      if (collectionFilterColour) {
-        const selected = collectionFilterColour.split(',').map(c => c.trim().toLowerCase()).filter(Boolean)
-        const wrapColour = ((wrap as any).colour || '').toLowerCase()
-        if (!selected.some(c => wrapColour.includes(c.split('/')[0].trim()))) return false
-      }
-      if (collectionFilterBlend.length > 0) {
-        const wrapMaterial = ((wrap as any).material || '').toLowerCase()
-        if (!collectionFilterBlend.some(b => wrapMaterial.includes(b.toLowerCase().split('/')[0].trim()))) return false
-      }
-      if (collectionFilterType.length > 0) {
-        const wrapType = ((wrap as any).wrap_type || '').toLowerCase()
-        if (!collectionFilterType.some(t => wrapType === t.toLowerCase())) return false
-      }
-      return true
-    })
-  }, [departedWraps, collectionFilterBrand, collectionSizeMin, collectionSizeMax, collectionFilterColour, collectionFilterBlend, collectionFilterType])
+  const filteredDepartedWraps = departedWraps.filter((wrap) =>
+    collectionFilters.matches(wrap as Parameters<typeof collectionFilters.matches>[0])
+  )
 const reportRows = useMemo<ReportRow[]>(() => {
   return wraps
     .filter((wrap) => {
@@ -2147,162 +2087,45 @@ function exportReportCsv() {
           )
         })()}
 
-        {/* Profile tabs: iOS-style segmented control (scrolls if it ever needs to) */}
+        {/* Profile tabs: equal-width, icon over label, always fit (no sideways scroll) */}
         {mode === 'profile' && (
-          <div className="no-scrollbar mt-2! flex gap-1 overflow-x-auto rounded-xl bg-gray-100 p-1">
-            {([
-              { key: 'collection', label: 'Collection', icon: (<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-[18px] w-[18px]"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>) },
-              { key: 'forsale', label: 'For Sale', icon: (<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-[18px] w-[18px]"><path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z"/><circle cx="7.5" cy="7.5" r="1.5"/></svg>) },
-              { key: 'dips', label: 'Dips', icon: (<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-[18px] w-[18px]"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1"/><circle cx="15.5" cy="15.5" r="1"/><circle cx="12" cy="12" r="1"/></svg>) },
-              { key: 'iso', label: 'ISO', icon: (<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-[18px] w-[18px]"><path d="m12 3 2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.4 6.8 19.1l1-5.8L3.5 9.2l5.9-.9z"/></svg>) },
-              { key: 'wdywt', label: 'WDYWT', icon: (<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-[18px] w-[18px]"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>) },
-            ] as const).map((tab) => {
-              const isActive = profileTab === tab.key
-              return (
-                <button
-                  key={tab.key}
-                  type="button"
-                  onClick={() => {
-                    setProfileTab(tab.key)
-                    if (tab.key === 'iso') setIsoOpened(true)
-                    if (tab.key === 'wdywt') setWdywtOpened(true)
-                  }}
-                  aria-current={isActive ? 'page' : undefined}
-                  className={`flex min-h-[40px] min-w-max flex-1 items-center justify-center gap-1.5 rounded-lg px-2.5 text-sm transition ${
-                    isActive ? 'bg-white font-bold text-gray-900 shadow-sm' : 'font-semibold text-gray-500'
-                  }`}
-                >
-                  {tab.icon}
-                  <span>{tab.label}</span>
-                </button>
-              )
-            })}
-          </div>
+          <ProfileTabs
+            className="mt-2!"
+            active={profileTab}
+            onChange={(key) => {
+              setProfileTab(key)
+              if (key === 'iso') setIsoOpened(true)
+              if (key === 'wdywt') setWdywtOpened(true)
+            }}
+            tabs={[
+              { key: 'collection', label: 'Collection', icon: TAB_ICONS.collection },
+              { key: 'forsale', label: 'For Sale', icon: TAB_ICONS.forsale },
+              { key: 'dips', label: 'Dips', icon: TAB_ICONS.dips, badge: dips.filter((dip) => !dip.archived).length },
+              { key: 'iso', label: 'ISO', icon: TAB_ICONS.iso },
+              { key: 'wdywt', label: 'WDYWT', icon: TAB_ICONS.wdywt },
+            ]}
+          />
         )}
 
         {mode === 'profile' && profileTab === 'collection' && (
           <section className="mt-3! min-w-0">
-<div className="mb-3 hidden items-center justify-end px-1 md:flex">
-  <button
-    type="button"
-    onClick={openNewWrapModal}
-    className={`${BTN_PRIMARY} shrink-0`}
-  >
-    + Add Wrap
-  </button>
-</div>
-
-<div className="mb-4 space-y-2 px-1">
-  
-  {/* All five pills fit across a 375px phone; they share spare width (grow) but never shrink,
-      so the row scrolls once 'Clear' is added */}
-  <div className="no-scrollbar -mx-1 flex gap-1.5 overflow-x-auto pb-0.5">
-    {[
-      { label: collectionFilterBrand ? 'Brand ✓' : 'Brand', key: 'brand', active: !!collectionFilterBrand },
-      { label: (collectionSizeMin || collectionSizeMax) ? 'Length ✓' : 'Length', key: 'length', active: !!(collectionSizeMin || collectionSizeMax) },
-      { label: collectionFilterColour ? 'Colour ✓' : 'Colour', key: 'colour', active: !!collectionFilterColour },
-      { label: collectionFilterBlend.length > 0 ? 'Blend ✓' : 'Blend', key: 'blend', active: collectionFilterBlend.length > 0 },
-      { label: collectionFilterType.length > 0 ? 'Type ✓' : 'Type', key: 'type', active: collectionFilterType.length > 0 },
-    ].map(({ label, key, active }) => (
-      <button
-        key={key}
-        type="button"
-        onClick={() => {
-          setShowCollectionBrandFilter(key === 'brand' ? !showCollectionBrandFilter : false)
-          setShowCollectionLengthFilter(key === 'length' ? !showCollectionLengthFilter : false)
-          setShowCollectionColourFilter(key === 'colour' ? !showCollectionColourFilter : false)
-          setShowCollectionBlendFilter(key === 'blend' ? !showCollectionBlendFilter : false)
-          setShowCollectionTypeFilter(key === 'type' ? !showCollectionTypeFilter : false)
-        }}
-        className={`h-[34px] shrink-0 grow whitespace-nowrap rounded-full border px-2.5 text-sm font-semibold transition ${active ? 'border-pink-500 bg-pink-50 text-pink-700' : 'border-gray-200 bg-white text-gray-600'}`}
-      >
-        {label}
-      </button>
-    ))}
-    {(collectionFilterBrand || collectionSizeMin || collectionSizeMax || collectionFilterColour || collectionFilterBlend.length > 0 || collectionFilterType.length > 0) && (
-      <button
-        type="button"
-        onClick={() => {
-          setCollectionFilterBrand('')
-          setCollectionSizeMin('')
-          setCollectionSizeMax('')
-          setCollectionFilterColour('')
-          setCollectionFilterBlend([])
-          setCollectionFilterType([])
-        }}
-        className="h-[34px] shrink-0 whitespace-nowrap rounded-full border border-red-200 bg-white px-2.5 text-sm font-semibold text-red-500"
-      >
-        Clear
-      </button>
-    )}
-  </div>
-
-  {showCollectionBrandFilter && (
-    <input
-      type="text"
-      value={collectionFilterBrand}
-      onChange={(e) => setCollectionFilterBrand(e.target.value)}
-      placeholder="Filter by brand..."
-      className="w-full rounded-xl border px-3 py-2 text-[16px] text-gray-900 outline-none focus:border-pink-500"
-    />
-  )}
-
-  {showCollectionLengthFilter && (
-    <div className="flex items-center gap-2">
-      <input type="number" step="0.1" value={collectionSizeMin} onChange={(e) => setCollectionSizeMin(e.target.value)} placeholder="Min m" className="w-24 rounded-xl border px-3 py-2 text-[16px] outline-none focus:border-pink-300" />
-      <span className="text-xs text-gray-400">to</span>
-      <input type="number" step="0.1" value={collectionSizeMax} onChange={(e) => setCollectionSizeMax(e.target.value)} placeholder="Max m" className="w-24 rounded-xl border px-3 py-2 text-[16px] outline-none focus:border-pink-300" />
-      <span className="text-xs text-gray-400">meters</span>
-    </div>
-  )}
-
-
-  {showCollectionBlendFilter && (
-    <div className="flex flex-wrap gap-1.5">
-      {COLLECTION_BLEND_TAGS.map((tag) => {
-        const selected = collectionFilterBlend.includes(tag)
-        return (
-          <button key={tag} type="button"
-            onClick={() => setCollectionFilterBlend(prev => selected ? prev.filter(b => b !== tag) : [...prev, tag])}
-            className={`rounded-full border px-2.5 py-1 text-xs font-semibold transition ${selected ? 'border-pink-500 bg-pink-500 text-white' : 'border-gray-200 bg-white text-gray-600'}`}
-          >{tag}</button>
-        )
-      })}
-    </div>
-  )}
-
-  {showCollectionTypeFilter && (
-    <div className="flex flex-wrap gap-1.5">
-      {COLLECTION_TYPE_TAGS.map((tag) => {
-        const selected = collectionFilterType.includes(tag)
-        return (
-          <button key={tag} type="button"
-            onClick={() => setCollectionFilterType(prev => selected ? prev.filter(t => t !== tag) : [...prev, tag])}
-            className={`rounded-full border px-2.5 py-1 text-xs font-semibold transition ${selected ? 'border-pink-500 bg-pink-500 text-white' : 'border-gray-200 bg-white text-gray-600'}`}
-          >{tag}</button>
-        )
-      })}
-    </div>
-  )}
-
-  {showCollectionColourFilter && (
-    <div className="flex flex-wrap gap-1.5">
-      {COLLECTION_COLOUR_TAGS.map((tag) => {
-        const selected = collectionFilterColour.split(',').map(c => c.trim()).filter(Boolean).includes(tag)
-        return (
-          <button key={tag} type="button"
-            onClick={() => {
-              const current = collectionFilterColour.split(',').map(c => c.trim()).filter(Boolean)
-              const updated = selected ? current.filter(c => c !== tag) : [...current, tag]
-              setCollectionFilterColour(updated.join(', '))
-            }}
-            className={`rounded-full border px-2.5 py-1 text-xs font-semibold transition ${selected ? 'border-pink-500 bg-pink-500 text-white' : 'border-gray-200 bg-white text-gray-600'}`}
-          >{tag}</button>
-        )
-      })}
-    </div>
-  )}
-</div>
+            {/* Wrap count + filter button (filters open in a bottom sheet) */}
+            <CollectionFilterBar
+              filters={collectionFilters}
+              shown={filteredCollectionWraps.length}
+              total={collectionWraps.length}
+            >
+              <span className="hidden md:block">
+                <button
+                  type="button"
+                  onClick={openNewWrapModal}
+                  className={`${BTN_PRIMARY} shrink-0`}
+                >
+                  + Add Wrap
+                </button>
+              </span>
+            </CollectionFilterBar>
+            <CollectionFilterSheet filters={collectionFilters} />
 
             {loading && wraps.length === 0 ? (
               <p className="text-sm text-gray-500">Loading wraps...</p>
@@ -2317,8 +2140,15 @@ function exportReportCsv() {
                   Add your first wrap
                 </button>
               </div>
+            ) : filteredCollectionWraps.length === 0 ? (
+              <div className="rounded-2xl border border-dashed p-8 text-center">
+                <p className="text-sm text-gray-500">No wraps match these filters</p>
+                <button type="button" onClick={collectionFilters.clear} className="mt-2 min-h-[36px] text-sm font-semibold text-pink-600">
+                  Clear filters
+                </button>
+              </div>
             ) : (<div className="grid grid-cols-2 gap-3 sm:grid-cols-2 xl:grid-cols-3 xl:gap-4">
-              
+
                 {filteredCollectionWraps.map((wrap) => renderCollectionTile(wrap))}
               </div>
             )}

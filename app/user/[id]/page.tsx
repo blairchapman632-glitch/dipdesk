@@ -10,6 +10,8 @@ import { useLockBodyScroll } from '@/app/components/useLockBodyScroll'
 import { showToast } from '@/app/components/Toast'
 import WdywtGrid from '@/app/components/WdywtGrid'
 import DoubleTapLike from '@/app/components/DoubleTapLike'
+import ProfileTabs, { TAB_ICONS } from '@/app/components/ProfileTabs'
+import { CollectionFilterBar, CollectionFilterSheet, useCollectionFilters } from '@/app/components/CollectionFilters'
 
 type WrapImage = {
   id: string
@@ -27,6 +29,7 @@ type Wrap = {
   size: string | null
   material: string | null
   colour: string | null
+  wrap_type?: string | null
   // Private: only loaded on your own profile (from my_wraps)
   purchase_date?: string | null
   purchased_from?: string | null
@@ -156,8 +159,8 @@ export default function UserCollectionPage() {
         // Own profile: all fields from the owner-only my_wraps view.
         // Other people: public columns only (purchase, loan and sale details are private).
         loggedInUserId && String(loggedInUserId) === String(userId)
-          ? supabase.from('my_wraps').select('id, name, brand, size, material, colour, purchase_date, purchased_from, status, on_loan_to, sold_to, sold_price, sold_currency, sold_date, is_favourite, for_sale, for_sale_price, for_sale_currency, for_sale_price_is_pm, wrap_images(id, image_url, thumbnail_url, is_primary, sort_order)').eq('user_id', userId).order('is_favourite', { ascending: false }).order('purchase_date', { ascending: false }).order('sort_order', { referencedTable: 'wrap_images' })
-          : supabase.from('wraps').select('id, name, brand, size, material, colour, status, sold_date, is_favourite, for_sale, for_sale_price, for_sale_currency, for_sale_price_is_pm, wrap_images(id, image_url, thumbnail_url, is_primary, sort_order)').eq('user_id', userId).order('is_favourite', { ascending: false }).order('created_at', { ascending: false }).order('sort_order', { referencedTable: 'wrap_images' }),
+          ? supabase.from('my_wraps').select('id, name, brand, size, material, colour, wrap_type, purchase_date, purchased_from, status, on_loan_to, sold_to, sold_price, sold_currency, sold_date, is_favourite, for_sale, for_sale_price, for_sale_currency, for_sale_price_is_pm, wrap_images(id, image_url, thumbnail_url, is_primary, sort_order)').eq('user_id', userId).order('is_favourite', { ascending: false }).order('purchase_date', { ascending: false }).order('sort_order', { referencedTable: 'wrap_images' })
+          : supabase.from('wraps').select('id, name, brand, size, material, colour, wrap_type, status, sold_date, is_favourite, for_sale, for_sale_price, for_sale_currency, for_sale_price_is_pm, wrap_images(id, image_url, thumbnail_url, is_primary, sort_order)').eq('user_id', userId).order('is_favourite', { ascending: false }).order('created_at', { ascending: false }).order('sort_order', { referencedTable: 'wrap_images' }),
       ])
 
       let nextIsFollowing = false
@@ -210,6 +213,11 @@ export default function UserCollectionPage() {
 
   const collectionWraps = useMemo(() => wraps.filter(w => w.status === 'active' || w.status === 'holiday').sort((a, b) => { if (a.is_favourite !== b.is_favourite) return a.is_favourite ? -1 : 1; return a.name.localeCompare(b.name) }), [wraps])
   const departedWraps = useMemo(() => wraps.filter(w => w.status === 'departed').sort((a, b) => { if (a.is_favourite !== b.is_favourite) return a.is_favourite ? -1 : 1; return a.name.localeCompare(b.name) }), [wraps])
+
+  // Collection filters (same sheet and rules as your own profile; also apply to Departed)
+  const collectionFilters = useCollectionFilters()
+  const filteredCollectionWraps = collectionWraps.filter((wrap) => collectionFilters.matches(wrap))
+  const filteredDepartedWraps = departedWraps.filter((wrap) => collectionFilters.matches(wrap))
 
   const forSaleWraps = useMemo(() => wraps.filter(w => w.for_sale && w.status !== 'departed').sort((a, b) => a.name.localeCompare(b.name)), [wraps])
 
@@ -438,34 +446,18 @@ export default function UserCollectionPage() {
           )
         })()}
 
-        {/* Tabs: segmented control, same as your own profile (no ISO here) */}
-        <div className="no-scrollbar mt-2! flex gap-1 overflow-x-auto rounded-xl bg-gray-100 p-1">
-          {([
-            { key: 'collection', label: 'Collection', icon: (<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-[18px] w-[18px]"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>) },
-            { key: 'forsale', label: 'For Sale', icon: (<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-[18px] w-[18px]"><path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z"/><circle cx="7.5" cy="7.5" r="1.5"/></svg>) },
-            { key: 'dips', label: 'Dips', icon: (<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-[18px] w-[18px]"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1"/><circle cx="15.5" cy="15.5" r="1"/><circle cx="12" cy="12" r="1"/></svg>) },
-            { key: 'wdywt', label: 'WDYWT', icon: (<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-[18px] w-[18px]"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>) },
-          ] as const).map((tab) => {
-            const isActive = activeTab === tab.key
-            return (
-              <button
-                key={tab.key}
-                type="button"
-                onClick={() => { setActiveTab(tab.key); try { sessionStorage.setItem(`profile_tab_${userId}`, tab.key) } catch {} }}
-                aria-current={isActive ? 'page' : undefined}
-                className={`flex min-h-[40px] min-w-max flex-1 items-center justify-center gap-1.5 rounded-lg px-2.5 text-sm transition ${
-                  isActive ? 'bg-white font-bold text-gray-900 shadow-sm' : 'font-semibold text-gray-500'
-                }`}
-              >
-                {tab.icon}
-                <span>{tab.label}</span>
-                {tab.key === 'dips' && activeDips.length > 0 && (
-                  <span className="rounded-full bg-fuchsia-100 px-1.5 text-[11px] font-bold text-fuchsia-700">{activeDips.length}</span>
-                )}
-              </button>
-            )
-          })}
-        </div>
+        {/* Tabs: equal-width, icon over label, same as your own profile (no ISO here) */}
+        <ProfileTabs
+          className="mt-2!"
+          active={activeTab}
+          onChange={(key) => { setActiveTab(key); try { sessionStorage.setItem(`profile_tab_${userId}`, key) } catch {} }}
+          tabs={[
+            { key: 'collection', label: 'Collection', icon: TAB_ICONS.collection },
+            { key: 'forsale', label: 'For Sale', icon: TAB_ICONS.forsale },
+            { key: 'dips', label: 'Dips', icon: TAB_ICONS.dips, badge: activeDips.length },
+            { key: 'wdywt', label: 'WDYWT', icon: TAB_ICONS.wdywt },
+          ]}
+        />
 
         {/* For Sale: their wraps marked for sale */}
         {activeTab === 'forsale' && (
@@ -535,18 +527,30 @@ export default function UserCollectionPage() {
               {collectionWraps.length === 0 ? (
                 <div className="rounded-2xl border border-dashed p-8 text-center"><p className="text-gray-600">No wraps yet</p></div>
               ) : (
-                <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-2 xl:grid-cols-4 xl:gap-4">
-                  {collectionWraps.map((wrap) => renderWrapTile(wrap))}
-                </div>
+                <>
+                  {/* Wrap count + filter button (filters open in a bottom sheet) */}
+                  <CollectionFilterBar filters={collectionFilters} shown={filteredCollectionWraps.length} total={collectionWraps.length} />
+                  {filteredCollectionWraps.length === 0 ? (
+                    <div className="rounded-2xl border border-dashed p-8 text-center">
+                      <p className="text-sm text-gray-500">No wraps match these filters</p>
+                      <button type="button" onClick={collectionFilters.clear} className="mt-2 min-h-[36px] text-sm font-semibold text-pink-600">Clear filters</button>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-2 xl:grid-cols-4 xl:gap-4">
+                      {filteredCollectionWraps.map((wrap) => renderWrapTile(wrap))}
+                    </div>
+                  )}
+                </>
               )}
+              <CollectionFilterSheet filters={collectionFilters} />
 
               <div className="mt-8">
                 <h3 className="mb-3 text-lg font-bold text-gray-900">Departed Wraps</h3>
-                {departedWraps.length === 0 ? (
-                  <p className="text-sm text-gray-500">No departed wraps yet</p>
+                {filteredDepartedWraps.length === 0 ? (
+                  <p className="text-sm text-gray-500">{departedWraps.length === 0 ? 'No departed wraps yet' : 'No departed wraps match these filters'}</p>
                 ) : (
                   <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
-                    {departedWraps.map((wrap) => (
+                    {filteredDepartedWraps.map((wrap) => (
                       <button key={wrap.id} type="button" onClick={() => openViewWrapModal(wrap)} className="group flex cursor-pointer flex-col overflow-hidden rounded-2xl border bg-gray-50 p-0 text-left shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-md">
                         <div className="relative aspect-[4/5] w-full bg-gray-100 pointer-events-none">
                           <img src={getPrimaryThumb(wrap)} alt={wrap.name} loading="lazy" className="h-full w-full object-cover object-[center_20%] opacity-90 transition duration-300 group-hover:scale-[1.03]" />

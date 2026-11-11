@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { getDipStageLabel } from '@/lib/dipStages'
+import ProfileTabs, { TAB_ICONS } from '@/app/components/ProfileTabs'
 
 export type PublicProfile = {
   id: string
@@ -164,23 +165,15 @@ export default function PublicCollection({
           </section>
         )}
 
-        {/* Tabs: Collection · For Sale (segmented, like the profile) */}
-        <div className="flex gap-1 rounded-xl bg-gray-100 p-1">
-          {([
-            { key: 'collection', label: 'Collection' },
-            { key: 'forsale', label: `For Sale${forSaleWraps.length ? ` (${forSaleWraps.length})` : ''}` },
-          ] as const).map(t => (
-            <button
-              key={t.key}
-              type="button"
-              onClick={() => setTab(t.key)}
-              aria-current={tab === t.key ? 'page' : undefined}
-              className={`flex min-h-[40px] flex-1 items-center justify-center rounded-lg px-2.5 text-sm transition ${tab === t.key ? 'bg-white font-bold text-gray-900 shadow-sm' : 'font-semibold text-gray-500'}`}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
+        {/* Tabs: Collection · For Sale (same equal-width tabs as the profile) */}
+        <ProfileTabs
+          active={tab}
+          onChange={setTab}
+          tabs={[
+            { key: 'collection', label: 'Collection', icon: TAB_ICONS.collection },
+            { key: 'forsale', label: 'For Sale', icon: TAB_ICONS.forsale, badge: forSaleWraps.length },
+          ]}
+        />
 
         {/* Wrap grid */}
         <section className="min-w-0">
