@@ -1,5 +1,17 @@
 # Session Notes
 
+## 2026-11-11 — Onboarding shows on first launch again (+ step 4)
+**Changed**
+- New `app/components/Onboarding.tsx`, mounted by `AppLayout` on every main page. Removed the old onboarding overlay, state, trigger and upload function from `ProfileDashboard.tsx` (it can't show twice).
+- Trigger: no avatar AND no wraps AND `wrapapp_onboarded` not set. This is new: the old code never read the flag, so it reshowed on every profile load until you had a photo or wrap. It's cache-first: if the cached profile (same user id) has an avatar, or the cached wraps list isn't empty, it just sets the flag with no query. Otherwise it runs one small parallel check (profile avatar + `my_wraps` head count). Established users get the flag set on first check, so it never runs again.
+- Steps 1–3: same screens, text and avatar-upload logic. The avatar upload now also updates the nav avatar straight away.
+- Step 4 "Follow some collectors": up to 6, same rules as Explore (not you, not already followed, ≥1 wrap; newest wrap activity first, then most wraps). Follow/Following pills. Loaded in the background when onboarding opens. Skipped entirely if nobody qualifies. Progress dots: 4.
+- Step 3 flow: both buttons go to step 4. "Done" then either opens the add-wrap form (if they tapped "Add my first wrap"; the button reads "Done — add my first wrap →") or goes to Home. With no suggestions, step 3 behaves exactly as before. The add-wrap form is the same one the ➕ sheet opens (event on /dashboard, else /dashboard?add=1).
+- The flag is set when finished or skipped, same as before.
+
+**Untested**
+- A brand-new account: onboarding should appear on Home right after sign-up, all 4 steps, follow a couple, Done → Home (or → add-wrap form).
+
 ## 2026-11-11 — No profile flash on app launch
 - The fresh-launch redirect moved from a useEffect in `AppLayout.tsx` (which ran after the profile had drawn, so it flashed) to a small inline script in the `<head>` of `app/layout.tsx`. It runs before the page renders: if sessionStorage has no `wrapapp_launched` flag, it sets the flag, and if the path is a bare `/dashboard` it does `location.replace('/explore')`. Wrapped in try/catch. The old AppLayout effect was removed (only one redirect now).
 - In-app taps on Profile are client-side navigations, so the script never runs for them. `/dashboard?…` links are left alone. Checked in the built HTML that the script sits in `<head>`, before `<body>`.

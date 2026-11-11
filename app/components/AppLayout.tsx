@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import imageCompression from 'browser-image-compression'
 import { FeedbackHost } from './Toast'
+import Onboarding from './Onboarding'
 import { useLockBodyScroll } from './useLockBodyScroll'
 
 export default function AppLayout({
@@ -639,6 +640,9 @@ const cachedUnread = localStorage.getItem('dipdesk_unread_count')
 
       {/* Shared toast + confirm sheet for every page */}
       <FeedbackHost />
+
+      {/* First-launch onboarding (new users only; shows on whichever main page they land on) */}
+      <Onboarding onAvatarChange={setAvatar} />
     </div>
   )
 }
