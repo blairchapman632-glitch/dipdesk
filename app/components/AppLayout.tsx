@@ -27,20 +27,6 @@ export default function AppLayout({
   const [unreadCount, setUnreadCount] = useState(0)
 const [unreadMessages, setUnreadMessages] = useState(0)
 
-  // A fresh app launch always lands on Home. Old home-screen installs saved
-  // /dashboard as their start_url (iOS never updates it), so on the first page of a
-  // new session (sessionStorage is empty) a bare /dashboard goes to /explore.
-  // Any query (?add=1, ?report=true, ?google=…) means an in-app link, so it's left alone.
-  useEffect(() => {
-    try {
-      if (sessionStorage.getItem('wrapapp_launched')) return
-      sessionStorage.setItem('wrapapp_launched', '1')
-      if (window.location.pathname === '/dashboard' && !window.location.search) {
-        router.replace('/explore')
-      }
-    } catch {}
-  }, [router])
-
 useEffect(() => {
     const handleStorage = () => {
       const cached = localStorage.getItem('dipdesk_unread_messages')

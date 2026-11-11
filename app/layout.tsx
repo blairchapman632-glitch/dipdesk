@@ -32,6 +32,25 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        {/* A fresh app launch always lands on Home, before anything is drawn. Old home-screen
+            installs saved /dashboard as their start_url (iOS never updates it). Only the first
+            page of a new session (no 'wrapapp_launched' flag) and only a bare /dashboard; a
+            query (?add=1, ?report=true, ?google=…) means an in-app link, so it's left alone.
+            In-app taps are client-side navigations, so this never runs for them. */}
+        <script dangerouslySetInnerHTML={{
+          __html: `
+            try {
+              if (!sessionStorage.getItem('wrapapp_launched')) {
+                sessionStorage.setItem('wrapapp_launched', '1');
+                if (location.pathname === '/dashboard' && !location.search) {
+                  location.replace('/explore');
+                }
+              }
+            } catch (e) {}
+          `
+        }} />
+      </head>
       <body className="bg-white">
         <script dangerouslySetInnerHTML={{
           __html: `
