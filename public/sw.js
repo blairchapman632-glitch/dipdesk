@@ -108,7 +108,7 @@ self.addEventListener('push', function(event) {
       body: data.body,
       icon: '/icon-512.png',
       badge: '/icon-192.png',
-      data: { url: data.url || '/dashboard' },
+      data: { url: data.url || '/activity' },
     })
   )
 })

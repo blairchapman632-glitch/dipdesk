@@ -1,5 +1,12 @@
 # Session Notes
 
+## 2026-11-11 — App launch always lands on Home
+- `app/components/AppLayout.tsx`: on the first page of a fresh launch (sessionStorage `wrapapp_launched` empty), a bare `/dashboard` (no query string) is replaced with `/explore`, then the flag is set. This fixes old home-screen installs that saved `/dashboard` as start_url (iOS never updates it). It works in the installed app and normal browsers. Links with a query (`?add=1`, `?report=true`, `?google=…`) and all in-app navigation to Profile are untouched.
+- `public/sw.js`: the push notification fallback URL is now `/activity` (was `/dashboard`). `app/api/push/route.ts` has the same fallback and was changed to match. Every current caller passes its own url anyway.
+- Checked: login, Google sign-in, password reset, `/` when logged in and manifest start_url all go to /explore.
+- Side effect: opening wrapapp.com.au/dashboard in a brand-new browser tab also lands on Home (by design, it's a fresh session). Refreshing an existing tab stays on Profile.
+- Untested on a device: an old iPhone home-screen install should now open on Home. The new service worker may take one app open to activate.
+
 ## 2026-11-10 — Explore filter: "Available" → "For Sale"
 - `app/explore/page.tsx`: the filter sheet option is now labelled "For Sale". Label only; the internal value stays `for-sale` and behaviour is unchanged. No other user-facing "Available" text for this filter (the only other "Available" is the username checker, which is unrelated).
 - Note: this filter also shows wraps that are in an active dip, not just ones marked for sale (unchanged).

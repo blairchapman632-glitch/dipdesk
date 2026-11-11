@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
     const payload = JSON.stringify({
       title,
       body,
-      url: url || '/dashboard',
+      url: url || '/activity',
     })
 
     const results = await Promise.allSettled(
